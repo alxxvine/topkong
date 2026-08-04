@@ -1,4 +1,3 @@
-using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -26,7 +25,13 @@ namespace TopKong.EditorTools
             go.AddComponent<GameBootstrap>();
             Selection.activeGameObject = go;
 
-            Directory.CreateDirectory(SceneDir);
+            // Через AssetDatabase, а не Directory.CreateDirectory: созданная в обход базы
+            // папка остаётся ей неизвестной до следующего Refresh, и SaveScene по пути
+            // внутри такой папки падает.
+            if (!AssetDatabase.IsValidFolder(SceneDir))
+            {
+                AssetDatabase.CreateFolder("Assets/TopKong", "Scenes");
+            }
             EditorSceneManager.SaveScene(scene, ScenePath);
             AssetDatabase.Refresh();
 
