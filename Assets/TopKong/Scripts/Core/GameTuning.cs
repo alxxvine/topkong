@@ -147,5 +147,15 @@ namespace TopKong
 
         [Header("Звук")]
         [Range(0f, 1f)] public float volume = 0.6f;
+
+        [Header("Песочница (отладка ощущений)")]
+        [Tooltip("Ты один на арене с манекенами: раунд не заканчивается, выбыть нельзя")]
+        public bool sandboxMode = false;
+        [Range(0, 6)] public int dummyCount = 3;
+        public float dummyRespawnDelay = 1.5f;
+        [Tooltip("Множитель времени в замедленном режиме (F2)")]
+        [Range(0.05f, 1f)] public float sandboxSlowMotion = 0.25f;
+        [Tooltip("След за дубиной игрока. Показывает форму замаха — по нему сразу видно, что не так")]
+        public bool showClubTrail = true;
     }
 }

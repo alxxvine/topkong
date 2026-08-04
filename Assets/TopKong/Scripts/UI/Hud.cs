@@ -22,9 +22,14 @@ namespace TopKong
         GUIStyle _mid;
         GUIStyle _small;
         Texture2D _white;
-        Font _font;
         bool _ru;
         bool _ready;
+
+        // Шрифт статический и помеченный несохраняемым намеренно. Созданный в рантайме
+        // Font без этого флага редактор пытается восстановить при перезагрузке скриптов
+        // и ругается «Deleting invalid font reference». Плюс один экземпляр на домен
+        // вместо нового на каждый вход в Play.
+        static Font _font;
 
         public void Init(MatchManager match, GameTuning tuning)
         {
@@ -42,9 +47,13 @@ namespace TopKong
             _white.Apply();
             _white.hideFlags = HideFlags.HideAndDontSave;
 
-            _font = Font.CreateDynamicFontFromOSFont(
-                new[] { "Arial", "Helvetica", "Segoe UI", "Liberation Sans", "DejaVu Sans", "Noto Sans" },
-                24);
+            if (_font == null)
+            {
+                _font = Font.CreateDynamicFontFromOSFont(
+                    new[] { "Arial", "Helvetica", "Segoe UI", "Liberation Sans", "DejaVu Sans", "Noto Sans" },
+                    24);
+                if (_font != null) _font.hideFlags = HideFlags.HideAndDontSave;
+            }
             _ru = _font != null;
 
             _big = new GUIStyle(GUI.skin.label)
@@ -97,6 +106,7 @@ namespace TopKong
             DrawStatus(w, h);
             DrawSwingMeter(w, h);
             DrawControls(w, h);
+            if (_match.Sandbox) DrawDiagnostics(w, h);
             DrawBanner(w, h);
         }
 
@@ -106,9 +116,58 @@ namespace TopKong
             Box(rect, new Color(0f, 0f, 0f, 0.45f));
 
             GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, rect.width - 24f, 22f),
-                L("Раунд ", "Round ") + _match.Round, _small);
+                _match.Sandbox ? L("ПЕСОЧНИЦА", "SANDBOX") : L("Раунд ", "Round ") + _match.Round, _small);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 32f, rect.width - 24f, 22f),
-                L("На арене: ", "Left: ") + _match.AliveCount, _small);
+                _match.Sandbox
+                    ? L("Выбыть нельзя", "You cannot be eliminated")
+                    : L("На арене: ", "Left: ") + _match.AliveCount, _small);
+        }
+
+        /// <summary>
+        /// Цифры для отладки ощущений. Смысл в том, чтобы «мах какой-то слабый» можно
+        /// было заменить на «пик 9 м/с, а попадание засчиталось на 5» — с этим уже
+        /// понятно, какую ручку крутить.
+        /// </summary>
+        void DrawDiagnostics(float w, float h)
+        {
+            var player = _match.Player;
+            if (player == null) return;
+
+            var rect = new Rect(w - 268f, 16f, 250f, 170f);
+            Box(rect, new Color(0f, 0f, 0f, 0.5f));
+
+            float x = rect.x + 12f;
+            float y = rect.y + 8f;
+            float lineW = rect.width - 24f;
+
+            void Line(string text)
+            {
+                GUI.Label(new Rect(x, y, lineW, 20f), text, _small);
+                y += 20f;
+            }
+
+            Line(L("Дубина: ", "Club: ") + player.SwingSpeed.ToString("0.0") + " " + L("м/с", "m/s"));
+            Line(L("Пик за замах: ", "Swing peak: ") + player.SwingPeakSpeed.ToString("0.0"));
+
+            bool hasHit = Time.time - player.LastHitTime < 3f;
+            Line(hasHit
+                ? L("Попадание: ", "Hit: ") + player.LastHitSpeed.ToString("0.0")
+                    + "  (" + player.LastHitStrength.ToString("0.00") + ")"
+                : L("Попадание: —", "Hit: —"));
+
+            Line(L("Замах: ", "Swinging: ")
+                + (player.Swinging ? L("да", "yes") : L("нет", "no")));
+            Line(L("Вертикаль: ", "Upright: ") + player.Uprightness.ToString("0.00")
+                + (player.Recovering ? L("  (встаёт)", "  (getting up)") : ""));
+            Line(L("Время: ", "Time: ")
+                + (_match.SlowMotion
+                    ? "x" + _t.sandboxSlowMotion.ToString("0.00")
+                    : L("обычное", "normal")));
+
+            y += 4f;
+            GUI.Label(new Rect(x, y, lineW, 40f),
+                L("F2 — замедление\nF3 — вернуться в центр", "F2 - slow motion\nF3 - back to center"),
+                _small);
         }
 
         /// <summary>Скорость дубины прямо сейчас — она же сила удара, если попасть.</summary>
@@ -173,6 +232,12 @@ namespace TopKong
                 main = L("ПРИГОТОВЬСЯ", "GET READY");
                 sub = L("Сбрось всех с арены", "Knock everyone off the arena");
             }
+            else if (_match.Sandbox)
+            {
+                // В песочнице баннеров нет: они перекрывали бы как раз то,
+                // ради чего сюда и пришли.
+                return;
+            }
             else if (_match.State == MatchState.RoundOver)
             {
                 main = _match.PlayerWon
@@ -182,7 +247,7 @@ namespace TopKong
                     + Mathf.CeilToInt(Mathf.Max(0f, _match.StateTimer))
                     + L("   (R — сразу)", "   (R for now)");
             }
-            else if (_match.Player != null && !_match.Player.IsAlive)
+            else if (!_match.Sandbox && _match.Player != null && !_match.Player.IsAlive)
             {
                 main = L("ТЫ ВЫЛЕТЕЛ", "YOU ARE OUT");
                 sub = L("Досматриваем, кто останется   (R — новый раунд)",

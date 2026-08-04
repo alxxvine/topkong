@@ -11,18 +11,36 @@ namespace TopKong.EditorTools
     /// </summary>
     public static class TopKongMenu
     {
-        const string SceneDir = "Assets/TopKong/Scenes";
-        const string ScenePath = SceneDir + "/Arena.unity";
+        const string ParentDir = "Assets/TopKong";
+        const string SceneDir = ParentDir + "/Scenes";
+        const string ArenaScenePath = SceneDir + "/Arena.unity";
+        const string SandboxScenePath = SceneDir + "/Sandbox.unity";
 
         [MenuItem("Tools/Top Kong/Создать сцену арены", false, 10)]
         public static void CreateArenaScene()
+        {
+            CreateScene(ArenaScenePath, false,
+                "[TopKong] Сцена создана: " + ArenaScenePath + ". Нажми Play.");
+        }
+
+        [MenuItem("Tools/Top Kong/Создать сцену песочницы", false, 11)]
+        public static void CreateSandboxScene()
+        {
+            CreateScene(SandboxScenePath, true,
+                "[TopKong] Песочница создана: " + SandboxScenePath
+                + ". Нажми Play: ты один на арене с манекенами, выбыть нельзя. "
+                + "F2 — замедление времени, F3 — вернуться в центр.");
+        }
+
+        static void CreateScene(string path, bool sandbox, string message)
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var go = new GameObject("TopKong");
-            go.AddComponent<GameBootstrap>();
+            var bootstrap = go.AddComponent<GameBootstrap>();
+            bootstrap.tuning.sandboxMode = sandbox;
             Selection.activeGameObject = go;
 
             // Через AssetDatabase, а не Directory.CreateDirectory: созданная в обход базы
@@ -30,15 +48,15 @@ namespace TopKong.EditorTools
             // внутри такой папки падает.
             if (!AssetDatabase.IsValidFolder(SceneDir))
             {
-                AssetDatabase.CreateFolder("Assets/TopKong", "Scenes");
+                AssetDatabase.CreateFolder(ParentDir, "Scenes");
             }
-            EditorSceneManager.SaveScene(scene, ScenePath);
+            EditorSceneManager.SaveScene(scene, path);
             AssetDatabase.Refresh();
 
-            Debug.Log("[TopKong] Сцена создана: " + ScenePath + ". Нажми Play.");
+            Debug.Log(message);
         }
 
-        [MenuItem("Tools/Top Kong/Добавить TopKong в текущую сцену", false, 11)]
+        [MenuItem("Tools/Top Kong/Добавить TopKong в текущую сцену", false, 12)]
         public static void AddToCurrentScene()
         {
             // Обход корней сцены вместо FindObjectOfType: тот помечен устаревшим

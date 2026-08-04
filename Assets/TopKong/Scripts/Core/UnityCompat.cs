@@ -120,6 +120,28 @@ namespace TopKong
 #endif
         }
 
+        /// <summary>F2 — замедление времени в песочнице.</summary>
+        public static bool SlowMotionPressed()
+        {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            var kb = Keyboard.current;
+            return kb != null && kb.f2Key.wasPressedThisFrame;
+#else
+            return Input.GetKeyDown(KeyCode.F2);
+#endif
+        }
+
+        /// <summary>F3 — вернуть бойца в центр арены.</summary>
+        public static bool RespawnPressed()
+        {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            var kb = Keyboard.current;
+            return kb != null && kb.f3Key.wasPressedThisFrame;
+#else
+            return Input.GetKeyDown(KeyCode.F3);
+#endif
+        }
+
         public static bool EscapePressed()
         {
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER

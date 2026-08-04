@@ -75,6 +75,7 @@ namespace TopKong
             otherRb.AddForce(dir * (power * 0.5f), ForceMode.VelocityChange);
 
             victim.Stun(Mathf.Lerp(_t.minStun, _t.maxStun, strength));
+            _owner.RecordHit(speed, strength);
 
             Vector3 point = collision.contactCount > 0
                 ? collision.GetContact(0).point

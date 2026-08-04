@@ -132,6 +132,10 @@ namespace TopKong
 
             var clubImpact = club.gameObject.AddComponent<ClubImpact>();
 
+            // След только у игрока: по нему видно форму собственного замаха. У ботов
+            // это превратилось бы в кашу из четырёх лент поверх арены.
+            if (isPlayer && t.showClubTrail) AddClubTrail(club.transform, teamColor);
+
             var marker = BuildMarker(root, teamColor, isPlayer);
 
             fighter.Setup(new Fighter.Rig
@@ -271,6 +275,33 @@ namespace TopKong
             j.enableCollision = false;
 
             joints.Add(j);
+        }
+
+        /// <summary>
+        /// Лента за набалдашником дубины. Главный инструмент отладки ощущений: словами
+        /// «мах какой-то не такой» описать трудно, а на форме следа сразу видно, идёт ли
+        /// дубина широкой дугой или её дёргает по прямой.
+        /// </summary>
+        static void AddClubTrail(Transform club, Color color)
+        {
+            var go = new GameObject("ClubTrail");
+            go.transform.SetParent(club, false);
+            // На конце дубины, а не в центре тела: рисовать надо путь ударной части.
+            go.transform.localPosition = new Vector3(0f, 0.46f, 0f);
+
+            var trail = go.AddComponent<TrailRenderer>();
+            trail.time = 0.35f;
+            trail.widthMultiplier = 0.22f;
+            trail.numCapVertices = 2;
+            trail.minVertexDistance = 0.03f;
+            trail.sharedMaterial = MaterialFactory.Unlit(color);
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+
+            var curve = new AnimationCurve();
+            curve.AddKey(0f, 1f);
+            curve.AddKey(1f, 0f);
+            trail.widthCurve = curve;
         }
 
         /// <summary>Круг под ногами. Единственный способ в свалке понять, кто из них ты.</summary>

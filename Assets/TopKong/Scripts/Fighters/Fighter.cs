@@ -41,6 +41,7 @@ namespace TopKong
         JointDrive[] _baseDrives;
         float _driveScale = 1f;
         float _appliedDriveScale = -1f;
+        bool _wasSwinging;
 
         public event Action<Fighter> Eliminated;
 
@@ -63,6 +64,13 @@ namespace TopKong
         public bool IsPlayer { get; private set; }
         public bool IsAlive { get; private set; }
         public bool Grounded => _balance != null && _balance.Grounded;
+
+        /// <summary>Боец сейчас поднимается с земли.</summary>
+        public bool Recovering => _balance != null && _balance.Recovering;
+
+        /// <summary>Насколько тело вертикально: 1 — стоит ровно, 0 — лежит плашмя.</summary>
+        public float Uprightness =>
+            _rig != null && _rig.Hips != null ? Vector3.Dot(_rig.Hips.transform.up, Vector3.up) : 1f;
 
         /// <summary>Куда игрок или бот хочет прыгать: x — вправо, y — вперёд, в осях камеры.</summary>
         public Vector2 MoveInput { get; set; }
@@ -89,6 +97,22 @@ namespace TopKong
 
         /// <summary>Текущая скорость дубины — она же сила будущего удара.</summary>
         public float SwingSpeed => _rig != null && _rig.Club != null ? RB.Vel(_rig.Club).magnitude : 0f;
+
+        /// <summary>Максимум скорости за текущий замах. Обнуляется в начале каждого нового.</summary>
+        public float SwingPeakSpeed { get; private set; }
+
+        // Данные последнего попадания — нужны панели диагностики в песочнице,
+        // чтобы «удар получился слабым» можно было заменить конкретным числом.
+        public float LastHitSpeed { get; private set; }
+        public float LastHitStrength { get; private set; }
+        public float LastHitTime { get; private set; } = -99f;
+
+        public void RecordHit(float speed, float strength)
+        {
+            LastHitSpeed = speed;
+            LastHitStrength = strength;
+            LastHitTime = Time.time;
+        }
 
         public Vector3 Position => _rig != null && _rig.Hips != null ? _rig.Hips.position : transform.position;
 
@@ -178,6 +202,13 @@ namespace TopKong
 
             float dt = Time.fixedDeltaTime;
             if (StunTimer > 0f) StunTimer = Mathf.Max(0f, StunTimer - dt);
+
+            if (Swinging)
+            {
+                if (!_wasSwinging) SwingPeakSpeed = 0f;
+                SwingPeakSpeed = Mathf.Max(SwingPeakSpeed, SwingSpeed);
+            }
+            _wasSwinging = Swinging;
 
             UpdateDrives(dt);
 
