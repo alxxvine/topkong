@@ -136,5 +136,55 @@ namespace TopKong
             Time.timeScale = 1f;
             SetCursorLocked(false);
         }
+
+        /// <summary>
+        /// Разметка для Scene-вида. Мир строится кодом в момент Play, поэтому до запуска
+        /// сцена пустая и непонятно, где вообще будет арена. Гизмо показывают её край,
+        /// круг спавна и позиции бойцов — по тем же числам из tuning, по которым потом
+        /// всё и построится.
+        /// </summary>
+        void OnDrawGizmos()
+        {
+            if (Application.isPlaying || tuning == null) return;
+
+            Vector3 center = transform.position;
+            float top = tuning.arenaThickness * 0.5f;
+
+            Gizmos.color = new Color(1f, 0.72f, 0.25f);
+            DrawCircle(center + Vector3.up * top, tuning.arenaRadius, 64);
+
+            Gizmos.color = new Color(1f, 1f, 1f, 0.25f);
+            float spawnRadius = tuning.arenaRadius * tuning.spawnRadiusFactor;
+            DrawCircle(center + Vector3.up * top, spawnRadius, 48);
+
+            int total = Mathf.Max(2, tuning.botCount + 1);
+            for (int i = 0; i < total; i++)
+            {
+                float angle = i / (float)total * Mathf.PI * 2f;
+                Vector3 pos = center
+                    + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * spawnRadius
+                    + Vector3.up * top;
+
+                Gizmos.color = i == 0 ? new Color(1f, 0.62f, 0.16f) : new Color(0.35f, 0.72f, 1f);
+                Gizmos.DrawWireSphere(pos + Vector3.up * 1f, 0.35f);
+                Gizmos.DrawLine(pos, pos + Vector3.up * 2.1f);
+            }
+
+            // Отметка, ниже которой боец считается выбывшим.
+            Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.35f);
+            DrawCircle(center + Vector3.up * tuning.killY, tuning.arenaRadius * 0.5f, 24);
+        }
+
+        static void DrawCircle(Vector3 center, float radius, int segments)
+        {
+            Vector3 prev = center + new Vector3(radius, 0f, 0f);
+            for (int i = 1; i <= segments; i++)
+            {
+                float a = i / (float)segments * Mathf.PI * 2f;
+                Vector3 next = center + new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius);
+                Gizmos.DrawLine(prev, next);
+                prev = next;
+            }
+        }
     }
 }
