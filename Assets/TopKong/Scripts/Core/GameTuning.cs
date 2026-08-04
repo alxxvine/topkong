@@ -38,12 +38,24 @@ namespace TopKong
         public float suspensionDamper = 26f;
         // Момент прикладывается в режиме Acceleration, то есть в рад/с², а не в ньютон-метрах.
         // Момент инерции таза мал, поэтому осмысленные значения тут — сотни, а не единицы.
-        public float uprightSpring = 400f;
-        public float uprightDamper = 35f;
+        public float uprightSpring = 550f;
+        public float uprightDamper = 45f;
         public float facingSpring = 55f;
         public float facingDamper = 8f;
         [Tooltip("Торможение на земле, когда игрок не жмёт направление")]
         public float groundFriction = 12f;
+        [Tooltip("Гасит вращение таза на земле. Отдельно от uprightDamper, чтобы не делать подъём деревянным")]
+        public float groundedAngularDamping = 6f;
+
+        [Header("Подъём с земли")]
+        [Tooltip("Ниже этого совпадения с вертикалью боец считается лежащим (1 — стоит ровно)")]
+        [Range(0f, 1f)] public float getUpTiltThreshold = 0.62f;
+        [Tooltip("Запас, чтобы не дёргаться на самой границе порога")]
+        [Range(0f, 0.5f)] public float getUpHysteresis = 0.15f;
+        [Tooltip("Во сколько раз усилить возврат в стойку, пока боец лежит")]
+        public float getUpBoost = 3.5f;
+        [Tooltip("Если не встал за это время, усилие растёт дальше без потолка — страховка от вечного лежания")]
+        public float getUpTimeout = 1.2f;
 
         [Header("Прыжки (рука-нога)")]
         [Tooltip("Пауза между микро-прыжками — из неё берётся весь ритм передвижения")]
@@ -56,14 +68,22 @@ namespace TopKong
         [Tooltip("Импульс вниз в руку-ногу в момент отталкивания — чистая визуальная отдача")]
         public float legKick = 6f;
 
-        [Header("Дубина")]
+        [Header("Мышь")]
+        [Tooltip("Градусов поворота на единицу движения мыши, когда ЛКМ не зажата")]
+        public float turnSensitivity = 3.5f;
+        [Tooltip("Насколько мышь водит дубиной, когда ЛКМ зажата")]
         public float mouseSensitivity = 0.055f;
+
+        [Header("Дубина")]
         // Дальность подобрана под длину руки в риге: центр дубины в стойке стоит
         // в 1.32 от центра груди, поэтому за 1.45 тянуть бессмысленно — рука просто
         // упрётся в пределы суставов и замах станет вязким.
         public float handMinReach = 0.60f;
         public float handMaxReach = 1.45f;
+        [Tooltip("Радиус руки во время замаха (ЛКМ зажата)")]
         public float handRestReach = 1.05f;
+        [Tooltip("Радиус руки в стойке. Меньше боевого — чтобы «несу дубину» и «бью» отличались на глаз")]
+        public float handRestReachIdle = 0.78f;
         [Tooltip("Как быстро рука возвращается в нейтраль. Больше — тем активнее надо махать")]
         public float handReturnRate = 7f;
         public float clubHeightOffset = -0.15f;
@@ -72,9 +92,13 @@ namespace TopKong
         public float clubKD = 34f;
         public float clubMaxAccel = 700f;
         [Tooltip("Доля силы, уходящая обратно в корпус — вес дубины и отдача")]
-        public float clubChestReaction = 0.22f;
+        public float clubChestReaction = 0.35f;
         public float clubAlignSpring = 30f;
         public float clubAlignDamper = 4f;
+        [Tooltip("Момент, которым корпус доворачивается вслед за проносом дубины. Больше — размашистее замах")]
+        public float swingBodyAssist = 90f;
+        [Tooltip("Сколько веса дубины компенсируется во время замаха. 1 — невесомая, 0 — тянет в полную силу")]
+        [Range(0f, 1f)] public float swingGravityCompensation = 0.45f;
 
         [Header("Удары")]
         [Tooltip("Медленнее этой скорости касание не считается ударом")]
@@ -108,6 +132,10 @@ namespace TopKong
         public float camFollowWeight = 0.45f;
         public float camSmooth = 0.18f;
         public float camLookAhead = 0.35f;
+        [Tooltip("Камера едет за поворотом бойца. Выключено намеренно: на маленькой арене "
+               + "важнее видеть всех соперников, чем смотреть глазами персонажа")]
+        public bool camFollowFacing = false;
+        public float camFollowFacingSmooth = 6f;
 
         [Header("Боты")]
         [Range(0f, 1f)] public float botSkill = 0.55f;

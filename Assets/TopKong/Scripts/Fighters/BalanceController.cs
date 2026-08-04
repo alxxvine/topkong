@@ -21,8 +21,14 @@ namespace TopKong
 
         float _hopTimer;
         float _suspensionMute;
+        float _getUpTimer;
+        bool _recovering;
 
         public bool Grounded { get; private set; }
+
+        /// <summary>Боец сейчас поднимается с земли — управление на это время отобрано.</summary>
+        public bool Recovering => _recovering;
+
         public event Action Hopped;
 
         public BalanceController(Fighter fighter, GameTuning tuning, Arena arena)
@@ -42,10 +48,59 @@ namespace TopKong
             _suspensionMute -= dt;
             _hopTimer -= dt;
 
+            UpdateRecovery(hips, dt);
+
             ApplySuspension(hips, groundDistance);
             ApplyUpright(hips);
             ApplyFacing(hips);
             ApplyMovement(hips, dt, controlEnabled);
+            ApplyAngularDamping(hips);
+        }
+
+        /// <summary>
+        /// Определяет, лежит ли боец, и держит режим подъёма.
+        ///
+        /// Порог со гистерезисом: входим в режим при одном наклоне, выходим при заметно
+        /// меньшем. Без этого на самой границе боец бесконечно дёргался бы между
+        /// "встаю" и "стою".
+        /// </summary>
+        void UpdateRecovery(Rigidbody hips, float dt)
+        {
+            float upright = Vector3.Dot(hips.transform.up, Vector3.up);
+
+            if (_recovering)
+            {
+                if (upright > _t.getUpTiltThreshold + _t.getUpHysteresis)
+                {
+                    _recovering = false;
+                    _getUpTimer = 0f;
+                }
+            }
+            else if (upright < _t.getUpTiltThreshold)
+            {
+                _recovering = true;
+                _getUpTimer = 0f;
+            }
+
+            if (_recovering) _getUpTimer += dt;
+        }
+
+        /// <summary>
+        /// Во сколько раз усилить возврат в стойку.
+        ///
+        /// После getUpTimeout множитель растёт линейно и без потолка. Это страховка:
+        /// "боец всегда встаёт" должно быть гарантией, а не следствием удачно
+        /// подобранных коэффициентов — рано или поздно найдётся поза, из которой
+        /// фиксированного усилия не хватит, и он останется лежать навсегда.
+        /// </summary>
+        float RecoveryBoost
+        {
+            get
+            {
+                if (!_recovering) return 1f;
+                float overtime = Mathf.Max(0f, _getUpTimer - _t.getUpTimeout);
+                return _t.getUpBoost * (1f + overtime * 2f);
+            }
         }
 
         /// <summary>
@@ -83,7 +138,10 @@ namespace TopKong
             float support = 1f - Mathf.InverseLerp(_t.standHeight, _t.standHeight * 1.35f, groundDistance);
             support = Mathf.Clamp01(support);
 
-            float compression = _t.standHeight - groundDistance;
+            // Сжатие обязательно ограничить сверху. У лежащего бойца таз почти на земле,
+            // сжатие получается огромным, и неограниченная пружина катапультировала бы
+            // его вместо того, чтобы поднять.
+            float compression = Mathf.Min(_t.standHeight - groundDistance, _t.standHeight * 0.4f);
             float verticalSpeed = RB.Vel(hips).y;
             float force = weightHold * support
                         + compression * _t.suspensionSpring
@@ -98,23 +156,47 @@ namespace TopKong
         {
             var chest = _f.Chest;
 
+            float boost = RecoveryBoost;
+            // Демпфер растёт как корень из жёсткости — так коэффициент затухания
+            // остаётся прежним. Разгонять одну только пружину значит получить
+            // не подъём, а раскачку.
+            float damperBoost = Mathf.Sqrt(boost);
+
             Vector3 axis = Vector3.Cross(hips.transform.up, Vector3.up);
-            hips.AddTorque(axis * _t.uprightSpring - hips.angularVelocity * _t.uprightDamper,
+            hips.AddTorque(axis * (_t.uprightSpring * boost)
+                - hips.angularVelocity * (_t.uprightDamper * damperBoost),
                 ForceMode.Acceleration);
 
             if (chest != null)
             {
+                // Пока боец лежит, грудь тянут наравне с тазом: одного таза не хватает,
+                // чтобы перевернуть тело, у которого сверху голова, а сбоку тяжёлая дубина.
+                float chestShare = _recovering ? 1f : 0.6f;
                 Vector3 chestAxis = Vector3.Cross(chest.transform.up, Vector3.up);
-                chest.AddTorque(chestAxis * (_t.uprightSpring * 0.6f)
-                    - chest.angularVelocity * (_t.uprightDamper * 0.6f), ForceMode.Acceleration);
+                chest.AddTorque(chestAxis * (_t.uprightSpring * chestShare * boost)
+                    - chest.angularVelocity * (_t.uprightDamper * chestShare * damperBoost),
+                    ForceMode.Acceleration);
             }
         }
 
-        /// <summary>Боец разворачивается туда, куда занесена дубина — целишься движением, а не отдельной кнопкой.</summary>
+        /// <summary>
+        /// Гасит вращение таза на земле. Отдельно от uprightDamper специально: тот
+        /// участвует в возврате к вертикали, и поднимать его ради устойчивости
+        /// означало бы заодно сделать подъём деревянным.
+        /// </summary>
+        void ApplyAngularDamping(Rigidbody hips)
+        {
+            if (!Grounded) return;
+            hips.AddTorque(-hips.angularVelocity * _t.groundedAngularDamping, ForceMode.Acceleration);
+        }
+
+        /// <summary>Доворачивает тело к заданному направлению. У игрока им правит мышь, у бота — цель.</summary>
         void ApplyFacing(Rigidbody hips)
         {
-            Vector3 want = _f.AimDirection;
+            Vector3 want = _f.FacingTarget;
+            want.y = 0f;
             if (want.sqrMagnitude < 0.01f) return;
+            want.Normalize();
 
             float errorDeg = Vector3.SignedAngle(_f.Facing, want, Vector3.up);
             float torque = errorDeg * Mathf.Deg2Rad * _t.facingSpring
@@ -124,6 +206,17 @@ namespace TopKong
 
         void ApplyMovement(Rigidbody hips, float dt, bool controlEnabled)
         {
+            // Пока поднимается — не прыгает. Прыжок из лежачего положения только
+            // отбрасывал бы тело дальше и мешал ему собраться в стойку.
+            if (_recovering)
+            {
+                // Строго на земле. Сбитый боец летит к обрыву тоже в перевёрнутом виде,
+                // и торможение в воздухе спасало бы его от падения — то есть ломало бы
+                // ровно ту механику, ради которой игра существует.
+                if (Grounded) DampHorizontal(hips, dt);
+                return;
+            }
+
             Vector2 mv = controlEnabled ? _f.MoveInput : Vector2.zero;
             Vector3 dir = new Vector3(mv.x, 0f, mv.y);
             if (dir.sqrMagnitude > 1f) dir.Normalize();
@@ -141,14 +234,16 @@ namespace TopKong
                 return;
             }
 
-            if (!wantsMove)
-            {
-                // Без этого боец бесконечно скользит после последнего прыжка.
-                Vector3 v = RB.Vel(hips);
-                Vector3 horizontal = new Vector3(v.x, 0f, v.z);
-                horizontal = Vector3.MoveTowards(horizontal, Vector3.zero, _t.groundFriction * dt);
-                RB.SetVel(hips, new Vector3(horizontal.x, v.y, horizontal.z));
-            }
+            // Без этого боец бесконечно скользит после последнего прыжка.
+            if (!wantsMove) DampHorizontal(hips, dt);
+        }
+
+        void DampHorizontal(Rigidbody hips, float dt)
+        {
+            Vector3 v = RB.Vel(hips);
+            Vector3 horizontal = new Vector3(v.x, 0f, v.z);
+            horizontal = Vector3.MoveTowards(horizontal, Vector3.zero, _t.groundFriction * dt);
+            RB.SetVel(hips, new Vector3(horizontal.x, v.y, horizontal.z));
         }
 
         void Hop(Rigidbody hips, Vector3 dir)

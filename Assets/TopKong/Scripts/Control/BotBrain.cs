@@ -45,7 +45,7 @@ namespace TopKong
             _match = match;
             // Небольшой разброс, чтобы боты не действовали как один организм.
             _skill = Mathf.Clamp01(_t.botSkill + Random.Range(-0.15f, 0.15f));
-            _hand = _f.Facing * _t.handRestReach;
+            _hand = _f.Facing * _t.handRestReachIdle;
             _reaction = _t.botReaction;
         }
 
@@ -59,9 +59,11 @@ namespace TopKong
             if (!_f.ControlEnabled || _f.Stunned)
             {
                 _f.MoveInput = Vector2.zero;
+                _f.Swinging = false;
                 return;
             }
 
+            UpdateFacing();
             UpdateMovement(dt);
             UpdateSwing(dt);
         }
@@ -89,6 +91,25 @@ namespace TopKong
                     _target = other;
                 }
             }
+        }
+
+        /// <summary>
+        /// Бот держит соперника перед собой. Тот же вход, которым у игрока правит мышь, —
+        /// у бота нет привилегии бить в спину, не поворачиваясь.
+        /// </summary>
+        void UpdateFacing()
+        {
+            Vector3 want;
+            if (_target != null)
+            {
+                want = _target.GroundPosition - _f.GroundPosition;
+            }
+            else
+            {
+                want = new Vector3(_f.MoveInput.x, 0f, _f.MoveInput.y);
+            }
+
+            if (want.sqrMagnitude > 0.0001f) _f.FacingTarget = want.normalized;
         }
 
         void UpdateMovement(float dt)
@@ -158,10 +179,11 @@ namespace TopKong
                     _reaction = _t.botReaction * Mathf.Lerp(1.6f, 0.5f, _skill);
                 }
 
-                // Дубина держится в сторону цели и медленно возвращается — как у игрока.
+                // Вне замаха дубина прижата к телу — тот же короткий радиус, что у игрока
+                // с отпущенной кнопкой, иначе бот выглядел бы вечно замахнувшимся.
                 Vector3 rest = (_target != null && distance > 0.001f ? toTarget / distance : _f.Facing)
-                               * _t.handRestReach;
-                _hand = Vector3.Lerp(_hand, rest, Mathf.Clamp01(_t.handReturnRate * 0.6f * dt));
+                               * _t.handRestReachIdle;
+                _hand = Vector3.Lerp(_hand, rest, Mathf.Clamp01(_t.handReturnRate * 1.5f * dt));
             }
             else
             {
@@ -187,6 +209,7 @@ namespace TopKong
                 }
             }
 
+            _f.Swinging = _swinging;
             _f.HandOffset = _hand + Vector3.up * _t.clubHeightOffset;
         }
 

@@ -33,6 +33,8 @@ namespace TopKong
             var chest = _f.Chest;
             if (club == null || chest == null) return;
 
+            bool swinging = _f.Swinging;
+
             // Дубина держится на весу без участия баланса.
             //
             // Она намеренно тяжёлая — восемь килограммов на вытянутой руке, — и именно
@@ -42,9 +44,13 @@ namespace TopKong
             // полной (импульс сопернику передаётся ровно тот же), а вес перестаёт тянуть
             // хозяина к земле. Пока боец оглушён, Tick не вызывается — и дубина честно
             // весит своё, утягивая обмякшее тело.
-            club.AddForce(-Physics.gravity, ForceMode.Acceleration);
+            //
+            // Во время замаха компенсация ослабляется: тяжёлый пронос обязан тянуть
+            // бойца за собой, иначе удар не чувствуется весомым.
+            float compensation = swinging ? _t.swingGravityCompensation : 1f;
+            club.AddForce(-Physics.gravity * compensation, ForceMode.Acceleration);
             var upperArm = _f.ClubUpper;
-            if (upperArm != null) upperArm.AddForce(-Physics.gravity, ForceMode.Acceleration);
+            if (upperArm != null) upperArm.AddForce(-Physics.gravity * compensation, ForceMode.Acceleration);
 
             Vector3 target = chest.position + _f.HandOffset;
 
@@ -59,7 +65,34 @@ namespace TopKong
             // работать как безынерционному манипулятору.
             chest.AddForce(-force * _t.clubChestReaction, ForceMode.Acceleration);
 
+            if (swinging) AssistWithBody(club, chest, target);
+
             AlignClub(club, chest, target);
+        }
+
+        /// <summary>
+        /// Разворачивает корпус вслед за проносом дубины.
+        ///
+        /// Раньше рука ходила сама по себе, а тело оставалось неподвижным — из-за этого
+        /// удар и не читался как удар: махала одна конечность. Настоящий замах идёт от
+        /// корпуса, поэтому во время маха грудь получает момент в ту же сторону, куда
+        /// уходит дубина. Момент считается от того, куда дубина летит сейчас, а не от
+        /// точки прицела: иначе корпус доворачивался бы к цели ещё до начала движения.
+        /// </summary>
+        void AssistWithBody(Rigidbody club, Rigidbody chest, Vector3 target)
+        {
+            Vector3 velocity = RB.Vel(club);
+            velocity.y = 0f;
+            if (velocity.sqrMagnitude < 0.5f) return;
+
+            Vector3 arm = club.position - chest.position;
+            arm.y = 0f;
+            if (arm.sqrMagnitude < 1e-4f) return;
+
+            // Знак угловой составляющей скорости дубины вокруг корпуса — в эту сторону
+            // тело и должно проворачиваться.
+            float swingSign = Vector3.Dot(Vector3.Cross(arm.normalized, velocity), Vector3.up);
+            chest.AddTorque(Vector3.up * (swingSign * _t.swingBodyAssist), ForceMode.Acceleration);
         }
 
         /// <summary>

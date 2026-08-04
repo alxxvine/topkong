@@ -130,6 +130,17 @@ namespace TopKong
 #endif
         }
 
+        /// <summary>Левая кнопка мыши удерживается — идёт замах.</summary>
+        public static bool SwingHeld()
+        {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            var mouse = Mouse.current;
+            return mouse != null && mouse.leftButton.isPressed;
+#else
+            return Input.GetMouseButton(0);
+#endif
+        }
+
         public static bool ClickPressed()
         {
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER

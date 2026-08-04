@@ -130,21 +130,30 @@ namespace TopKong
                 Color.Lerp(new Color(0.4f, 0.7f, 1f), new Color(1f, 0.45f, 0.2f), fill));
 
             var label = new GUIStyle(_mid) { fontSize = 14 };
+            // Пока ЛКМ не зажата, рука не работает — подсказываем это прямо на полоске,
+            // иначе непонятно, почему дубина не двигается вслед за мышью.
+            label.normal.textColor = player.Swinging
+                ? new Color(1f, 0.8f, 0.4f)
+                : new Color(0.7f, 0.74f, 0.8f);
             GUI.Label(new Rect(back.x, back.y - 22f, back.width, 20f),
-                L("СИЛА ЗАМАХА", "SWING POWER"), label);
+                player.Swinging
+                    ? L("СИЛА ЗАМАХА", "SWING POWER")
+                    : L("ЗАЖМИ ЛКМ И МАШИ", "HOLD LMB AND SWING"), label);
         }
 
         void DrawControls(float w, float h)
         {
             string text = L(
                 "WASD / стрелки — прыжки\n" +
-                "мышь — дубина (маши быстрее — бьёт сильнее)\n" +
+                "мышь — поворот\n" +
+                "ЛКМ + мышь — удар (маши быстрее — бьёт сильнее)\n" +
                 "R — новый раунд      Esc — освободить курсор",
                 "WASD / arrows - hop\n" +
-                "mouse - club (swing faster to hit harder)\n" +
+                "mouse - turn\n" +
+                "LMB + mouse - swing (faster swing hits harder)\n" +
                 "R - new round      Esc - release cursor");
 
-            var rect = new Rect(18f, h - 92f, 420f, 76f);
+            var rect = new Rect(18f, h - 112f, 440f, 96f);
             Box(rect, new Color(0f, 0f, 0f, 0.35f));
             GUI.Label(new Rect(rect.x + 12f, rect.y + 8f, rect.width - 24f, rect.height - 16f), text, _small);
         }

@@ -24,6 +24,8 @@ namespace TopKong
 
         float _shake;
         float _shakeSeed;
+        float _yaw;
+        float _targetYaw;
 
         public Camera Cam => _cam;
 
@@ -33,6 +35,8 @@ namespace TopKong
             _t = tuning;
             _focusCenter = arenaCenter;
             _shakeSeed = Random.value * 100f;
+            _yaw = _t.camYaw;
+            _targetYaw = _t.camYaw;
 
             _cam.clearFlags = CameraClearFlags.SolidColor;
             _cam.backgroundColor = ArenaBuilder.VoidColor;
@@ -60,10 +64,26 @@ namespace TopKong
             _shake = Mathf.Min(1.2f, _shake + amount);
         }
 
-        /// <summary>Проекция направления экрана на плоскость арены — этим мышь переводится в мир.</summary>
-        public Quaternion GroundYaw => Quaternion.Euler(0f, _t.camYaw, 0f);
+        /// <summary>
+        /// Куда боец сейчас развёрнут. Используется, только если включён camFollowFacing —
+        /// по умолчанию камера не поворачивается вовсе.
+        /// </summary>
+        public void SetFollowFacing(Vector3 facing)
+        {
+            if (!_t.camFollowFacing) return;
+            facing.y = 0f;
+            if (facing.sqrMagnitude < 0.0001f) return;
+            _targetYaw = _t.camYaw + Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg;
+        }
 
-        Quaternion Rotation => Quaternion.Euler(_t.camPitch, _t.camYaw, 0f);
+        /// <summary>
+        /// Проекция осей экрана на плоскость арены — по ней ходьба привязывается к камере.
+        /// Берётся текущий угол камеры, а не настройка: при включённом camFollowFacing
+        /// иначе "вперёд" уехало бы относительно того, что видно на экране.
+        /// </summary>
+        public Quaternion GroundYaw => Quaternion.Euler(0f, _yaw, 0f);
+
+        Quaternion Rotation => Quaternion.Euler(_t.camPitch, _yaw, 0f);
 
         Vector3 DesiredPosition(Vector3 focus)
         {
@@ -73,6 +93,16 @@ namespace TopKong
         void LateUpdate()
         {
             if (_t == null) return;
+
+            if (_t.camFollowFacing)
+            {
+                _yaw = Mathf.LerpAngle(_yaw, _targetYaw,
+                    Mathf.Clamp01(_t.camFollowFacingSmooth * Time.unscaledDeltaTime));
+            }
+            else
+            {
+                _yaw = _t.camYaw;
+            }
 
             Vector3 focus = _focusCenter;
             if (_target != null)

@@ -70,6 +70,17 @@ namespace TopKong
         /// <summary>Смещение точки прицела дубины относительно груди, в мировых осях.</summary>
         public Vector3 HandOffset { get; set; }
 
+        /// <summary>
+        /// Куда боец должен быть развёрнут. Раньше поворот брался из направления на дубину,
+        /// и получалась петля: тело гналось за рукой, а рука пружинила к телу. Она сходилась,
+        /// но любое движение мышью разворачивало бойца целиком, и замах на этом фоне
+        /// не читался вообще. Теперь поворот — отдельный вход, которым правит мышь.
+        /// </summary>
+        public Vector3 FacingTarget { get; set; }
+
+        /// <summary>Идёт замах (у игрока — зажата ЛКМ). Корпус в это время помогает руке.</summary>
+        public bool Swinging { get; set; }
+
         /// <summary>Пока false, боец стоит, но не двигается и не машет — используется во вступлении.</summary>
         public bool ControlEnabled { get; set; }
 
@@ -146,7 +157,8 @@ namespace TopKong
 
             rig.Impact.Init(this, t, fx);
 
-            HandOffset = Facing * t.handRestReach + Vector3.up * t.clubHeightOffset;
+            FacingTarget = Facing;
+            HandOffset = Facing * t.handRestReachIdle + Vector3.up * t.clubHeightOffset;
         }
 
         void OnHopped()
@@ -229,6 +241,7 @@ namespace TopKong
             if (!IsAlive) return;
             IsAlive = false;
             ControlEnabled = false;
+            Swinging = false;
 
             // Дальше он просто падает: приводы в ноль, трение почти убрано.
             _driveScale = 0f;

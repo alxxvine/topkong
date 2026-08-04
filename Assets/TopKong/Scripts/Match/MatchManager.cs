@@ -193,6 +193,7 @@ namespace TopKong
             if (Player != null && Player.IsAlive && _camera != null)
             {
                 _camera.SetLookAhead(Player.AimDirection * Player.HandOffset.magnitude);
+                _camera.SetFollowFacing(Player.FacingTarget);
             }
         }
 
