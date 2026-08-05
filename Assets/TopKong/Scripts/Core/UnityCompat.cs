@@ -98,6 +98,20 @@ namespace TopKong
 #endif
         }
 
+        /// <summary>
+        /// Позиция курсора на экране в пикселях. Работает только когда курсор не захвачен
+        /// (CursorLockMode.Locked отдаёт лишь дельты) — поэтому игра держит режим Confined.
+        /// </summary>
+        public static Vector2 MousePosition()
+        {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            var mouse = Mouse.current;
+            return mouse == null ? Vector2.zero : mouse.position.ReadValue();
+#else
+            return Input.mousePosition;
+#endif
+        }
+
         /// <summary>Смещение мыши за кадр. Это уже дельта — на Time.deltaTime умножать НЕ надо.</summary>
         public static Vector2 MouseDelta()
         {

@@ -5,19 +5,19 @@ namespace TopKong
     /// <summary>
     /// Ввод игрока.
     ///
-    /// Мышь делает две разные вещи, и какую именно — решает левая кнопка:
+    /// Наведение абсолютное: мышь задаёт точку на арене, боец разворачивается к ней.
+    /// Прежняя схема копила дельты мыши в угол, и играть в неё было нельзя — угол
+    /// нигде не показывался, так что куда повернёшься, узнавалось только постфактум.
     ///
-    /// - **кнопка не зажата**: горизонтальные движения мыши разворачивают бойца.
-    ///   Рука в это время прижата к телу и никуда не идёт.
-    /// - **ЛКМ зажата**: мышь перестаёт крутить тело и начинает водить дубиной.
-    ///   Разворот на время замаха заморожен намеренно: иначе мах разворачивал бы
-    ///   бойца следом за рукой, и получилась бы ровно та каша, из-за которой
-    ///   удар раньше не читался.
+    /// Левая кнопка решает, что делает мышь с рукой:
+    /// - не зажата: дубина прижата к телу, мышь только целится;
+    /// - зажата: цель дубины — сама точка прицела. Замах превращается в пронос
+    ///   курсора сквозь соперника, и скорость проноса становится скоростью удара.
     ///
-    /// Точка прицела считается в системе координат тела и переводится в мир через
-    /// накопленный угол `_aimYaw`, а не через фактический поворот таза. Таз — часть
-    /// ragdoll'а, он постоянно качается, и рука, привязанная к нему напрямую,
-    /// дрожала бы вместе с ним.
+    /// Заморозки поворота на время замаха здесь больше нет. Она была нужна, пока
+    /// поворот вычислялся из положения руки и требовалось разорвать петлю «тело
+    /// за рукой, рука за телом». Прицел — внешний вход, петли нет, а замерший
+    /// разворот при видимо движущемся курсоре читался бы как поломка.
     /// </summary>
     [RequireComponent(typeof(Fighter))]
     public class PlayerController : MonoBehaviour
@@ -25,83 +25,74 @@ namespace TopKong
         Fighter _fighter;
         GameTuning _t;
         ArenaCamera _camera;
+        AimCursor _aim;
 
-        float _aimYaw;
-        Vector3 _handLocal;
+        Vector3 _hand;
 
-        public void Init(GameTuning tuning, ArenaCamera cam)
+        public void Init(GameTuning tuning, ArenaCamera cam, AimCursor aim)
         {
             _fighter = GetComponent<Fighter>();
             _t = tuning;
             _camera = cam;
-
-            Vector3 facing = _fighter.Facing;
-            _aimYaw = Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg;
-            _handLocal = new Vector3(0f, 0f, _t.handRestReachIdle);
+            _aim = aim;
+            _hand = _fighter.Facing * _t.handRestReachIdle;
         }
 
         void Update()
         {
             if (_fighter == null || !_fighter.IsAlive) return;
 
-            // Курсор отпущен — это пауза управления целиком. Заодно клик, которым
-            // курсор возвращают в игру, не превращается в удар.
-            bool controls = _fighter.ControlEnabled && Cursor.lockState == CursorLockMode.Locked;
+            // Курсор отпущен (Esc) — это пауза управления целиком. Заодно клик,
+            // которым курсор возвращают в игру, не превращается в удар.
+            bool controls = _fighter.ControlEnabled && Cursor.lockState != CursorLockMode.None;
+
+            Vector3 aimPoint = _aim.Compute();
+
+            Vector3 toAim = aimPoint - _fighter.Position;
+            toAim.y = 0f;
+            if (toAim.sqrMagnitude > 0.0004f) _fighter.FacingTarget = toAim.normalized;
+
             bool swinging = controls && Inp.SwingHeld();
             _fighter.Swinging = swinging;
 
-            // Дельта уже посчитана за кадр — умножать её на deltaTime нельзя,
-            // иначе чувствительность поедет вслед за частотой кадров.
-            Vector2 delta = controls ? Inp.MouseDelta() : Vector2.zero;
-
-            if (!swinging) _aimYaw += delta.x * _t.turnSensitivity;
-
-            Quaternion aim = Quaternion.Euler(0f, _aimYaw, 0f);
-            _fighter.FacingTarget = aim * Vector3.forward;
-
             Vector2 move = controls ? Inp.Move() : Vector2.zero;
-            // Ходьба привязана к осям камеры, а не к повороту тела: камера неподвижна,
-            // поэтому "вперёд" — это всегда вверх по экрану, независимо от того,
-            // куда боец сейчас смотрит.
+            // Ходьба привязана к осям камеры: камера неподвижна, поэтому "вперёд" —
+            // это всегда вверх по экрану, независимо от того, куда боец смотрит.
             Vector3 moveWorld = _camera.GroundYaw * new Vector3(move.x, 0f, move.y);
             _fighter.MoveInput = new Vector2(moveWorld.x, moveWorld.z);
 
-            UpdateHand(swinging, delta, aim);
+            UpdateHand(swinging, aimPoint);
         }
 
-        void UpdateHand(bool swinging, Vector2 delta, Quaternion aim)
+        void UpdateHand(bool swinging, Vector3 aimPoint)
         {
             float dt = Time.deltaTime;
+            Vector3 desired;
+            float rate;
 
             if (swinging)
             {
-                _handLocal += new Vector3(delta.x, 0f, delta.y) * _t.mouseSensitivity;
-            }
-
-            // В стойке рука прижата к телу, в замахе — разрешён полный размах.
-            // Разница между "несу дубину" и "бью" должна быть видна глазом.
-            float restReach = swinging ? _t.handRestReach : _t.handRestReachIdle;
-            float maxReach = swinging ? _t.handMaxReach : _t.handRestReachIdle * 1.15f;
-
-            // Отпустил кнопку — рука собирается в стойку заметно быстрее, чем ходит
-            // во время замаха, иначе после удара она долго болтается.
-            float returnRate = swinging ? _t.handReturnRate : _t.handReturnRate * 2.5f;
-
-            _handLocal = Vector3.Lerp(_handLocal, new Vector3(0f, 0f, restReach),
-                Mathf.Clamp01(returnRate * dt));
-
-            _handLocal.y = 0f;
-            float len = _handLocal.magnitude;
-            if (len < 0.0001f)
-            {
-                _handLocal = new Vector3(0f, 0f, _t.handMinReach);
+                // Цель дубины — точка прицела, обрезанная по длине руки. Дальше
+                // тянуть некуда: рука упрётся в пределы суставов, и замах станет вязким.
+                Vector3 fromChest = aimPoint - _fighter.Chest.position;
+                fromChest.y = 0f;
+                float length = fromChest.magnitude;
+                desired = length < 0.0001f
+                    ? _fighter.Facing * _t.handMinReach
+                    : fromChest / length * Mathf.Clamp(length, _t.handMinReach, _t.handMaxReach);
+                rate = _t.handFollowRate;
             }
             else
             {
-                _handLocal = _handLocal / len * Mathf.Clamp(len, _t.handMinReach, maxReach);
+                // В стойке рука прижата к телу и смотрит туда же, куда боец.
+                desired = _fighter.FacingTarget * _t.handRestReachIdle;
+                rate = _t.handReturnRate * 2.5f;
             }
 
-            _fighter.HandOffset = aim * _handLocal + Vector3.up * _t.clubHeightOffset;
+            _hand = Vector3.Lerp(_hand, desired, Mathf.Clamp01(rate * dt));
+            _hand.y = 0f;
+
+            _fighter.HandOffset = _hand + Vector3.up * _t.clubHeightOffset;
         }
     }
 }

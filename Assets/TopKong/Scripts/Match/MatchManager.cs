@@ -32,6 +32,7 @@ namespace TopKong
         GameTuning _t;
         Arena _arena;
         ArenaCamera _camera;
+        AimCursor _aim;
         Sfx _sfx;
         GameFx _fx;
         Transform _container;
@@ -75,11 +76,12 @@ namespace TopKong
             }
         }
 
-        public void Init(GameTuning tuning, Arena arena, ArenaCamera cam, Sfx sfx, GameFx fx)
+        public void Init(GameTuning tuning, Arena arena, ArenaCamera cam, AimCursor aim, Sfx sfx, GameFx fx)
         {
             _t = tuning;
             _arena = arena;
             _camera = cam;
+            _aim = aim;
             _sfx = sfx;
             _fx = fx;
             _fx.HitStop = TriggerHitStop;
@@ -118,7 +120,7 @@ namespace TopKong
                 {
                     Player = fighter;
                     var pc = fighter.gameObject.AddComponent<PlayerController>();
-                    pc.Init(_t, _camera);
+                    pc.Init(_t, _camera, _aim);
                 }
                 else
                 {
@@ -127,7 +129,11 @@ namespace TopKong
                 }
             }
 
-            if (Player != null) _camera.SetTarget(Player.Hips.transform);
+            if (Player != null)
+            {
+                _camera.SetTarget(Player.Hips.transform);
+                _aim.SetOwner(Player.Hips.transform);
+            }
 
             SetControlEnabled(false);
             State = MatchState.Intro;
@@ -176,8 +182,9 @@ namespace TopKong
             Player = Spawn(Vector3.zero, 0f, PlayerColor, "Ты", true);
             Player.ControlEnabled = true;
             var pc = Player.gameObject.AddComponent<PlayerController>();
-            pc.Init(_t, _camera);
+            pc.Init(_t, _camera, _aim);
             _camera.SetTarget(Player.Hips.transform);
+            _aim.SetOwner(Player.Hips.transform);
 
             int count = Mathf.Clamp(_t.dummyCount, 0, 6);
             float radius = _arena.Radius * 0.5f;
@@ -254,8 +261,9 @@ namespace TopKong
             Player = Spawn(Vector3.zero, 0f, PlayerColor, "Ты", true);
             Player.ControlEnabled = true;
             var pc = Player.gameObject.AddComponent<PlayerController>();
-            pc.Init(_t, _camera);
+            pc.Init(_t, _camera, _aim);
             _camera.SetTarget(Player.Hips.transform);
+            _aim.SetOwner(Player.Hips.transform);
         }
 
         void OnFighterEliminated(Fighter fighter)
@@ -263,7 +271,11 @@ namespace TopKong
             // В песочнице камеру перевешивать не надо: игрок возродится в центре
             // в этом же кадре, и переключение на манекен только моргнёт картинкой.
             if (Sandbox) return;
-            if (fighter == Player) FollowSomeoneElse();
+            if (fighter != Player) return;
+
+            // Прицел принадлежит игроку. Пока он летит вниз, тянуть к нему линию незачем.
+            _aim.SetOwner(null);
+            FollowSomeoneElse();
         }
 
         void FollowSomeoneElse()

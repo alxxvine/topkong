@@ -23,6 +23,7 @@ namespace TopKong
 
         Arena _arena;
         ArenaCamera _camera;
+        AimCursor _aim;
         MatchManager _match;
         Sfx _sfx;
         Hud _hud;
@@ -97,44 +98,55 @@ namespace TopKong
             _camera = camGo.AddComponent<ArenaCamera>();
             _camera.Init(cam, tuning, _arena.Center);
 
+            var aimGo = new GameObject("AimCursor");
+            aimGo.transform.SetParent(transform, false);
+            _aim = aimGo.AddComponent<AimCursor>();
+            _aim.Init(cam, _arena, tuning);
+
             _sfx = gameObject.AddComponent<Sfx>();
             _sfx.Init(tuning);
 
             _fx = new GameFx { Camera = _camera, Sound = _sfx };
 
             _match = gameObject.AddComponent<MatchManager>();
-            _match.Init(tuning, _arena, _camera, _sfx, _fx);
+            _match.Init(tuning, _arena, _camera, _aim, _sfx, _fx);
 
             _hud = gameObject.AddComponent<Hud>();
             _hud.Init(_match, tuning);
 
             _match.StartRound();
-            SetCursorLocked(true);
+            SetCursorCaptured(true);
         }
 
         void Update()
         {
             if (Inp.EscapePressed())
             {
-                SetCursorLocked(false);
+                SetCursorCaptured(false);
             }
-            else if (Cursor.lockState != CursorLockMode.Locked && Inp.ClickPressed())
+            else if (Cursor.lockState == CursorLockMode.None && Inp.ClickPressed())
             {
-                SetCursorLocked(true);
+                SetCursorCaptured(true);
             }
         }
 
-        static void SetCursorLocked(bool locked)
+        /// <summary>
+        /// Confined, а не Locked. Захват отдаёт только дельты — экранной позиции при нём
+        /// нет вообще, а прицел строится именно из неё. Confined позицию даёт и при этом
+        /// не выпускает курсор за пределы окна. Системный курсор прячем: вместо него
+        /// на арене рисуется собственное кольцо прицела.
+        /// </summary>
+        static void SetCursorCaptured(bool captured)
         {
-            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !locked;
+            Cursor.lockState = captured ? CursorLockMode.Confined : CursorLockMode.None;
+            Cursor.visible = !captured;
         }
 
         void OnDestroy()
         {
             if (_instance == this) _instance = null;
             Time.timeScale = 1f;
-            SetCursorLocked(false);
+            SetCursorCaptured(false);
         }
 
         /// <summary>

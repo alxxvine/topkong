@@ -68,11 +68,12 @@ namespace TopKong
         [Tooltip("Импульс вниз в руку-ногу в момент отталкивания — чистая визуальная отдача")]
         public float legKick = 6f;
 
-        [Header("Мышь")]
-        [Tooltip("Градусов поворота на единицу движения мыши, когда ЛКМ не зажата")]
-        public float turnSensitivity = 3.5f;
-        [Tooltip("Насколько мышь водит дубиной, когда ЛКМ зажата")]
-        public float mouseSensitivity = 0.055f;
+        [Header("Прицел")]
+        [Tooltip("Насколько далеко за край арены можно увести прицел (доля радиуса). "
+               + "Целиться за край нужно — именно туда соперника и сбивают")]
+        [Range(1f, 2.5f)] public float aimMaxRadiusFactor = 1.35f;
+        [Tooltip("Линия от бойца к прицелу. Показывает, куда он развернётся")]
+        public bool showAimLink = true;
 
         [Header("Дубина")]
         // Дальность подобрана под длину руки в риге: центр дубины в стойке стоит
@@ -84,8 +85,10 @@ namespace TopKong
         public float handRestReach = 1.05f;
         [Tooltip("Радиус руки в стойке. Меньше боевого — чтобы «несу дубину» и «бью» отличались на глаз")]
         public float handRestReachIdle = 0.78f;
-        [Tooltip("Как быстро рука возвращается в нейтраль. Больше — тем активнее надо махать")]
+        [Tooltip("Как быстро рука возвращается в стойку, когда ЛКМ отпущена")]
         public float handReturnRate = 7f;
+        [Tooltip("Насколько цепко дубина следует за курсором в замахе. Больше — резче удар")]
+        public float handFollowRate = 30f;
         public float clubHeightOffset = -0.15f;
         [Tooltip("Жёсткость притяжения дубины к точке прицела")]
         public float clubKP = 420f;

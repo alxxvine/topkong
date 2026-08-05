@@ -204,12 +204,12 @@ namespace TopKong
         {
             string text = L(
                 "WASD / стрелки — прыжки\n" +
-                "мышь — поворот\n" +
-                "ЛКМ + мышь — удар (маши быстрее — бьёт сильнее)\n" +
+                "мышь — прицел, боец смотрит на точку\n" +
+                "ЛКМ + мышь — удар (веди быстрее — бьёт сильнее)\n" +
                 "R — новый раунд      Esc — освободить курсор",
                 "WASD / arrows - hop\n" +
-                "mouse - turn\n" +
-                "LMB + mouse - swing (faster swing hits harder)\n" +
+                "mouse - aim, the fighter faces the dot\n" +
+                "LMB + mouse - swing (sweep faster to hit harder)\n" +
                 "R - new round      Esc - release cursor");
 
             var rect = new Rect(18f, h - 112f, 440f, 96f);
@@ -222,7 +222,7 @@ namespace TopKong
             string main = null;
             string sub = null;
 
-            if (Cursor.lockState != CursorLockMode.Locked)
+            if (Cursor.lockState == CursorLockMode.None)
             {
                 main = L("ПАУЗА", "PAUSED");
                 sub = L("Клик — вернуться в игру", "Click to resume");
