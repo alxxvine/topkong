@@ -111,6 +111,9 @@ namespace TopKong
         public float swingCooldown = 0.12f;
         [Tooltip("Ширина дуги проноса в градусах")]
         [Range(60f, 220f)] public float swingArcDegrees = 150f;
+        [Tooltip("Насколько дубина отведена от корпуса на полном заряде. "
+               + "Между carryReach и этим значением она и разгоняется, пока копишь")]
+        public float windUpReach = 0.85f;
         [Tooltip("Насколько дубина вылетает от корпуса на пике проноса")]
         public float handMaxReach = 1.15f;
         [Tooltip("Во сколько раз слабее незаряженный удар по сравнению с полным")]
