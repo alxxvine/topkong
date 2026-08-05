@@ -165,30 +165,44 @@ namespace TopKong
 
             Vector3 axis = Vector3.Cross(hips.transform.up, Vector3.up);
             hips.AddTorque(axis * (_t.uprightSpring * boost)
-                - hips.angularVelocity * (_t.uprightDamper * damperBoost),
+                - TiltVelocity(hips) * (_t.uprightDamper * damperBoost),
                 ForceMode.Acceleration);
 
             if (chest != null)
             {
                 // Пока боец лежит, грудь тянут наравне с тазом: одного таза не хватает,
-                // чтобы перевернуть тело, у которого сверху голова, а сбоку тяжёлая дубина.
+                // чтобы перевернуть тело, у которого сверху голова, а спереди тяжёлая дубина.
                 float chestShare = _recovering ? 1f : 0.6f;
                 Vector3 chestAxis = Vector3.Cross(chest.transform.up, Vector3.up);
                 chest.AddTorque(chestAxis * (_t.uprightSpring * chestShare * boost)
-                    - chest.angularVelocity * (_t.uprightDamper * chestShare * damperBoost),
+                    - TiltVelocity(chest) * (_t.uprightDamper * chestShare * damperBoost),
                     ForceMode.Acceleration);
             }
         }
 
         /// <summary>
-        /// Гасит вращение таза на земле. Отдельно от uprightDamper специально: тот
+        /// Угловая скорость без составляющей рыскания.
+        ///
+        /// Демпферы вертикали обязаны гасить заваливание, но не разворот. Пока они
+        /// работали по всем осям сразу, тот же коэффициент, что держит бойца на ногах,
+        /// душил и поворот к прицелу — и поворот выглядел безнадёжно вялым.
+        /// За рыскание отвечает отдельный демпфер в ApplyFacing.
+        /// </summary>
+        static Vector3 TiltVelocity(Rigidbody body)
+        {
+            Vector3 angular = body.angularVelocity;
+            return angular - Vector3.up * angular.y;
+        }
+
+        /// <summary>
+        /// Гасит заваливание таза на земле. Отдельно от uprightDamper специально: тот
         /// участвует в возврате к вертикали, и поднимать его ради устойчивости
         /// означало бы заодно сделать подъём деревянным.
         /// </summary>
         void ApplyAngularDamping(Rigidbody hips)
         {
             if (!Grounded) return;
-            hips.AddTorque(-hips.angularVelocity * _t.groundedAngularDamping, ForceMode.Acceleration);
+            hips.AddTorque(-TiltVelocity(hips) * _t.groundedAngularDamping, ForceMode.Acceleration);
         }
 
         /// <summary>Доворачивает тело к заданному направлению. У игрока им правит мышь, у бота — цель.</summary>

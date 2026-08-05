@@ -40,8 +40,10 @@ namespace TopKong
         // Момент инерции таза мал, поэтому осмысленные значения тут — сотни, а не единицы.
         public float uprightSpring = 550f;
         public float uprightDamper = 45f;
-        public float facingSpring = 55f;
-        public float facingDamper = 8f;
+        [Tooltip("Скорость разворота к прицелу. Демпферы вертикали рыскание больше "
+               + "не душат, так что значение работает в полную силу")]
+        public float facingSpring = 110f;
+        public float facingDamper = 10f;
         [Tooltip("Торможение на земле, когда игрок не жмёт направление")]
         public float groundFriction = 12f;
         [Tooltip("Гасит вращение таза на земле. Отдельно от uprightDamper, чтобы не делать подъём деревянным")]
@@ -57,7 +59,7 @@ namespace TopKong
         [Tooltip("Если не встал за это время, усилие растёт дальше без потолка — страховка от вечного лежания")]
         public float getUpTimeout = 1.2f;
 
-        [Header("Прыжки (рука-нога)")]
+        [Header("Прыжки")]
         [Tooltip("Пауза между микро-прыжками — из неё берётся весь ритм передвижения")]
         public float hopInterval = 0.30f;
         public float hopUp = 4.6f;
@@ -65,7 +67,7 @@ namespace TopKong
         public float hopAccel = 3.2f;
         public float maxRunSpeed = 6.2f;
         public float airControl = 9f;
-        [Tooltip("Импульс вниз в руку-ногу в момент отталкивания — чистая визуальная отдача")]
+        [Tooltip("Импульс вниз в опорную ногу в момент отталкивания. Ноги чередуются, и это единственное, что делает прыжки похожими на походку")]
         public float legKick = 6f;
 
         [Header("Прицел")]
@@ -105,14 +107,17 @@ namespace TopKong
         public float clubKP = 420f;
         public float clubKD = 34f;
         public float clubMaxAccel = 700f;
-        [Tooltip("Доля силы, уходящая обратно в корпус — вес дубины и отдача")]
-        public float clubChestReaction = 0.35f;
+        [Tooltip("Доля тяги дубины, возвращаемая в корпус противодействием. 1 — замах "
+               + "полностью уравновешен телом и бойца никуда не утаскивает; меньше — "
+               + "дубина тянет хозяина за собой")]
+        [Range(0f, 1.2f)] public float clubChestReaction = 1f;
         public float clubAlignSpring = 30f;
         public float clubAlignDamper = 4f;
-        [Tooltip("Момент, которым корпус доворачивается вслед за проносом дубины. Больше — размашистее замах")]
-        public float swingBodyAssist = 90f;
-        [Tooltip("Сколько веса дубины компенсируется во время замаха. 1 — невесомая, 0 — тянет в полную силу")]
-        [Range(0f, 1f)] public float swingGravityCompensation = 0.45f;
+        [Tooltip("Момент, которым корпус доворачивается вслед за проносом. Больше — размашистее")]
+        public float swingBodyAssist = 45f;
+        [Tooltip("Сколько веса дубины компенсируется во время проноса. 1 — невесомая, "
+               + "0 — тянет в полную силу и заваливает бойца")]
+        [Range(0f, 1f)] public float swingGravityCompensation = 0.8f;
 
         [Header("Удары")]
         [Tooltip("Медленнее этой скорости касание не считается ударом")]

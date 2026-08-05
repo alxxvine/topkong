@@ -57,14 +57,23 @@ namespace TopKong
 
             Vector3 target = swing.Target;
             Vector3 error = target - club.position;
-            Vector3 force = error * (_t.clubKP * swing.PowerScale) - RB.Vel(club) * _t.clubKD;
-            force = Vector3.ClampMagnitude(force, _t.clubMaxAccel * swing.PowerScale);
+            Vector3 acceleration = error * (_t.clubKP * swing.PowerScale) - RB.Vel(club) * _t.clubKD;
+            acceleration = Vector3.ClampMagnitude(acceleration, _t.clubMaxAccel * swing.PowerScale);
 
-            club.AddForce(force, ForceMode.Acceleration);
-
-            // Часть силы уходит обратно в корпус: дубина ощутимо тяжёлая, и на резком
-            // замахе бойца немного разворачивает следом.
-            chest.AddForce(-force * _t.clubChestReaction, ForceMode.Acceleration);
+            // Тяга и противодействие — честная внутренняя пара сил.
+            //
+            // Раньше сила прикладывалась к дубине в режиме Acceleration, то есть была
+            // внешней и ничем не уравновешенной. Пока суставы рук были слабыми, они её
+            // проглатывали. С жёсткими руками тот же рывок стал передаваться на весь
+            // корпус, и бойца буквально утаскивало за дубиной.
+            //
+            // Поэтому считаем настоящие ньютоны и ровно столько же прикладываем к груди
+            // в обратную сторону. Центр масс бойца от собственного замаха больше никуда
+            // не едет: тело разворачивается и подаётся, но не улетает. Именно так это
+            // и работает у живого человека — размах уравновешен корпусом.
+            Vector3 force = acceleration * club.mass;
+            club.AddForce(force, ForceMode.Force);
+            chest.AddForce(-force * _t.clubChestReaction, ForceMode.Force);
 
             if (striking) AssistWithBody(club, chest);
 
