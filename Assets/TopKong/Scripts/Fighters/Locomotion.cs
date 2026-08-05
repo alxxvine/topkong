@@ -55,6 +55,10 @@ namespace TopKong
             Vector3 wish = new Vector3(move.x, 0f, move.y);
             if (wish.sqrMagnitude > 1f) wish.Normalize();
 
+            // Пронос забирает управление: удар должен чего-то стоить, иначе им можно
+            // размахивать на бегу без всякого риска.
+            if (_f.Swinging) wish *= _t.swingMoveLock;
+
             Vector3 velocity = RB.Vel(body);
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);
 

@@ -31,17 +31,22 @@ namespace TopKong
         public float spawnRadiusFactor = 0.62f;
 
         [Header("Движение")]
-        public float maxRunSpeed = 6.2f;
-        [Tooltip("Разгон до полной скорости")]
-        public float moveAccel = 45f;
-        [Tooltip("Торможение, когда направление отпущено")]
-        public float moveBrake = 30f;
+        public float maxRunSpeed = 4.0f;
+        [Tooltip("Разгон до полной скорости. Намеренно небыстрый: инерция у края — "
+               + "это и есть ощущение риска")]
+        public float moveAccel = 16f;
+        [Tooltip("Торможение, когда направление отпущено. Низкое — значит у края "
+               + "мгновенно остановиться нельзя")]
+        public float moveBrake = 10f;
         [Tooltip("Управление в воздухе. Малое намеренно: сбитый должен долетать до края, "
                + "а не выруливать обратно на арену")]
         public float airControl = 4f;
         [Tooltip("Градусов разворота в секунду. Тело кинематическое, так что это "
                + "ровно та скорость, которую видно на экране")]
-        public float turnSpeed = 720f;
+        public float turnSpeed = 420f;
+        [Tooltip("Насколько теряется управление во время проноса. 0 — стоишь как вкопанный, "
+               + "1 — удар не мешает бегать. Удар должен чего-то стоить")]
+        [Range(0f, 1f)] public float swingMoveLock = 0.2f;
 
         [Header("Шаг")]
         [Tooltip("Шагов в секунду на полной скорости")]
@@ -50,6 +55,17 @@ namespace TopKong
         public float stepLength = 0.28f;
         [Tooltip("Подскок корпуса на шаге")]
         public float stepBob = 0.07f;
+
+        [Header("Вес и шаткость")]
+        [Tooltip("Амплитуда покачивания корпуса. У края арены усиливается автоматически")]
+        public float wobbleAmount = 0.5f;
+        [Tooltip("Как часто корпус качает")]
+        public float wobbleRate = 1.1f;
+        [Tooltip("Завал корпуса от разгона и торможения — из него читается инерция")]
+        public float leanFromAccel = 0.06f;
+        [Tooltip("Отставание дубины при развороте, градусов на градус/сек. "
+               + "Отсюда у неё берётся вес")]
+        public float limbLag = 0.12f;
 
         [Header("Подъём после падения")]
         [Tooltip("Сколько тряпка должна пролежать спокойно, прежде чем вставать")]

@@ -50,6 +50,9 @@ namespace TopKong
             public Quaternion ClubRotation;
             public Vector3 HandLeft;
             public Vector3 HandRight;
+            public Quaternion HipsRotation;
+            public Quaternion ChestRotation;
+            public Quaternion HeadRotation;
         }
 
         /// <summary>
@@ -60,15 +63,23 @@ namespace TopKong
         /// <param name="stride">Размах шага: 0 в покое, больше на скорости.</param>
         /// <param name="clubAngleDeg">Куда развёрнута дубина относительно взгляда.</param>
         /// <param name="clubReach">Насколько дубина вынесена от груди.</param>
-        /// <param name="lean">Наклон корпуса вперёд при движении и ударе.</param>
+        /// <param name="lean">Наклон корпуса вперёд: от разгона и от удара.</param>
+        /// <param name="sway">Заваливание вбок. Им и делается вся шаткость походки.</param>
         public static Pose Compute(float bob, float stepPhase, float stride,
-            float clubAngleDeg, float clubReach, float lean)
+            float clubAngleDeg, float clubReach, float lean, float sway = 0f)
         {
             var pose = new Pose();
 
-            pose.Hips = new Vector3(0f, HipsY + bob, 0f);
-            pose.Chest = new Vector3(0f, ChestY + bob, lean * 0.12f);
-            pose.Head = new Vector3(0f, HeadY + bob, lean * 0.16f);
+            pose.Hips = new Vector3(sway * 0.05f, HipsY + bob, 0f);
+            pose.Chest = new Vector3(sway * 0.12f, ChestY + bob, lean * 0.12f);
+            pose.Head = new Vector3(sway * 0.16f, HeadY + bob, lean * 0.16f);
+
+            // Наклоны вместо чисто позиционного смещения: тело должно заваливаться,
+            // а не съезжать вбок целиком. Голова довешивает сверх корпуса — так
+            // походка читается как чуть пьяная, а не как поворот статуи.
+            pose.HipsRotation = Quaternion.Euler(lean * 4f, 0f, -sway * 5f);
+            pose.ChestRotation = Quaternion.Euler(lean * 12f, 0f, -sway * 9f);
+            pose.HeadRotation = Quaternion.Euler(lean * 8f, 0f, -sway * 12f);
 
             // Ноги в противофазе: одна выносится вперёд и приподнимается, другая позади.
             float phaseL = stepPhase * Mathf.PI * 2f;
@@ -127,7 +138,7 @@ namespace TopKong
         /// <summary>Поза покоя — из неё собирается тело и в неё же оно возвращается после падения.</summary>
         public static Pose RestPose()
         {
-            return Compute(0f, 0f, 0f, 0f, ClubRestReach, 0f);
+            return Compute(0f, 0f, 0f, 0f, ClubRestReach, 0f, 0f);
         }
     }
 }

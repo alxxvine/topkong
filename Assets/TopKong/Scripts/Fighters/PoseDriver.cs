@@ -24,6 +24,12 @@ namespace TopKong
         float _stepPhase;
         float _bob;
         float _stride;
+        float _lean;
+        float _sway;
+        float _clubLag;
+        float _lastYaw;
+        float _lastSpeed;
+        readonly float _noiseSeed = Random.value * 100f;
         int _writeIndex;
 
         /// <summary>1 — чистая вычисленная поза, 0 — поза, запомненная при вставании.</summary>
@@ -75,11 +81,53 @@ namespace TopKong
                 : 0f;
             _bob = Mathf.Lerp(_bob, targetBob, Mathf.Clamp01(12f * dt));
 
+            UpdateWobble(dt, planarSpeed, normalized);
+
             var pose = FighterRig.Compute(_bob, _stepPhase, _stride,
-                swing.ClubAngle, swing.ClubReach, swing.Lean);
+                swing.ClubAngle + _clubLag, swing.ClubReach, swing.Lean + _lean, _sway);
 
             Apply(pose);
         }
+
+        /// <summary>
+        /// Вторичная анимация: завал корпуса от разгона, покачивание и отставание дубины.
+        ///
+        /// Тело кинематическое и потому идеально ровное — из-за этого пропадало ощущение
+        /// веса и риска. Возвращать ради этого физику нельзя, с ней управление
+        /// уже воевало; вместо неё здесь три дешёвых источника неровности, каждый
+        /// из которых полностью управляем.
+        /// </summary>
+        void UpdateWobble(float dt, float planarSpeed, float normalized)
+        {
+            // 1. Инерция: разгоняешься — корпус отстаёт назад, тормозишь — валится вперёд.
+            float acceleration = (planarSpeed - _lastSpeed) / Mathf.Max(1e-5f, dt);
+            _lastSpeed = planarSpeed;
+            float leanTarget = Mathf.Clamp(-acceleration * _t.leanFromAccel, -1.2f, 1.2f);
+            _lean = Mathf.Lerp(_lean, leanTarget, Mathf.Clamp01(8f * dt));
+
+            // 2. Покачивание. У края арены усиливается — это единственный честный способ
+            // показать риск, не отбирая у игрока контроль.
+            float edge = _f.RigRef != null
+                ? Mathf.InverseLerp(_edgeSafe, _edgeLimit, _f.GroundPosition.magnitude)
+                : 0f;
+            float amount = _t.wobbleAmount * (0.4f + normalized) * (1f + edge * 2f);
+            float noise = Mathf.PerlinNoise(_noiseSeed, Time.time * _t.wobbleRate) * 2f - 1f;
+            // Плюс раскачка в такт шагу: на каждый шаг тело кренится в свою сторону.
+            float stepSway = Mathf.Sin(_stepPhase * Mathf.PI * 2f) * 0.5f * normalized;
+            _sway = Mathf.Lerp(_sway, (noise + stepSway) * amount, Mathf.Clamp01(6f * dt));
+
+            // 3. Дубина отстаёт от разворота — только так у неё читается вес.
+            // На проносе отставание гасится: там важен точный тайминг, а не инерция.
+            float yaw = _f.transform.eulerAngles.y;
+            float yawRate = Mathf.DeltaAngle(_lastYaw, yaw) / Mathf.Max(1e-5f, dt);
+            _lastYaw = yaw;
+
+            float lagTarget = _f.Swing.Striking ? 0f : Mathf.Clamp(-yawRate * _t.limbLag, -60f, 60f);
+            _clubLag = Mathf.Lerp(_clubLag, lagTarget, Mathf.Clamp01((_f.Swing.Striking ? 25f : 9f) * dt));
+        }
+
+        float _edgeSafe => _t.arenaRadius * 0.55f;
+        float _edgeLimit => _t.arenaRadius;
 
         /// <summary>Поставить бойца в чистую стойку — используется при спавне.</summary>
         public void SnapToRest()
@@ -87,6 +135,11 @@ namespace TopKong
             _stepPhase = 0f;
             _bob = 0f;
             _stride = 0f;
+            _lean = 0f;
+            _sway = 0f;
+            _clubLag = 0f;
+            _lastSpeed = 0f;
+            _lastYaw = _f.transform.eulerAngles.y;
             BlendFromStart = 1f;
             Apply(FighterRig.RestPose());
         }
@@ -96,9 +149,9 @@ namespace TopKong
             var rig = _f.RigRef;
             _writeIndex = 0;
 
-            Set(rig.Hips, pose.Hips, Quaternion.identity);
-            Set(rig.Chest, pose.Chest, Quaternion.identity);
-            Set(rig.Head, pose.Head, Quaternion.identity);
+            Set(rig.Hips, pose.Hips, pose.HipsRotation);
+            Set(rig.Chest, pose.Chest, pose.ChestRotation);
+            Set(rig.Head, pose.Head, pose.HeadRotation);
             Set(rig.Club, pose.Club, pose.ClubRotation);
 
             PlaceLimb(rig.LegLUpper, FighterRig.HipJoint(false), Knee(pose.FootLeft, false));
