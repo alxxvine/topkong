@@ -294,6 +294,8 @@ namespace TopKong
             _pose.StartLocalPositions = _startPositions;
             _pose.StartLocalRotations = _startRotations;
             _pose.BlendFromStart = 0f;
+            // Накопленные скорости пружин иначе выстрелят конечностями в момент перехода.
+            _pose.ResetJelly();
 
             EnableRootBody(true);
             RB.SetVel(_rig.RootBody, Vector3.zero);

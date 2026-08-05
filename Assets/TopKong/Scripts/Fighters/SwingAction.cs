@@ -38,6 +38,7 @@ namespace TopKong
         float _angle;
         float _reach;
         float _lean;
+        float _height;
 
         public SwingState State { get; private set; } = SwingState.Guard;
         public bool Held { get; set; }
@@ -55,13 +56,21 @@ namespace TopKong
         /// <summary>Наклон корпуса: отрицательный — отклонился назад на замахе.</summary>
         public float Lean => _lean;
 
+        /// <summary>
+        /// Высота дубины. В покое сильно отрицательная — дубина волочится за спиной,
+        /// и по одному этому видно, что боец не готов бить.
+        /// </summary>
+        public float ClubHeight => _height;
+
         /// <summary>Сила удара 0..1: во столько раз он весомее незаряженного.</summary>
         public float Power { get; private set; } = 1f;
 
         public SwingAction(GameTuning tuning)
         {
             _t = tuning;
-            _reach = FighterRig.ClubRestReach;
+            _reach = tuning.carryReach;
+            _angle = tuning.carryAngle * -_side;
+            _height = tuning.carryDrop;
         }
 
         public void Tick(float dt)
@@ -120,17 +129,20 @@ namespace TopKong
             float targetAngle;
             float targetReach;
             float targetLean;
+            float targetHeight;
             float blend;
 
             switch (State)
             {
                 case SwingState.WindUp:
-                    // Отводим за начало дуги и подаём корпус назад: замах должен читаться
-                    // как замах ещё до того, как что-то полетит.
-                    targetAngle = -_side * (half + 25f);
-                    targetReach = FighterRig.ClubRestReach * 0.8f;
-                    targetLean = -0.4f * _charge;
-                    blend = 12f * dt;
+                    // Замах обязан читаться до того, как что-то полетит: дубина
+                    // поднимается из-за спины тем выше, чем больше заряд, корпус
+                    // отклоняется назад. Состояние видно по одной позе, без интерфейса.
+                    targetAngle = Mathf.Lerp(_t.carryAngle * -_side, -_side * (half + 25f), _charge);
+                    targetReach = Mathf.Lerp(_t.carryReach, _t.windUpReach, _charge);
+                    targetLean = -0.5f * _charge;
+                    targetHeight = Mathf.Lerp(_t.carryDrop, 0.18f, _charge);
+                    blend = 10f * dt;
                     break;
 
                 case SwingState.Strike:
@@ -143,6 +155,7 @@ namespace TopKong
                     targetReach = Mathf.Lerp(FighterRig.ClubRestReach, _t.handMaxReach,
                         Mathf.Sin(phase * Mathf.PI));
                     targetLean = Mathf.Sin(phase * Mathf.PI);
+                    targetHeight = 0f;
                     // Во время удара поза ставится напрямую: любое сглаживание здесь
                     // размазало бы тайминг, ради которого сценарный удар и делался.
                     blend = 1f;
@@ -150,24 +163,29 @@ namespace TopKong
                 }
 
                 case SwingState.Recover:
-                    targetAngle = 0f;
-                    targetReach = FighterRig.ClubRestReach;
+                    targetAngle = _t.carryAngle * -_side;
+                    targetReach = _t.carryReach;
                     targetLean = 0f;
-                    blend = 10f * dt;
+                    targetHeight = _t.carryDrop;
+                    blend = 7f * dt;
                     break;
 
                 default:
-                    targetAngle = 0f;
-                    targetReach = FighterRig.ClubRestReach;
+                    // Покой: дубина волочится за спиной. Отдельного «состояния готовности»
+                    // рисовать не нужно — разница между «несу» и «замахиваюсь» видна сама.
+                    targetAngle = _t.carryAngle * -_side;
+                    targetReach = _t.carryReach;
                     targetLean = 0f;
-                    blend = 8f * dt;
+                    targetHeight = _t.carryDrop;
+                    blend = 5f * dt;
                     break;
             }
 
             blend = Mathf.Clamp01(blend);
-            _angle = Mathf.Lerp(_angle, targetAngle, blend);
+            _angle = Mathf.LerpAngle(_angle, targetAngle, blend);
             _reach = Mathf.Lerp(_reach, targetReach, blend);
             _lean = Mathf.Lerp(_lean, targetLean, blend);
+            _height = Mathf.Lerp(_height, targetHeight, blend);
         }
 
         public void Reset()
@@ -177,9 +195,10 @@ namespace TopKong
             _timer = 0f;
             _cooldown = 0f;
             _charge = 0f;
-            _angle = 0f;
-            _reach = FighterRig.ClubRestReach;
+            _angle = _t.carryAngle * -_side;
+            _reach = _t.carryReach;
             _lean = 0f;
+            _height = _t.carryDrop;
         }
     }
 }

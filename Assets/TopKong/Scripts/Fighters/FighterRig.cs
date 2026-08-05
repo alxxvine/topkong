@@ -50,9 +50,6 @@ namespace TopKong
             public Quaternion ClubRotation;
             public Vector3 HandLeft;
             public Vector3 HandRight;
-            public Quaternion HipsRotation;
-            public Quaternion ChestRotation;
-            public Quaternion HeadRotation;
         }
 
         /// <summary>
@@ -65,21 +62,20 @@ namespace TopKong
         /// <param name="clubReach">Насколько дубина вынесена от груди.</param>
         /// <param name="lean">Наклон корпуса вперёд: от разгона и от удара.</param>
         /// <param name="sway">Заваливание вбок. Им и делается вся шаткость походки.</param>
+        /// <param name="clubHeight">Смещение дубины по высоте. Отрицательное — волочится.</param>
         public static Pose Compute(float bob, float stepPhase, float stride,
-            float clubAngleDeg, float clubReach, float lean, float sway = 0f)
+            float clubAngleDeg, float clubReach, float lean, float sway = 0f,
+            float clubHeight = 0f)
         {
             var pose = new Pose();
 
-            pose.Hips = new Vector3(sway * 0.05f, HipsY + bob, 0f);
-            pose.Chest = new Vector3(sway * 0.12f, ChestY + bob, lean * 0.12f);
-            pose.Head = new Vector3(sway * 0.16f, HeadY + bob, lean * 0.16f);
-
-            // Наклоны вместо чисто позиционного смещения: тело должно заваливаться,
-            // а не съезжать вбок целиком. Голова довешивает сверх корпуса — так
-            // походка читается как чуть пьяная, а не как поворот статуи.
-            pose.HipsRotation = Quaternion.Euler(lean * 4f, 0f, -sway * 5f);
-            pose.ChestRotation = Quaternion.Euler(lean * 12f, 0f, -sway * 9f);
-            pose.HeadRotation = Quaternion.Euler(lean * 8f, 0f, -sway * 12f);
+            // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
+            // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
+            // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
+            // на разную величину — и тело заваливается само, оставаясь связным.
+            pose.Hips = new Vector3(sway * 0.02f, HipsY + bob, lean * 0.02f);
+            pose.Chest = new Vector3(sway * 0.10f, ChestY + bob, lean * 0.12f);
+            pose.Head = new Vector3(sway * 0.22f, HeadY + bob, lean * 0.20f);
 
             // Ноги в противофазе: одна выносится вперёд и приподнимается, другая позади.
             float phaseL = stepPhase * Mathf.PI * 2f;
@@ -90,7 +86,7 @@ namespace TopKong
             Vector3 direction = Quaternion.Euler(0f, clubAngleDeg, 0f) * Vector3.forward;
             Vector3 side = Vector3.Cross(Vector3.up, direction);
 
-            Vector3 chestPoint = new Vector3(0f, ClubY + bob, lean * 0.12f);
+            Vector3 chestPoint = new Vector3(0f, ClubY + bob + clubHeight, lean * 0.12f);
             pose.Club = chestPoint + direction * clubReach;
             // Длинная ось дубины — её локальная Y, поэтому разворачиваем Y на направление.
             pose.ClubRotation = Quaternion.FromToRotation(Vector3.up, direction);
@@ -138,7 +134,7 @@ namespace TopKong
         /// <summary>Поза покоя — из неё собирается тело и в неё же оно возвращается после падения.</summary>
         public static Pose RestPose()
         {
-            return Compute(0f, 0f, 0f, 0f, ClubRestReach, 0f, 0f);
+            return Compute(0f, 0f, 0f, 0f, ClubRestReach, 0f, 0f, 0f);
         }
     }
 }

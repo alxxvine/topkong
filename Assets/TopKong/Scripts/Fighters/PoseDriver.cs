@@ -32,6 +32,15 @@ namespace TopKong
         readonly float _noiseSeed = Random.value * 100f;
         int _writeIndex;
 
+        // Пружины по ключевым точкам позы. Жёсткость падает по мере удаления от опоры,
+        // поэтому движение прокатывается по телу волной, а не приходит везде разом.
+        const int PointCount = 8;
+        static readonly float[] Stiffness = { 2.4f, 1.0f, 0.6f, 0.4f, 2.0f, 2.0f, 0.55f, 0.55f };
+        readonly Vector3[] _point = new Vector3[PointCount];
+        readonly Vector3[] _pointVel = new Vector3[PointCount];
+        bool _jellyReady;
+        float _rigid;
+
         /// <summary>1 — чистая вычисленная поза, 0 — поза, запомненная при вставании.</summary>
         public float BlendFromStart { get; set; } = 1f;
         public Vector3[] StartLocalPositions { get; set; }
@@ -84,9 +93,81 @@ namespace TopKong
             UpdateWobble(dt, planarSpeed, normalized);
 
             var pose = FighterRig.Compute(_bob, _stepPhase, _stride,
-                swing.ClubAngle + _clubLag, swing.ClubReach, swing.Lean + _lean, _sway);
+                swing.ClubAngle + _clubLag, swing.ClubReach, swing.Lean + _lean, _sway,
+                swing.ClubHeight);
 
-            Apply(pose);
+            // На проносе желе почти выключается: там важен точный тайминг и точное
+            // положение набалдашника — по его смещению считается сила попадания,
+            // и мягкие пружины начали бы влиять на урон.
+            _rigid = Mathf.MoveTowards(_rigid, swing.Striking ? 1f : 0f, dt / 0.08f);
+
+            Apply(Jelly(pose, dt));
+        }
+
+        /// <summary>
+        /// Пропускает ключевые точки позы через пружины.
+        ///
+        /// Кинематическое тело приходит в новое положение всеми частями разом и без
+        /// запаздывания — именно это читается как «деталь», а не «тело». Пружина
+        /// с недодемпфированием даёт перелёт и отставание, а разная жёсткость по частям
+        /// превращает это в волну: таз пошёл, корпус отстал, голова качнулась следом,
+        /// дубина довесила.
+        ///
+        /// Слой чисто визуальный. Ни столкновения, ни движение, ни тайминг удара
+        /// он не трогает — иначе мы вернулись бы к физическому телу, из которого
+        /// только что вылезли.
+        /// </summary>
+        FighterRig.Pose Jelly(FighterRig.Pose target, float dt)
+        {
+            var targets = new[]
+            {
+                target.Hips, target.Chest, target.Head, target.Club,
+                target.FootLeft, target.FootRight, target.HandRight, target.HandLeft
+            };
+
+            if (!_jellyReady)
+            {
+                for (int i = 0; i < PointCount; i++)
+                {
+                    _point[i] = targets[i];
+                    _pointVel[i] = Vector3.zero;
+                }
+                _jellyReady = true;
+            }
+
+            float amount = Mathf.Clamp01(_t.jellyAmount) * (1f - _rigid);
+            float stiffBoost = Mathf.Lerp(1f, 8f, _rigid);
+
+            for (int i = 0; i < PointCount; i++)
+            {
+                float k = _t.jellyStiffness * Stiffness[i] * stiffBoost;
+                float d = _t.jellyDamping * Mathf.Sqrt(Stiffness[i] * stiffBoost);
+
+                _pointVel[i] += ((targets[i] - _point[i]) * k - _pointVel[i] * d) * dt;
+                _point[i] += _pointVel[i] * dt;
+
+                targets[i] = Vector3.Lerp(targets[i], _point[i], amount);
+            }
+
+            target.Hips = targets[0];
+            target.Chest = targets[1];
+            target.Head = targets[2];
+            target.Club = targets[3];
+            target.FootLeft = targets[4];
+            target.FootRight = targets[5];
+            target.HandRight = targets[6];
+            target.HandLeft = targets[7];
+            return target;
+        }
+
+        /// <summary>
+        /// Сбросить пружины в текущую позу. Нужно перед вставанием: иначе накопленные
+        /// скорости выстрелят конечностями в момент перехода.
+        /// </summary>
+        public void ResetJelly()
+        {
+            _jellyReady = false;
+            _rigid = 0f;
         }
 
         /// <summary>
@@ -141,6 +222,7 @@ namespace TopKong
             _lastSpeed = 0f;
             _lastYaw = _f.transform.eulerAngles.y;
             BlendFromStart = 1f;
+            ResetJelly();
             Apply(FighterRig.RestPose());
         }
 
@@ -149,10 +231,17 @@ namespace TopKong
             var rig = _f.RigRef;
             _writeIndex = 0;
 
-            Set(rig.Hips, pose.Hips, pose.HipsRotation);
-            Set(rig.Chest, pose.Chest, pose.ChestRotation);
-            Set(rig.Head, pose.Head, pose.HeadRotation);
-            Set(rig.Club, pose.Club, pose.ClubRotation);
+            // Повороты выводятся из уже сработавших точек, а не пружинятся отдельно.
+            // Отдельная пружина на кватернион дала бы второй источник правды
+            // и рассинхрон с позициями; так поза остаётся связной сама собой.
+            Quaternion hipsRot = Aim(pose.Chest - pose.Hips);
+            Quaternion chestRot = Aim(pose.Head - pose.Chest);
+            Vector3 handMid = (pose.HandLeft + pose.HandRight) * 0.5f;
+
+            Set(rig.Hips, pose.Hips, hipsRot);
+            Set(rig.Chest, pose.Chest, chestRot);
+            Set(rig.Head, pose.Head, chestRot);
+            Set(rig.Club, pose.Club, Aim(pose.Club - handMid));
 
             PlaceLimb(rig.LegLUpper, FighterRig.HipJoint(false), Knee(pose.FootLeft, false));
             PlaceLimb(rig.LegLFoot, Knee(pose.FootLeft, false), pose.FootLeft);
@@ -174,6 +263,14 @@ namespace TopKong
             Vector3 mid = (hip + foot) * 0.5f;
             mid.z += 0.06f;
             return mid;
+        }
+
+        /// <summary>Поворот, направляющий локальную ось Y тела вдоль вектора.</summary>
+        static Quaternion Aim(Vector3 direction)
+        {
+            return direction.sqrMagnitude > 1e-6f
+                ? Quaternion.FromToRotation(Vector3.up, direction.normalized)
+                : Quaternion.identity;
         }
 
         void PlaceLimb(Rigidbody body, Vector3 from, Vector3 to)

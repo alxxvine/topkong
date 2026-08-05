@@ -58,6 +58,10 @@ namespace TopKong
             // Пронос забирает управление: удар должен чего-то стоить, иначе им можно
             // размахивать на бегу без всякого риска.
             if (_f.Swinging) wish *= _t.swingMoveLock;
+            // Пока копишь замах — идёшь медленно. Полная скорость только у того,
+            // кто дубину не поднимал: выбор между «быстро» и «готов ударить» и есть
+            // главное решение в бою.
+            else if (_f.SwingHeld) wish *= _t.chargeMoveSlow;
 
             Vector3 velocity = RB.Vel(body);
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);

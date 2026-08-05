@@ -67,6 +67,14 @@ namespace TopKong
                + "Отсюда у неё берётся вес")]
         public float limbLag = 0.12f;
 
+        [Header("Желейность")]
+        [Tooltip("Общий рубильник вторичного движения. 0 — жёсткое тело, как было")]
+        [Range(0f, 1f)] public float jellyAmount = 1f;
+        [Tooltip("Жёсткость пружин позы. Меньше — тело мягче и ленивее")]
+        public float jellyStiffness = 120f;
+        [Tooltip("Затухание. Низкое даёт перелёт — это и есть желе")]
+        public float jellyDamping = 8f;
+
         [Header("Подъём после падения")]
         [Tooltip("Сколько тряпка должна пролежать спокойно, прежде чем вставать")]
         public float standUpSettle = 0.45f;
@@ -83,6 +91,16 @@ namespace TopKong
         public bool showAimLink = true;
 
         [Header("Удар")]
+        [Tooltip("Куда отведена дубина в покое, градусов от взгляда. Около 180 — "
+               + "волочится прямо за спиной")]
+        [Range(90f, 180f)] public float carryAngle = 155f;
+        [Tooltip("Насколько дубина отставлена от корпуса в покое")]
+        public float carryReach = 0.5f;
+        [Tooltip("Насколько дубина опущена в покое. Отрицательное — волочится по земле")]
+        public float carryDrop = -0.75f;
+        [Tooltip("Во сколько раз медленнее боец идёт, пока копит замах. "
+               + "Не копишь — бежишь в полную силу")]
+        [Range(0.1f, 1f)] public float chargeMoveSlow = 0.45f;
         [Tooltip("За сколько секунд удержания заряд набирается полностью")]
         public float swingChargeTime = 0.5f;
         [Tooltip("Длительность самого проноса. Меньше — резче удар")]
