@@ -4,31 +4,29 @@ namespace TopKong
 {
     public enum SwingState
     {
-        /// <summary>Дубина в стойке перед собой, её держат суставы.</summary>
         Guard,
-        /// <summary>Кнопка зажата: рука отведена, копится заряд.</summary>
         WindUp,
-        /// <summary>Пронос дугой сквозь направление прицела.</summary>
         Strike,
-        /// <summary>Возврат в стойку.</summary>
         Recover
     }
 
     /// <summary>
-    /// Удар: зажал — копишь, отпустил — бьёшь.
+    /// Удар как сценарий, а не как физика.
     ///
-    /// До этого дубина непрерывно следовала за мышью, а суставы рук были намеренно
-    /// слабыми, чтобы её тащил PD-регулятор. Из-за этого рука болталась и регулярно
-    /// оказывалась за спиной — ударить из такого положения было нечем. Теперь стойку
-    /// держат жёсткие суставы, а этот автомат на время удара перехватывает управление
-    /// дубиной и ведёт её по осмысленной дуге.
+    /// Раньше дубину вёл PD-регулятор, а замах возникал из того, как игрок водит мышью.
+    /// Идея пришла из VR, где у игрока есть настоящая рука с настоящей скоростью;
+    /// на мыши такой руки нет, и всё сводилось к угадыванию намерения по двумерному
+    /// курсору — отсюда вязкость, раскачка и бесконечная подкрутка коэффициентов.
     ///
-    /// Класс общий для игрока и ботов: разница только в том, кто дёргает Held.
-    /// Бот бьёт ровно тем же кодом и с теми же таймингами — никаких привилегий.
+    /// Теперь это чистый таймлайн: класс не трогает физику вовсе, а лишь выдаёт три числа —
+    /// куда развёрнута дубина, насколько вынесена и как наклонён корпус. Разворачивает
+    /// их в позу PoseDriver. Физика остаётся там, где она хороша: в том, как соперник
+    /// получает импульс и улетает.
+    ///
+    /// Класс общий для игрока и ботов: разница только в том, кто держит Held.
     /// </summary>
     public class SwingAction
     {
-        readonly Fighter _f;
         readonly GameTuning _t;
 
         float _timer;
@@ -36,31 +34,34 @@ namespace TopKong
         float _charge;
         // Сторона дуги чередуется: слева-направо, потом обратно.
         float _side = 1f;
-        float _strikeAimDeg;
+
+        float _angle;
+        float _reach;
+        float _lean;
 
         public SwingState State { get; private set; } = SwingState.Guard;
-
-        /// <summary>Набранный заряд 0..1. В стойке — заряд прошлого удара уже сброшен.</summary>
+        public bool Held { get; set; }
         public float Charge => _charge;
 
-        public bool Held { get; set; }
-
-        /// <summary>Идёт пронос — по нему включается помощь корпуса и звук.</summary>
+        /// <summary>Идёт пронос — только в это время дубина считается бьющей.</summary>
         public bool Striking => State == SwingState.Strike;
 
-        /// <summary>Пока false, дубину держат только суставы и PD-регулятор не вмешивается.</summary>
-        public bool DrivesClub => State == SwingState.WindUp || State == SwingState.Strike;
+        /// <summary>Куда развёрнута дубина относительно взгляда, в градусах.</summary>
+        public float ClubAngle => _angle;
 
-        /// <summary>Мировая точка, к которой тянуть дубину. Осмысленна, только если DrivesClub.</summary>
-        public Vector3 Target { get; private set; }
+        /// <summary>Насколько дубина вынесена от корпуса.</summary>
+        public float ClubReach => _reach;
 
-        /// <summary>Множитель силы тяги: слабый заряд — вялый удар.</summary>
-        public float PowerScale => Mathf.Lerp(_t.swingWeakestPower, 1f, _charge);
+        /// <summary>Наклон корпуса: отрицательный — отклонился назад на замахе.</summary>
+        public float Lean => _lean;
 
-        public SwingAction(Fighter fighter, GameTuning tuning)
+        /// <summary>Сила удара 0..1: во столько раз он весомее незаряженного.</summary>
+        public float Power { get; private set; } = 1f;
+
+        public SwingAction(GameTuning tuning)
         {
-            _f = fighter;
             _t = tuning;
+            _reach = FighterRig.ClubRestReach;
         }
 
         public void Tick(float dt)
@@ -71,12 +72,22 @@ namespace TopKong
             {
                 case SwingState.Guard:
                     _charge = 0f;
-                    if (Held && _cooldown <= 0f) State = SwingState.WindUp;
+                    if (Held && _cooldown <= 0f)
+                    {
+                        State = SwingState.WindUp;
+                        _timer = 0f;
+                    }
                     break;
 
                 case SwingState.WindUp:
-                    _charge = Mathf.Min(1f, _charge + dt / Mathf.Max(0.01f, _t.swingChargeTime));
-                    if (!Held) BeginStrike();
+                    _timer += dt;
+                    _charge = Mathf.Min(1f, _timer / Mathf.Max(0.01f, _t.swingChargeTime));
+                    if (!Held)
+                    {
+                        State = SwingState.Strike;
+                        _timer = 0f;
+                        Power = Mathf.Lerp(_t.swingWeakestPower, 1f, _charge);
+                    }
                     break;
 
                 case SwingState.Strike:
@@ -85,8 +96,6 @@ namespace TopKong
                     {
                         State = SwingState.Recover;
                         _timer = 0f;
-                        // Следующий удар пойдёт с другой стороны — так серия ударов
-                        // читается как размен, а не как повторение одного движения.
                         _side = -_side;
                         _cooldown = _t.swingCooldown;
                     }
@@ -102,51 +111,75 @@ namespace TopKong
                     break;
             }
 
-            UpdateTarget();
+            UpdatePose(dt);
         }
 
-        void BeginStrike()
+        void UpdatePose(float dt)
         {
-            State = SwingState.Strike;
-            _timer = 0f;
-            // Направление фиксируется в момент отпускания. Иначе доворот прицела
-            // посреди проноса тащил бы дубину за собой, и удар терял бы инерцию.
-            _strikeAimDeg = AimDegrees();
-        }
-
-        float AimDegrees()
-        {
-            Vector3 aim = _f.FacingTarget;
-            aim.y = 0f;
-            if (aim.sqrMagnitude < 0.0001f) aim = _f.Facing;
-            return Mathf.Atan2(aim.x, aim.z) * Mathf.Rad2Deg;
-        }
-
-        void UpdateTarget()
-        {
-            if (!DrivesClub) return;
-
             float half = _t.swingArcDegrees * 0.5f;
-            float angle;
-            float reach;
+            float targetAngle;
+            float targetReach;
+            float targetLean;
+            float blend;
 
-            if (State == SwingState.WindUp)
+            switch (State)
             {
-                // Отводим за начало дуги: замах должен быть виден как замах,
-                // а пронос — начинаться с разгона, а не с места.
-                angle = AimDegrees() - _side * (half + 30f);
-                reach = Mathf.Lerp(_t.handMinReach, _t.windUpReach, _charge);
-            }
-            else
-            {
-                float phase = Mathf.Clamp01(_timer / Mathf.Max(0.01f, _t.swingStrikeTime));
-                angle = _strikeAimDeg + Mathf.Lerp(-half, half, phase) * _side;
-                // Рука выпрямляется к середине проноса — там же и максимальная скорость.
-                reach = Mathf.Lerp(_t.handMinReach, _t.handMaxReach, Mathf.Sin(phase * Mathf.PI));
+                case SwingState.WindUp:
+                    // Отводим за начало дуги и подаём корпус назад: замах должен читаться
+                    // как замах ещё до того, как что-то полетит.
+                    targetAngle = -_side * (half + 25f);
+                    targetReach = FighterRig.ClubRestReach * 0.8f;
+                    targetLean = -0.4f * _charge;
+                    blend = 12f * dt;
+                    break;
+
+                case SwingState.Strike:
+                {
+                    float phase = Mathf.Clamp01(_timer / Mathf.Max(0.01f, _t.swingStrikeTime));
+                    // Ease-out: пронос резкий в начале и доводится к концу. Линейная
+                    // развёртка выглядит как равномерное вращение манипулятора, а не как удар.
+                    float eased = 1f - (1f - phase) * (1f - phase);
+                    targetAngle = Mathf.Lerp(-(half + 25f), half, eased) * _side;
+                    targetReach = Mathf.Lerp(FighterRig.ClubRestReach, _t.handMaxReach,
+                        Mathf.Sin(phase * Mathf.PI));
+                    targetLean = Mathf.Sin(phase * Mathf.PI);
+                    // Во время удара поза ставится напрямую: любое сглаживание здесь
+                    // размазало бы тайминг, ради которого сценарный удар и делался.
+                    blend = 1f;
+                    break;
+                }
+
+                case SwingState.Recover:
+                    targetAngle = 0f;
+                    targetReach = FighterRig.ClubRestReach;
+                    targetLean = 0f;
+                    blend = 10f * dt;
+                    break;
+
+                default:
+                    targetAngle = 0f;
+                    targetReach = FighterRig.ClubRestReach;
+                    targetLean = 0f;
+                    blend = 8f * dt;
+                    break;
             }
 
-            Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * reach;
-            Target = _f.Chest.position + offset + Vector3.up * _t.clubHeightOffset;
+            blend = Mathf.Clamp01(blend);
+            _angle = Mathf.Lerp(_angle, targetAngle, blend);
+            _reach = Mathf.Lerp(_reach, targetReach, blend);
+            _lean = Mathf.Lerp(_lean, targetLean, blend);
+        }
+
+        public void Reset()
+        {
+            State = SwingState.Guard;
+            Held = false;
+            _timer = 0f;
+            _cooldown = 0f;
+            _charge = 0f;
+            _angle = 0f;
+            _reach = FighterRig.ClubRestReach;
+            _lean = 0f;
         }
     }
 }

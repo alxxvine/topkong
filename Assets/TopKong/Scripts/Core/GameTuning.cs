@@ -30,48 +30,34 @@ namespace TopKong
         public float despawnDelay = 3f;
         public float spawnRadiusFactor = 0.62f;
 
-        [Header("Стойка и баланс")]
-        [Tooltip("На какой высоте подвеска держит таз над ареной")]
-        public float standHeight = 1.0f;
-        [Tooltip("Только жёсткость отклика: вес тела подвеска компенсирует отдельно")]
-        public float suspensionSpring = 260f;
-        public float suspensionDamper = 26f;
-        // Момент прикладывается в режиме Acceleration, то есть в рад/с², а не в ньютон-метрах.
-        // Момент инерции таза мал, поэтому осмысленные значения тут — сотни, а не единицы.
-        public float uprightSpring = 550f;
-        public float uprightDamper = 45f;
-        [Tooltip("Скорость разворота к прицелу. Демпферы вертикали рыскание больше "
-               + "не душат, так что значение работает в полную силу")]
-        public float facingSpring = 110f;
-        public float facingDamper = 10f;
-        [Tooltip("Насколько активно тела объезжают вокруг оси при развороте. 0 — поворот "
-               + "тянут одни суставы, и вынесенная вперёд дубина делает его вязким")]
-        [Range(0f, 2f)] public float turnAssist = 1f;
-        [Tooltip("Торможение на земле, когда игрок не жмёт направление")]
-        public float groundFriction = 12f;
-        [Tooltip("Гасит вращение таза на земле. Отдельно от uprightDamper, чтобы не делать подъём деревянным")]
-        public float groundedAngularDamping = 6f;
-
-        [Header("Подъём с земли")]
-        [Tooltip("Ниже этого совпадения с вертикалью боец считается лежащим (1 — стоит ровно)")]
-        [Range(0f, 1f)] public float getUpTiltThreshold = 0.62f;
-        [Tooltip("Запас, чтобы не дёргаться на самой границе порога")]
-        [Range(0f, 0.5f)] public float getUpHysteresis = 0.15f;
-        [Tooltip("Во сколько раз усилить возврат в стойку, пока боец лежит")]
-        public float getUpBoost = 3.5f;
-        [Tooltip("Если не встал за это время, усилие растёт дальше без потолка — страховка от вечного лежания")]
-        public float getUpTimeout = 1.2f;
-
-        [Header("Прыжки")]
-        [Tooltip("Пауза между микро-прыжками — из неё берётся весь ритм передвижения")]
-        public float hopInterval = 0.30f;
-        public float hopUp = 4.6f;
-        [Tooltip("Насколько сильно один прыжок разгоняет в сторону движения")]
-        public float hopAccel = 3.2f;
+        [Header("Движение")]
         public float maxRunSpeed = 6.2f;
-        public float airControl = 9f;
-        [Tooltip("Импульс вниз в опорную ногу в момент отталкивания. Ноги чередуются, и это единственное, что делает прыжки похожими на походку")]
-        public float legKick = 6f;
+        [Tooltip("Разгон до полной скорости")]
+        public float moveAccel = 45f;
+        [Tooltip("Торможение, когда направление отпущено")]
+        public float moveBrake = 30f;
+        [Tooltip("Управление в воздухе. Малое намеренно: сбитый должен долетать до края, "
+               + "а не выруливать обратно на арену")]
+        public float airControl = 4f;
+        [Tooltip("Градусов разворота в секунду. Тело кинематическое, так что это "
+               + "ровно та скорость, которую видно на экране")]
+        public float turnSpeed = 720f;
+
+        [Header("Шаг")]
+        [Tooltip("Шагов в секунду на полной скорости")]
+        public float stepRate = 2.4f;
+        [Tooltip("Насколько далеко выносится нога")]
+        public float stepLength = 0.28f;
+        [Tooltip("Подскок корпуса на шаге")]
+        public float stepBob = 0.07f;
+
+        [Header("Подъём после падения")]
+        [Tooltip("Сколько тряпка должна пролежать спокойно, прежде чем вставать")]
+        public float standUpSettle = 0.45f;
+        [Tooltip("Страховка: встать не позже этого времени с момента удара")]
+        public float standUpTimeout = 3f;
+        [Tooltip("Длительность самого вставания")]
+        public float standUpTime = 0.5f;
 
         [Header("Прицел")]
         [Tooltip("Насколько далеко за край арены можно увести прицел (доля радиуса). "
@@ -80,53 +66,21 @@ namespace TopKong
         [Tooltip("Линия от бойца к прицелу. Показывает, куда он развернётся")]
         public bool showAimLink = true;
 
-        [Header("Дубина")]
-        [Tooltip("Жёсткость суставов рук. Держит стойку — при малых значениях дубина "
-               + "болтается и уезжает за спину. Применяется при сборке бойца: "
-               + "чтобы увидеть эффект, перезапусти раунд по R")]
-        public float armDriveSpring = 1500f;
-        // Дальность подобрана под длину руки: тянуть дальше бессмысленно, рука упрётся
-        // в пределы суставов и замах станет вязким.
-        public float handMinReach = 0.55f;
-        public float handMaxReach = 1.35f;
-        public float clubHeightOffset = -0.05f;
-
-        [Header("Замах")]
+        [Header("Удар")]
         [Tooltip("За сколько секунд удержания заряд набирается полностью")]
-        public float swingChargeTime = 0.55f;
+        public float swingChargeTime = 0.5f;
         [Tooltip("Длительность самого проноса. Меньше — резче удар")]
-        public float swingStrikeTime = 0.22f;
+        public float swingStrikeTime = 0.18f;
         [Tooltip("Возврат в стойку после удара")]
-        public float swingRecoverTime = 0.18f;
+        public float swingRecoverTime = 0.16f;
         [Tooltip("Пауза перед следующим замахом")]
-        public float swingCooldown = 0.15f;
+        public float swingCooldown = 0.12f;
         [Tooltip("Ширина дуги проноса в градусах")]
         [Range(60f, 220f)] public float swingArcDegrees = 150f;
-        [Tooltip("На сколько дубина отводится назад при замахе")]
-        public float windUpReach = 0.95f;
+        [Tooltip("Насколько дубина вылетает от корпуса на пике проноса")]
+        public float handMaxReach = 1.15f;
         [Tooltip("Во сколько раз слабее незаряженный удар по сравнению с полным")]
         [Range(0.1f, 1f)] public float swingWeakestPower = 0.5f;
-        [Tooltip("Жёсткость притяжения дубины к точке прицела")]
-        public float clubKP = 420f;
-        public float clubKD = 34f;
-        public float clubMaxAccel = 700f;
-        [Tooltip("Доля тяги дубины, возвращаемая в корпус противодействием. Ноль по "
-               + "умолчанию: сила прикладывается к груди, а дубина от неё далеко, и пара "
-               + "разнесённых сил даёт момент — то есть раскачку вместо смещения")]
-        [Range(0f, 1.2f)] public float clubChestReaction = 0f;
-        public float clubAlignSpring = 30f;
-        public float clubAlignDamper = 4f;
-        [Tooltip("Момент, которым корпус доворачивается вслед за проносом. Ноль по умолчанию: "
-               + "удар должен двигать руки, а не качать тело")]
-        public float swingBodyAssist = 0f;
-        [Tooltip("Во сколько раз мягче приводы рук на время замаха. Мягкие руки следуют "
-               + "за дубиной, вместо того чтобы тащить за ней корпус")]
-        [Range(0.05f, 1f)] public float swingArmSoftness = 0.35f;
-        [Tooltip("Торможение заваливания корпуса на время замаха — страховка от раскачки")]
-        public float swingTorsoBrace = 25f;
-        [Tooltip("Сколько веса дубины компенсируется во время проноса. 1 — невесомая, "
-               + "0 — тянет в полную силу и заваливает бойца")]
-        [Range(0f, 1f)] public float swingGravityCompensation = 0.8f;
 
         [Header("Удары")]
         [Tooltip("Медленнее этой скорости касание не считается ударом")]
@@ -136,11 +90,7 @@ namespace TopKong
         public float maxKnockback = 13f;
         [Tooltip("Сколько от удара уходит вверх — с подбросом сбивать с арены веселее")]
         public float knockUpBias = 0.35f;
-        public float minStun = 0.15f;
-        public float maxStun = 1.2f;
         public float hitCooldown = 0.22f;
-        [Tooltip("Сколько боец собирается обратно в стойку после стана")]
-        public float stunRecoverTime = 0.55f;
         public float hitStopMax = 0.055f;
         public float shakeMul = 0.9f;
 

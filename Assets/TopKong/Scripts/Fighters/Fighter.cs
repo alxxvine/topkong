@@ -3,21 +3,37 @@ using UnityEngine;
 
 namespace TopKong
 {
+    public enum BodyState
+    {
+        /// <summary>Тела кинематические, позу считает PoseDriver, движется капсула-персонаж.</summary>
+        Controlled,
+        /// <summary>Тела динамические, работают суставы. Так боец получает удар и улетает.</summary>
+        Ragdoll,
+        /// <summary>Возврат из тряпки в стойку — гарантированный, не физический.</summary>
+        StandingUp
+    }
+
     /// <summary>
-    /// Боец: активный ragdoll с двуручной дубиной.
+    /// Боец. Управление снаружи сводится к трём полям — MoveInput, FacingTarget
+    /// и SwingHeld; их одинаково выставляют PlayerController и BotBrain, так что бот
+    /// дерётся ровно теми же мышцами, что и игрок.
     ///
-    /// Управление снаружи сводится к трём полям — MoveInput, FacingTarget и SwingHeld.
-    /// Их одинаково выставляют и PlayerController, и BotBrain, поэтому бот дерётся ровно
-    /// теми же мышцами, что и игрок, без отдельной "ИИ-физики".
+    /// Тело живёт в двух режимах. Под управлением оно кинематическое: движется
+    /// капсула-персонаж на корне, а позу тел считает код. В момент попадания тела
+    /// становятся динамическими и продолжают с той же позы уже настоящей физикой —
+    /// и весь ragdoll достаётся тому, ради чего он и нужен: полёту с арены.
     ///
-    /// Контроллеры баланса, замаха и дубины намеренно не MonoBehaviour: тогда порядок
-    /// их вызова внутри FixedUpdate задаётся здесь явно и не зависит от
-    /// Script Execution Order.
+    /// Прежняя схема держала тело физическим всё время. Она пришла из VR-идеи, где
+    /// у игрока есть настоящая рука с настоящей скоростью; на мыши и клавиатуре
+    /// управление в итоге всё время боролось с физикой, и предсказать результат
+    /// было нельзя.
     /// </summary>
     public class Fighter : MonoBehaviour
     {
         public class Rig
         {
+            public Rigidbody RootBody;
+            public Collider RootCollider;
             public Rigidbody Hips;
             public Rigidbody Chest;
             public Rigidbody Head;
@@ -28,11 +44,10 @@ namespace TopKong
             public Rigidbody ArmR;
             public Rigidbody ArmL;
             public Rigidbody Club;
+            public Collider ClubCollider;
             public Rigidbody[] Bodies;
             public Collider[] Colliders;
             public ConfigurableJoint[] Joints;
-            /// <summary>Параллельно Joints: true — сустав руки или дубины.</summary>
-            public bool[] ArmJoints;
             public LineRenderer Marker;
             public ClubImpact Impact;
         }
@@ -41,90 +56,57 @@ namespace TopKong
         GameTuning _t;
         Arena _arena;
         GameFx _fx;
-        BalanceController _balance;
-        ClubDriver _clubDriver;
+
+        Locomotion _locomotion;
+        PoseDriver _pose;
         SwingAction _swing;
 
-        JointDrive[] _baseDrives;
-        float _driveScale = 1f;
-        float _appliedDriveScale = -1f;
-        float _armScale = 1f;
-        float _appliedArmScale = -1f;
-        bool _wasSwinging;
+        Rigidbody[] _ordered;
+        Vector3[] _startPositions;
+        Quaternion[] _startRotations;
+        Vector3 _lastClubHead;
+
+        float _settleTimer;
+        float _standUpTimer;
+        float _stateTimer;
 
         public event Action<Fighter> Eliminated;
 
+        public Rig RigRef => _rig;
+        public Rigidbody RootBody => _rig.RootBody;
         public Rigidbody Hips => _rig.Hips;
         public Rigidbody Chest => _rig.Chest;
         public Rigidbody Club => _rig.Club;
-        public Rigidbody ArmR => _rig.ArmR;
-        public Rigidbody ArmL => _rig.ArmL;
-        public Rigidbody LegFootLeft => _rig.LegLFoot;
-        public Rigidbody[] Bodies => _rig.Bodies;
-        public Rigidbody LegFootRight => _rig.LegRFoot;
-
-        /// <summary>Состояние удара — им пользуются ClubDriver, HUD и звук.</summary>
         public SwingAction Swing => _swing;
 
-        /// <summary>
-        /// Масса, которую подвеска обязана удержать: всё тело за вычетом ног —
-        /// те стоят на арене и держат себя сами.
-        /// </summary>
-        public float SupportedMass { get; private set; }
-
-        public float HipsMass => _rig.Hips.mass;
-
+        public BodyState State { get; private set; } = BodyState.Controlled;
         public string DisplayName { get; private set; }
         public Color TeamColor { get; private set; }
         public bool IsPlayer { get; private set; }
         public bool IsAlive { get; private set; }
-        public bool Grounded => _balance != null && _balance.Grounded;
 
-        /// <summary>Боец сейчас поднимается с земли.</summary>
-        public bool Recovering => _balance != null && _balance.Recovering;
+        public bool Grounded => _locomotion != null && _locomotion.Grounded;
+        public bool Ragdolled => State != BodyState.Controlled;
 
-        /// <summary>Насколько тело вертикально: 1 — стоит ровно, 0 — лежит плашмя.</summary>
-        public float Uprightness =>
-            _rig != null && _rig.Hips != null ? Vector3.Dot(_rig.Hips.transform.up, Vector3.up) : 1f;
-
-        /// <summary>Куда игрок или бот хочет прыгать: x — вправо, y — вперёд, в осях камеры.</summary>
         public Vector2 MoveInput { get; set; }
-
-        /// <summary>
-        /// Куда боец должен быть развёрнут. Раньше поворот брался из направления на дубину,
-        /// и получалась петля: тело гналось за рукой, а рука пружинила к телу. Она сходилась,
-        /// но любое движение мышью разворачивало бойца целиком, и замах на этом фоне
-        /// не читался вообще. Теперь поворот — отдельный вход, которым правит мышь.
-        /// </summary>
         public Vector3 FacingTarget { get; set; }
+        public bool ControlEnabled { get; set; }
 
-        /// <summary>Кнопка удара удерживается — боец копит замах.</summary>
         public bool SwingHeld
         {
             get => _swing != null && _swing.Held;
-            set { if (_swing != null) _swing.Held = value; }
+            // Пока боец летит тряпкой, замахнуться он не может.
+            set { if (_swing != null) _swing.Held = value && State == BodyState.Controlled; }
         }
 
-        /// <summary>Идёт пронос. Корпус в это время помогает рукам.</summary>
         public bool Swinging => _swing != null && _swing.Striking;
-
-        /// <summary>Набранный заряд замаха 0..1 — его показывает полоска в HUD.</summary>
         public float SwingCharge => _swing != null ? _swing.Charge : 0f;
+        public float SwingPower => _swing != null ? _swing.Power : 1f;
 
-        /// <summary>Пока false, боец стоит, но не двигается и не машет — используется во вступлении.</summary>
-        public bool ControlEnabled { get; set; }
-
-        public float StunTimer { get; private set; }
-        public bool Stunned => StunTimer > 0f;
-
-        /// <summary>Текущая скорость дубины — она же сила будущего удара.</summary>
-        public float SwingSpeed => _rig != null && _rig.Club != null ? RB.Vel(_rig.Club).magnitude : 0f;
-
-        /// <summary>Максимум скорости за текущий замах. Обнуляется в начале каждого нового.</summary>
+        /// <summary>Скорость набалдашника — из неё считается сила попадания.</summary>
+        public float SwingSpeed { get; private set; }
         public float SwingPeakSpeed { get; private set; }
 
-        // Данные последнего попадания — нужны панели диагностики в песочнице,
-        // чтобы «удар получился слабым» можно было заменить конкретным числом.
         public float LastHitSpeed { get; private set; }
         public float LastHitStrength { get; private set; }
         public float LastHitTime { get; private set; } = -99f;
@@ -136,9 +118,19 @@ namespace TopKong
             LastHitTime = Time.time;
         }
 
-        public Vector3 Position => _rig != null && _rig.Hips != null ? _rig.Hips.position : transform.position;
+        /// <summary>Позиция бойца: капсула под управлением, таз — когда он тряпка.</summary>
+        public Vector3 Position
+        {
+            get
+            {
+                if (_rig == null) return transform.position;
+                return State == BodyState.Controlled && _rig.RootBody != null
+                    ? _rig.RootBody.position
+                    : _rig.Hips.position;
+            }
+        }
 
-        /// <summary>Положение в плоскости арены относительно её центра. Длина вектора — расстояние до края.</summary>
+        /// <summary>Положение в плоскости арены относительно центра. Длина — расстояние до края.</summary>
         public Vector3 GroundPosition
         {
             get
@@ -148,25 +140,16 @@ namespace TopKong
             }
         }
 
-        /// <summary>Куда боец повёрнут, спроецировано на плоскость арены.</summary>
         public Vector3 Facing
         {
             get
             {
-                Vector3 f = _rig.Hips.transform.forward;
+                Vector3 f = transform.forward;
                 f.y = 0f;
-                if (f.sqrMagnitude < 1e-4f)
-                {
-                    // Тело лежит горизонтально — берём запасную ось, чтобы не делить на ноль.
-                    f = _rig.Hips.transform.up;
-                    f.y = 0f;
-                    if (f.sqrMagnitude < 1e-4f) return Vector3.forward;
-                }
-                return f.normalized;
+                return f.sqrMagnitude < 1e-4f ? Vector3.forward : f.normalized;
             }
         }
 
-        /// <summary>Направление, в котором боец целится. Совпадает с заданным поворотом.</summary>
         public Vector3 AimDirection
         {
             get
@@ -190,124 +173,229 @@ namespace TopKong
             IsAlive = true;
             ControlEnabled = false;
 
-            _baseDrives = new JointDrive[rig.Joints.Length];
-            for (int i = 0; i < rig.Joints.Length; i++) _baseDrives[i] = rig.Joints[i].slerpDrive;
-
-            float total = 0f;
-            foreach (var b in rig.Bodies) total += b.mass;
-            SupportedMass = total
-                - rig.LegLUpper.mass - rig.LegLFoot.mass
-                - rig.LegRUpper.mass - rig.LegRFoot.mass;
-
-            _balance = new BalanceController(this, t, arena);
-            _balance.Hopped += OnHopped;
-            _swing = new SwingAction(this, t);
-            _clubDriver = new ClubDriver(this, t);
+            _swing = new SwingAction(t);
+            _locomotion = new Locomotion(this, t, arena);
+            _pose = new PoseDriver(this, t);
+            _ordered = _pose.OrderedBodies();
+            _startPositions = new Vector3[_ordered.Length];
+            _startRotations = new Quaternion[_ordered.Length];
 
             rig.Impact.Init(this, t, fx);
 
             FacingTarget = Facing;
-        }
-
-        void OnHopped()
-        {
-            if (_fx != null && _fx.Sound != null) _fx.Sound.PlayHop();
-        }
-
-        public void Stun(float seconds)
-        {
-            if (!IsAlive) return;
-            StunTimer = Mathf.Max(StunTimer, seconds);
+            EnterControlled();
+            _pose.SnapToRest();
+            _lastClubHead = ClubHead();
         }
 
         void FixedUpdate()
         {
             if (!IsAlive || _rig == null) return;
-
             float dt = Time.fixedDeltaTime;
-            if (StunTimer > 0f) StunTimer = Mathf.Max(0f, StunTimer - dt);
+            _stateTimer += dt;
 
-            if (Swinging)
+            TrackSwingSpeed(dt);
+
+            switch (State)
             {
-                if (!_wasSwinging) SwingPeakSpeed = 0f;
-                SwingPeakSpeed = Mathf.Max(SwingPeakSpeed, SwingSpeed);
-            }
-            _wasSwinging = Swinging;
+                case BodyState.Controlled:
+                    _swing.Tick(dt);
+                    _locomotion.Tick(dt, ControlEnabled);
+                    _pose.Tick(dt, _locomotion.PlanarSpeed, _locomotion.Grounded);
+                    break;
 
-            UpdateDrives(dt);
+                case BodyState.Ragdoll:
+                    UpdateRagdoll(dt);
+                    break;
 
-            if (Stunned)
-            {
-                // Обмякшему бойцу замах не докрутить: сбрасываем удержание, автомат
-                // сам доиграет до стойки, пока тело болтается.
-                _swing.Held = false;
-            }
-            _swing.Tick(dt);
-
-            if (!Stunned)
-            {
-                _balance.Tick(dt, ControlEnabled);
-                _clubDriver.Tick();
+                case BodyState.StandingUp:
+                    UpdateStandUp(dt);
+                    break;
             }
 
             if (Position.y < _t.killY) Eliminate();
         }
 
-        /// <summary>
-        /// Единственный переключатель между "стоит" и "обмяк": сила приводов суставов.
-        /// Обмякает почти мгновенно — удар должен читаться сразу; собирается обратно
-        /// медленно, за stunRecoverTime, поэтому после сильного попадания боец
-        /// заметно шатается, прежде чем снова встать.
-        /// </summary>
-        void UpdateDrives(float dt)
+        Vector3 ClubHead()
         {
-            float target = Stunned ? 0.05f : 1f;
-            float rate = Stunned ? 0.06f : Mathf.Max(0.01f, _t.stunRecoverTime);
-            _driveScale = Mathf.MoveTowards(_driveScale, target, dt / rate);
-
-            // Руки ослабляются отдельно от остального тела. Пока дубину ведёт внешняя
-            // сила, жёсткие руки честно тащат за ней корпус — и тело качает. Мягкие
-            // на время замаха следуют за дубиной сами, а корпус остаётся на месте.
-            float armTarget = _swing != null && _swing.DrivesClub ? _t.swingArmSoftness : 1f;
-            _armScale = Mathf.MoveTowards(_armScale, armTarget, dt / 0.08f);
-
-            if (Mathf.Abs(_driveScale - _appliedDriveScale) < 0.002f
-                && Mathf.Abs(_armScale - _appliedArmScale) < 0.002f) return;
-
-            _appliedDriveScale = _driveScale;
-            _appliedArmScale = _armScale;
-            ApplyDriveScale();
+            return _rig.Club != null
+                ? _rig.Club.transform.TransformPoint(FighterRig.ClubHeadLocal)
+                : transform.position;
         }
 
-        void ApplyDriveScale()
+        void TrackSwingSpeed(float dt)
         {
-            var armJoints = _rig.ArmJoints;
-            for (int i = 0; i < _rig.Joints.Length; i++)
+            // У кинематического тела velocity нулевая, поэтому скорость набалдашника
+            // считаем сами по смещению за кадр. Именно она определяет силу попадания.
+            Vector3 head = ClubHead();
+            SwingSpeed = (head - _lastClubHead).magnitude / Mathf.Max(1e-5f, dt);
+            _lastClubHead = head;
+
+            if (_swing.Striking) SwingPeakSpeed = Mathf.Max(SwingPeakSpeed, SwingSpeed);
+            else if (_swing.State == SwingState.WindUp) SwingPeakSpeed = 0f;
+        }
+
+        void UpdateRagdoll(float dt)
+        {
+            // Ждём, пока тело успокоится, и только потом поднимаем: иначе боец
+            // начинал бы вставать прямо в полёте.
+            float speed = RB.Vel(_rig.Hips).magnitude;
+            bool onArena = GroundPosition.magnitude < _arena.Radius
+                           && _rig.Hips.position.y > _arena.TopY - 1f;
+
+            if (speed < 1.2f && onArena) _settleTimer += dt;
+            else _settleTimer = 0f;
+
+            // Верхняя граница по времени — страховка: встать боец обязан всегда,
+            // а не только если физика удачно улеглась.
+            if (_settleTimer >= _t.standUpSettle || (onArena && _stateTimer > _t.standUpTimeout))
             {
-                var j = _rig.Joints[i];
-                if (j == null) continue;
-
-                float scale = _driveScale;
-                if (armJoints != null && i < armJoints.Length && armJoints[i]) scale *= _armScale;
-
-                var b = _baseDrives[i];
-                j.slerpDrive = new JointDrive
-                {
-                    positionSpring = b.positionSpring * _t.driveSpringMul * scale,
-                    positionDamper = b.positionDamper * _t.driveDamperMul * scale,
-                    maximumForce = b.maximumForce
-                };
+                BeginStandUp();
             }
+        }
+
+        /// <summary>
+        /// Переход из тряпки в стойку. Делается интерполяцией, а не физикой:
+        /// «встаёт всегда» должно быть гарантией, а прежний физический подъём был
+        /// надеждой на удачно подобранные коэффициенты.
+        /// </summary>
+        void BeginStandUp()
+        {
+            Vector3 hips = _rig.Hips.position;
+            Vector3 flat = _rig.Hips.transform.up;
+            flat.y = 0f;
+            Quaternion yaw = flat.sqrMagnitude > 1e-4f
+                ? Quaternion.LookRotation(flat.normalized, Vector3.up)
+                : transform.rotation;
+
+            // Тела — дети корня, поэтому переставить корень значит утащить их за собой.
+            // Запоминаем мировые позы, двигаем корень, возвращаем тела на место —
+            // только после этого их локальные координаты осмысленны.
+            var worldPos = new Vector3[_ordered.Length];
+            var worldRot = new Quaternion[_ordered.Length];
+            for (int i = 0; i < _ordered.Length; i++)
+            {
+                if (_ordered[i] == null) continue;
+                worldPos[i] = _ordered[i].transform.position;
+                worldRot[i] = _ordered[i].transform.rotation;
+            }
+
+            SetBodiesKinematic(true);
+            transform.SetPositionAndRotation(new Vector3(hips.x, _arena.TopY, hips.z), yaw);
+
+            for (int i = 0; i < _ordered.Length; i++)
+            {
+                if (_ordered[i] == null) continue;
+                _ordered[i].transform.SetPositionAndRotation(worldPos[i], worldRot[i]);
+                _startPositions[i] = _ordered[i].transform.localPosition;
+                _startRotations[i] = _ordered[i].transform.localRotation;
+            }
+
+            _pose.StartLocalPositions = _startPositions;
+            _pose.StartLocalRotations = _startRotations;
+            _pose.BlendFromStart = 0f;
+
+            EnableRootBody(true);
+            RB.SetVel(_rig.RootBody, Vector3.zero);
+            FacingTarget = Facing;
+
+            State = BodyState.StandingUp;
+            _standUpTimer = 0f;
+            _stateTimer = 0f;
+        }
+
+        void UpdateStandUp(float dt)
+        {
+            _standUpTimer += dt;
+            float k = Mathf.Clamp01(_standUpTimer / Mathf.Max(0.05f, _t.standUpTime));
+            // Сглаживание на концах: без него подъём начинается и кончается рывком.
+            _pose.BlendFromStart = k * k * (3f - 2f * k);
+
+            _locomotion.Tick(dt, false);
+            _pose.Tick(dt, 0f, _locomotion.Grounded);
+
+            if (k >= 1f) EnterControlled();
+        }
+
+        void EnterControlled()
+        {
+            SetBodiesKinematic(true);
+            EnableRootBody(true);
+            _pose.BlendFromStart = 1f;
+            _swing.Reset();
+            State = BodyState.Controlled;
+            _stateTimer = 0f;
+            _settleTimer = 0f;
+        }
+
+        /// <summary>
+        /// Перевести бойца в тряпку и придать импульс. Единственный способ сюда попасть —
+        /// получить удар: собственные действия тело не роняют.
+        /// </summary>
+        public void Ragdoll(Vector3 impulse)
+        {
+            if (!IsAlive || State == BodyState.Ragdoll) return;
+
+            Vector3 inherited = _rig.RootBody != null && !_rig.RootBody.isKinematic
+                ? RB.Vel(_rig.RootBody)
+                : Vector3.zero;
+
+            _swing.Reset();
+            EnableRootBody(false);
+            SetBodiesKinematic(false);
+
+            // Тела наследуют скорость капсулы, иначе тряпка появлялась бы из ниоткуда
+            // с нулевым импульсом и удар в бегущего выглядел бы слабее, чем он есть.
+            foreach (var body in _rig.Bodies)
+            {
+                if (body != null) RB.SetVel(body, inherited);
+            }
+
+            _rig.Hips.AddForce(impulse, ForceMode.VelocityChange);
+            _rig.Chest.AddForce(impulse * 0.6f, ForceMode.VelocityChange);
+
+            State = BodyState.Ragdoll;
+            _stateTimer = 0f;
+            _settleTimer = 0f;
+        }
+
+        void SetBodiesKinematic(bool kinematic)
+        {
+            foreach (var body in _rig.Bodies)
+            {
+                if (body == null) continue;
+                body.isKinematic = kinematic;
+                // Интерполяция нужна только динамическим телам. У кинематических,
+                // чей трансформ пишется напрямую, она даёт дрожание на кадр.
+                body.interpolation = kinematic
+                    ? RigidbodyInterpolation.None
+                    : RigidbodyInterpolation.Interpolate;
+            }
+
+            // Под управлением тело представлено одной капсулой: коллайдеры ragdoll'а
+            // выключены, чтобы объём был ровно один. Дубина — исключение, ей бьют.
+            foreach (var col in _rig.Colliders)
+            {
+                if (col == null || col == _rig.ClubCollider) continue;
+                col.enabled = !kinematic;
+            }
+        }
+
+        void EnableRootBody(bool on)
+        {
+            if (_rig.RootBody != null) _rig.RootBody.isKinematic = !on;
+            if (_rig.RootCollider != null) _rig.RootCollider.enabled = on;
         }
 
         void LateUpdate()
         {
             if (_rig == null || _rig.Marker == null) return;
-            if (!IsAlive)
+            if (!IsAlive || State != BodyState.Controlled)
             {
                 _rig.Marker.enabled = false;
                 return;
             }
+            _rig.Marker.enabled = true;
             var p = Position;
             _rig.Marker.transform.SetPositionAndRotation(
                 new Vector3(p.x, _arena.TopY + 0.02f, p.z), Quaternion.identity);
@@ -316,20 +404,14 @@ namespace TopKong
         public void Eliminate()
         {
             if (!IsAlive) return;
+
+            // Улетать с арены надо тряпкой — так падение читается.
+            if (State == BodyState.Controlled) Ragdoll(Vector3.zero);
+
             IsAlive = false;
             ControlEnabled = false;
-            SwingHeld = false;
+            State = BodyState.Ragdoll;
 
-            // Дальше он просто падает: приводы в ноль, трение почти убрано.
-            _driveScale = 0f;
-            _appliedDriveScale = 0f;
-            _armScale = 1f;
-            _appliedArmScale = 1f;
-            ApplyDriveScale();
-            foreach (var b in _rig.Bodies)
-            {
-                if (b != null) RB.SetDamping(b, 0.01f, 0.02f);
-            }
             if (_rig.Impact != null) _rig.Impact.enabled = false;
             if (_rig.Marker != null) _rig.Marker.enabled = false;
 

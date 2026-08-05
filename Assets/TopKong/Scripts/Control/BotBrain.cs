@@ -51,7 +51,7 @@ namespace TopKong
             float dt = Time.deltaTime;
             Retarget(dt);
 
-            if (!_f.ControlEnabled || _f.Stunned)
+            if (!_f.ControlEnabled || _f.Ragdolled)
             {
                 _f.MoveInput = Vector2.zero;
                 _f.SwingHeld = false;

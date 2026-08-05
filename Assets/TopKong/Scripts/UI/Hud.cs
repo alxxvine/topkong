@@ -157,8 +157,7 @@ namespace TopKong
 
             Line(L("Состояние: ", "State: ") + player.Swing.State
                 + "  " + L("заряд ", "charge ") + player.SwingCharge.ToString("0.00"));
-            Line(L("Вертикаль: ", "Upright: ") + player.Uprightness.ToString("0.00")
-                + (player.Recovering ? L("  (встаёт)", "  (getting up)") : ""));
+            Line(L("Тело: ", "Body: ") + player.State);
             Line(L("Время: ", "Time: ")
                 + (_match.SlowMotion
                     ? "x" + _t.sandboxSlowMotion.ToString("0.00")

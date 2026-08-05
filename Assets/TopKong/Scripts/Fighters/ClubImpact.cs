@@ -5,12 +5,14 @@ namespace TopKong
 {
     /// <summary>
     /// Превращает касание дубины в толчок. Ни урона, ни здоровья в игре нет —
-    /// удар выдаёт только импульс и стан, а проигрывает тот, кого этим импульсом
+    /// удар выдаёт только импульс, а проигрывает тот, кого этим импульсом
     /// в итоге вынесло за край.
     ///
-    /// PhysX и сам передал бы импульс, но его одного мало: чтобы попадание читалось,
-    /// добавляется отдельный толчок с подбросом и оглушение, длительность которого
-    /// зависит от скорости дубины в момент касания.
+    /// Импульс считается и прикладывается вручную, а не оставляется физике: дубина
+    /// в момент удара кинематическая, то есть собственного импульса у неё нет вовсе.
+    /// Зато есть честная скорость набалдашника, которую Fighter меряет по смещению
+    /// за кадр, — из неё и получается сила. Заодно это снимает старую проблему,
+    /// когда удар древком и удар набалдашником отличались случайным образом.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public class ClubImpact : MonoBehaviour
@@ -18,7 +20,6 @@ namespace TopKong
         Fighter _owner;
         GameTuning _t;
         GameFx _fx;
-        Rigidbody _club;
 
         readonly Dictionary<Fighter, float> _lastHit = new Dictionary<Fighter, float>();
 
@@ -27,7 +28,6 @@ namespace TopKong
             _owner = owner;
             _t = tuning;
             _fx = fx;
-            _club = GetComponent<Rigidbody>();
         }
 
         void OnCollisionEnter(Collision collision) => Handle(collision);
@@ -41,8 +41,12 @@ namespace TopKong
         {
             if (_owner == null || !_owner.IsAlive || _t == null) return;
 
+            // Бьёт только пронос. В стойке и на замахе дубина ничего не задевает,
+            // иначе можно было бы наносить удары, просто наткнувшись на соперника.
+            if (!_owner.Swinging) return;
+
             var otherRb = collision.rigidbody;
-            if (otherRb == null) return;                 // арена и прочая статика
+            if (otherRb == null) return;
 
             var part = otherRb.GetComponent<BodyPart>();
             if (part == null) return;
@@ -53,34 +57,30 @@ namespace TopKong
             float now = Time.time;
             if (_lastHit.TryGetValue(victim, out float last) && now - last < _t.hitCooldown) return;
 
-            float speed = collision.relativeVelocity.magnitude;
+            float speed = _owner.SwingSpeed;
             if (speed < _t.minImpactSpeed) return;
 
             _lastHit[victim] = now;
 
-            float strength = Mathf.InverseLerp(_t.minImpactSpeed, _t.maxImpactSpeed, speed);
+            float strength = Mathf.InverseLerp(_t.minImpactSpeed, _t.maxImpactSpeed, speed)
+                             * _owner.SwingPower;
 
-            Vector3 dir = victim.Position - _club.position;
+            Vector3 dir = victim.Position - _owner.Position;
             dir.y = 0f;
-            if (dir.sqrMagnitude < 1e-4f) dir = _club.transform.up;
-            dir.y = 0f;
-            if (dir.sqrMagnitude < 1e-4f) dir = Vector3.forward;
+            if (dir.sqrMagnitude < 1e-4f) dir = _owner.AimDirection;
             dir = (dir.normalized + Vector3.up * _t.knockUpBias).normalized;
 
-            float power = Mathf.Lerp(_t.minKnockback, _t.maxKnockback, strength);
+            float power = Mathf.Lerp(_t.minKnockback, _t.maxKnockback, Mathf.Clamp01(strength));
 
-            // VelocityChange, а не Impulse: толчок не должен зависеть от того,
-            // в какую часть тела прилетело — иначе удар по голове двигал бы сильнее.
-            victim.Hips.AddForce(dir * power, ForceMode.VelocityChange);
-            otherRb.AddForce(dir * (power * 0.5f), ForceMode.VelocityChange);
-
-            victim.Stun(Mathf.Lerp(_t.minStun, _t.maxStun, strength));
-            _owner.RecordHit(speed, strength);
+            // Тряпкой соперник становится ровно здесь — единственная точка входа
+            // в ragdoll во всей игре.
+            victim.Ragdoll(dir * power);
+            victim.RecordHit(speed, strength);
 
             Vector3 point = collision.contactCount > 0
                 ? collision.GetContact(0).point
-                : _club.position;
-            _fx?.Hit(point, strength);
+                : transform.position;
+            _fx?.Hit(point, Mathf.Clamp01(strength));
         }
     }
 }
