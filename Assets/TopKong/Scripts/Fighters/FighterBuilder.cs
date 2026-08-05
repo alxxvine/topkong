@@ -118,6 +118,10 @@ namespace TopKong
             AttachLeg(root, legL, hips, -HipHalfWidth, t, joints);
             AttachLeg(root, legR, hips, HipHalfWidth, t, joints);
 
+            // Дальше идут только суставы рук и дубины. Запоминаем границу: на время
+            // замаха их приводы ослабляются отдельно от остального тела.
+            int armJointStart = joints.Count;
+
             // Руки держат дубину жёстко: стойка должна быть стойкой, а не висящей плетью.
             AddJoint(armR, chest, root.TransformPoint(new Vector3(ShoulderHalfWidth, ShoulderY, 0f)),
                 -80f, 80f, 70f, 80f, t.armDriveSpring, t.armDriveSpring * 0.07f, t, joints);
@@ -154,6 +158,9 @@ namespace TopKong
 
             var marker = BuildMarker(root, teamColor, isPlayer);
 
+            var armJoints = new bool[joints.Count];
+            for (int i = armJointStart; i < joints.Count; i++) armJoints[i] = true;
+
             fighter.Setup(new Fighter.Rig
             {
                 Hips = hips,
@@ -169,6 +176,7 @@ namespace TopKong
                 Bodies = bodies.ToArray(),
                 Colliders = colliders.ToArray(),
                 Joints = joints.ToArray(),
+                ArmJoints = armJoints,
                 Marker = marker,
                 Impact = clubImpact
             }, t, arena, fx, teamColor, displayName, isPlayer);

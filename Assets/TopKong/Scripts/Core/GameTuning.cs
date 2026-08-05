@@ -44,6 +44,9 @@ namespace TopKong
                + "не душат, так что значение работает в полную силу")]
         public float facingSpring = 110f;
         public float facingDamper = 10f;
+        [Tooltip("Насколько активно тела объезжают вокруг оси при развороте. 0 — поворот "
+               + "тянут одни суставы, и вынесенная вперёд дубина делает его вязким")]
+        [Range(0f, 2f)] public float turnAssist = 1f;
         [Tooltip("Торможение на земле, когда игрок не жмёт направление")]
         public float groundFriction = 12f;
         [Tooltip("Гасит вращение таза на земле. Отдельно от uprightDamper, чтобы не делать подъём деревянным")]
@@ -107,14 +110,20 @@ namespace TopKong
         public float clubKP = 420f;
         public float clubKD = 34f;
         public float clubMaxAccel = 700f;
-        [Tooltip("Доля тяги дубины, возвращаемая в корпус противодействием. 1 — замах "
-               + "полностью уравновешен телом и бойца никуда не утаскивает; меньше — "
-               + "дубина тянет хозяина за собой")]
-        [Range(0f, 1.2f)] public float clubChestReaction = 1f;
+        [Tooltip("Доля тяги дубины, возвращаемая в корпус противодействием. Ноль по "
+               + "умолчанию: сила прикладывается к груди, а дубина от неё далеко, и пара "
+               + "разнесённых сил даёт момент — то есть раскачку вместо смещения")]
+        [Range(0f, 1.2f)] public float clubChestReaction = 0f;
         public float clubAlignSpring = 30f;
         public float clubAlignDamper = 4f;
-        [Tooltip("Момент, которым корпус доворачивается вслед за проносом. Больше — размашистее")]
-        public float swingBodyAssist = 45f;
+        [Tooltip("Момент, которым корпус доворачивается вслед за проносом. Ноль по умолчанию: "
+               + "удар должен двигать руки, а не качать тело")]
+        public float swingBodyAssist = 0f;
+        [Tooltip("Во сколько раз мягче приводы рук на время замаха. Мягкие руки следуют "
+               + "за дубиной, вместо того чтобы тащить за ней корпус")]
+        [Range(0.05f, 1f)] public float swingArmSoftness = 0.35f;
+        [Tooltip("Торможение заваливания корпуса на время замаха — страховка от раскачки")]
+        public float swingTorsoBrace = 25f;
         [Tooltip("Сколько веса дубины компенсируется во время проноса. 1 — невесомая, "
                + "0 — тянет в полную силу и заваливает бойца")]
         [Range(0f, 1f)] public float swingGravityCompensation = 0.8f;

@@ -31,6 +31,8 @@ namespace TopKong
             public Rigidbody[] Bodies;
             public Collider[] Colliders;
             public ConfigurableJoint[] Joints;
+            /// <summary>Параллельно Joints: true — сустав руки или дубины.</summary>
+            public bool[] ArmJoints;
             public LineRenderer Marker;
             public ClubImpact Impact;
         }
@@ -46,6 +48,8 @@ namespace TopKong
         JointDrive[] _baseDrives;
         float _driveScale = 1f;
         float _appliedDriveScale = -1f;
+        float _armScale = 1f;
+        float _appliedArmScale = -1f;
         bool _wasSwinging;
 
         public event Action<Fighter> Eliminated;
@@ -56,6 +60,7 @@ namespace TopKong
         public Rigidbody ArmR => _rig.ArmR;
         public Rigidbody ArmL => _rig.ArmL;
         public Rigidbody LegFootLeft => _rig.LegLFoot;
+        public Rigidbody[] Bodies => _rig.Bodies;
         public Rigidbody LegFootRight => _rig.LegRFoot;
 
         /// <summary>Состояние удара — им пользуются ClubDriver, HUD и звук.</summary>
@@ -260,17 +265,31 @@ namespace TopKong
             float rate = Stunned ? 0.06f : Mathf.Max(0.01f, _t.stunRecoverTime);
             _driveScale = Mathf.MoveTowards(_driveScale, target, dt / rate);
 
-            if (Mathf.Abs(_driveScale - _appliedDriveScale) < 0.002f) return;
+            // Руки ослабляются отдельно от остального тела. Пока дубину ведёт внешняя
+            // сила, жёсткие руки честно тащат за ней корпус — и тело качает. Мягкие
+            // на время замаха следуют за дубиной сами, а корпус остаётся на месте.
+            float armTarget = _swing != null && _swing.DrivesClub ? _t.swingArmSoftness : 1f;
+            _armScale = Mathf.MoveTowards(_armScale, armTarget, dt / 0.08f);
+
+            if (Mathf.Abs(_driveScale - _appliedDriveScale) < 0.002f
+                && Mathf.Abs(_armScale - _appliedArmScale) < 0.002f) return;
+
             _appliedDriveScale = _driveScale;
-            ApplyDriveScale(_driveScale);
+            _appliedArmScale = _armScale;
+            ApplyDriveScale();
         }
 
-        void ApplyDriveScale(float scale)
+        void ApplyDriveScale()
         {
+            var armJoints = _rig.ArmJoints;
             for (int i = 0; i < _rig.Joints.Length; i++)
             {
                 var j = _rig.Joints[i];
                 if (j == null) continue;
+
+                float scale = _driveScale;
+                if (armJoints != null && i < armJoints.Length && armJoints[i]) scale *= _armScale;
+
                 var b = _baseDrives[i];
                 j.slerpDrive = new JointDrive
                 {
@@ -304,7 +323,9 @@ namespace TopKong
             // Дальше он просто падает: приводы в ноль, трение почти убрано.
             _driveScale = 0f;
             _appliedDriveScale = 0f;
-            ApplyDriveScale(0f);
+            _armScale = 1f;
+            _appliedArmScale = 1f;
+            ApplyDriveScale();
             foreach (var b in _rig.Bodies)
             {
                 if (b != null) RB.SetDamping(b, 0.01f, 0.02f);

@@ -56,6 +56,7 @@ namespace TopKong
             ApplyFacing(hips);
             ApplyMovement(hips, dt, controlEnabled);
             ApplyAngularDamping(hips);
+            ApplyTorsoBrace(hips);
         }
 
         /// <summary>
@@ -205,7 +206,17 @@ namespace TopKong
             hips.AddTorque(-TiltVelocity(hips) * _t.groundedAngularDamping, ForceMode.Acceleration);
         }
 
-        /// <summary>Доворачивает тело к заданному направлению. У игрока им правит мышь, у бота — цель.</summary>
+        /// <summary>
+        /// Доворачивает бойца к заданному направлению. У игрока им правит мышь, у бота — цель.
+        ///
+        /// Момент прикладывается ко всем телам, а не только к тазу, и вдобавок каждое
+        /// получает касательную силу вокруг вертикальной оси. Причина в том, что поворот
+        /// это не только разворот тел вокруг себя, но и объезд вокруг оси: дубина вынесена
+        /// вперёд и весит девять килограммов, и пока её тащили за собой одни суставы,
+        /// разворот выходил безнадёжно вязким. Никакой facingSpring этого не лечил —
+        /// сколько ни дави на таз, остальное тело он двигает через ограничения.
+        /// Теперь дубина уезжает по дуге сама.
+        /// </summary>
         void ApplyFacing(Rigidbody hips)
         {
             Vector3 want = _f.FacingTarget;
@@ -214,9 +225,48 @@ namespace TopKong
             want.Normalize();
 
             float errorDeg = Vector3.SignedAngle(_f.Facing, want, Vector3.up);
-            float torque = errorDeg * Mathf.Deg2Rad * _t.facingSpring
-                         - hips.angularVelocity.y * _t.facingDamper;
-            hips.AddTorque(Vector3.up * torque, ForceMode.Acceleration);
+            float alpha = errorDeg * Mathf.Deg2Rad * _t.facingSpring
+                        - hips.angularVelocity.y * _t.facingDamper;
+
+            Vector3 pivot = hips.position;
+            var bodies = _f.Bodies;
+
+            for (int i = 0; i < bodies.Length; i++)
+            {
+                var body = bodies[i];
+                if (body == null) continue;
+
+                body.AddTorque(Vector3.up * alpha, ForceMode.Acceleration);
+
+                Vector3 radius = body.position - pivot;
+                radius.y = 0f;
+                if (radius.sqrMagnitude < 1e-6f) continue;
+
+                // Cross(up, r) даёт касательное направление длиной |r|, поэтому
+                // произведение с alpha — это ровно тангенциальное ускорение alpha * |r|.
+                Vector3 tangential = Vector3.Cross(Vector3.up, radius);
+                body.AddForce(tangential * (alpha * _t.turnAssist), ForceMode.Acceleration);
+            }
+        }
+
+        /// <summary>
+        /// Держит корпус на время замаха. Тягу дубины ведёт внешняя сила, и её остатки
+        /// через руки всё равно доходят до тела; это торможение не даёт им превратиться
+        /// в раскачку. Гасится только заваливание — рыскание трогать нельзя,
+        /// иначе снова придушим разворот.
+        /// </summary>
+        void ApplyTorsoBrace(Rigidbody hips)
+        {
+            var swing = _f.Swing;
+            if (swing == null || !swing.DrivesClub || _t.swingTorsoBrace <= 0f) return;
+
+            hips.AddTorque(-TiltVelocity(hips) * _t.swingTorsoBrace, ForceMode.Acceleration);
+
+            var chest = _f.Chest;
+            if (chest != null)
+            {
+                chest.AddTorque(-TiltVelocity(chest) * _t.swingTorsoBrace, ForceMode.Acceleration);
+            }
         }
 
         void ApplyMovement(Rigidbody hips, float dt, bool controlEnabled)
