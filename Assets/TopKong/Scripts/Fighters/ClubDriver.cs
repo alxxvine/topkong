@@ -3,14 +3,16 @@ using UnityEngine;
 namespace TopKong
 {
     /// <summary>
-    /// Тянет дубину к точке прицела.
+    /// Ведёт дубину во время удара.
     ///
-    /// Здесь и живёт вся боёвка. Дубина — обычное физическое тело, а не анимация:
-    /// PD-регулятор гонит её к точке, которую двигает мышь. Дёрнул мышь резко —
-    /// точка ушла далеко, рассогласование выросло, сила выросла, дубина разогналась.
-    /// Дальше PhysX сам передаёт импульс сопернику, пропорциональный набранной скорости.
-    /// Поэтому "быстрее машешь мышью — сильнее бьёшь" не запрограммировано отдельно,
-    /// это просто следствие: отдельной кнопки атаки в игре нет вообще.
+    /// Раньше этот регулятор тянул дубину постоянно, а суставы рук были намеренно
+    /// слабыми, чтобы ему не мешать. Из-за этого в покое рука болталась и уезжала
+    /// за спину. Теперь наоборот: стойку держат жёсткие суставы, а регулятор
+    /// вмешивается только на замахе и проносе — когда SwingAction говорит, куда вести.
+    ///
+    /// Сам удар по-прежнему чисто физический: дубина — обычное тело, PD-регулятор
+    /// разгоняет её по дуге, дальше PhysX сам передаёт сопернику импульс,
+    /// пропорциональный набранной скорости. Никакого "нанесения урона" в коде нет.
     /// </summary>
     public class ClubDriver
     {
@@ -23,21 +25,18 @@ namespace TopKong
             _t = tuning;
         }
 
-        /// <summary>
-        /// Вызывается только пока боец в сознании. Во вступлении раунда тоже работает —
-        /// дубина должна висеть в стойке, а не волочиться по арене.
-        /// </summary>
         public void Tick()
         {
             var club = _f.Club;
             var chest = _f.Chest;
             if (club == null || chest == null) return;
 
-            bool swinging = _f.Swinging;
+            var swing = _f.Swing;
+            bool striking = swing.Striking;
 
             // Дубина держится на весу без участия баланса.
             //
-            // Она намеренно тяжёлая — восемь килограммов на вытянутой руке, — и именно
+            // Она намеренно тяжёлая — девять килограммов на вытянутых руках, — и именно
             // из этой массы берётся сила удара. Но та же масса статически валит бойца:
             // момент от неё на порядок больше того, что контроллер вертикали способен
             // выдать. Компенсация гравитации разводит эти два свойства: инерция остаётся
@@ -45,41 +44,46 @@ namespace TopKong
             // хозяина к земле. Пока боец оглушён, Tick не вызывается — и дубина честно
             // весит своё, утягивая обмякшее тело.
             //
-            // Во время замаха компенсация ослабляется: тяжёлый пронос обязан тянуть
-            // бойца за собой, иначе удар не чувствуется весомым.
-            float compensation = swinging ? _t.swingGravityCompensation : 1f;
-            club.AddForce(-Physics.gravity * compensation, ForceMode.Acceleration);
-            var upperArm = _f.ClubUpper;
-            if (upperArm != null) upperArm.AddForce(-Physics.gravity * compensation, ForceMode.Acceleration);
+            // На проносе компенсация ослабляется: тяжёлый удар обязан тянуть бойца
+            // за собой, иначе он не чувствуется весомым.
+            float compensation = striking ? _t.swingGravityCompensation : 1f;
+            ApplyLift(club, compensation);
+            ApplyLift(_f.ArmR, compensation);
+            ApplyLift(_f.ArmL, compensation);
 
-            Vector3 target = chest.position + _f.HandOffset;
+            // Вне замаха дубину держат суставы. Если тянуть её ещё и регулятором,
+            // два источника правды начинают спорить, и стойка дрожит.
+            if (!swing.DrivesClub) return;
 
+            Vector3 target = swing.Target;
             Vector3 error = target - club.position;
-            Vector3 force = error * _t.clubKP - RB.Vel(club) * _t.clubKD;
-            force = Vector3.ClampMagnitude(force, _t.clubMaxAccel);
+            Vector3 force = error * (_t.clubKP * swing.PowerScale) - RB.Vel(club) * _t.clubKD;
+            force = Vector3.ClampMagnitude(force, _t.clubMaxAccel * swing.PowerScale);
 
             club.AddForce(force, ForceMode.Acceleration);
 
             // Часть силы уходит обратно в корпус: дубина ощутимо тяжёлая, и на резком
-            // замахе бойца немного разворачивает следом. Это же не даёт руке
-            // работать как безынерционному манипулятору.
+            // замахе бойца немного разворачивает следом.
             chest.AddForce(-force * _t.clubChestReaction, ForceMode.Acceleration);
 
-            if (swinging) AssistWithBody(club, chest, target);
+            if (striking) AssistWithBody(club, chest);
 
             AlignClub(club, chest, target);
+        }
+
+        static void ApplyLift(Rigidbody body, float compensation)
+        {
+            if (body != null) body.AddForce(-Physics.gravity * compensation, ForceMode.Acceleration);
         }
 
         /// <summary>
         /// Разворачивает корпус вслед за проносом дубины.
         ///
-        /// Раньше рука ходила сама по себе, а тело оставалось неподвижным — из-за этого
-        /// удар и не читался как удар: махала одна конечность. Настоящий замах идёт от
-        /// корпуса, поэтому во время маха грудь получает момент в ту же сторону, куда
-        /// уходит дубина. Момент считается от того, куда дубина летит сейчас, а не от
-        /// точки прицела: иначе корпус доворачивался бы к цели ещё до начала движения.
+        /// Без этого удар выглядит как движение одной оторванной конечности. Момент
+        /// считается от того, куда дубина летит сейчас, а не от точки прицела: иначе
+        /// корпус доворачивался бы к цели ещё до начала движения.
         /// </summary>
-        void AssistWithBody(Rigidbody club, Rigidbody chest, Vector3 target)
+        void AssistWithBody(Rigidbody club, Rigidbody chest)
         {
             Vector3 velocity = RB.Vel(club);
             velocity.y = 0f;
@@ -89,8 +93,6 @@ namespace TopKong
             arm.y = 0f;
             if (arm.sqrMagnitude < 1e-4f) return;
 
-            // Знак угловой составляющей скорости дубины вокруг корпуса — в эту сторону
-            // тело и должно проворачиваться.
             float swingSign = Vector3.Dot(Vector3.Cross(arm.normalized, velocity), Vector3.up);
             chest.AddTorque(Vector3.up * (swingSign * _t.swingBodyAssist), ForceMode.Acceleration);
         }

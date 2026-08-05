@@ -76,20 +76,31 @@ namespace TopKong
         public bool showAimLink = true;
 
         [Header("Дубина")]
-        // Дальность подобрана под длину руки в риге: центр дубины в стойке стоит
-        // в 1.32 от центра груди, поэтому за 1.45 тянуть бессмысленно — рука просто
-        // упрётся в пределы суставов и замах станет вязким.
-        public float handMinReach = 0.60f;
-        public float handMaxReach = 1.45f;
-        [Tooltip("Радиус руки во время замаха (ЛКМ зажата)")]
-        public float handRestReach = 1.05f;
-        [Tooltip("Радиус руки в стойке. Меньше боевого — чтобы «несу дубину» и «бью» отличались на глаз")]
-        public float handRestReachIdle = 0.78f;
-        [Tooltip("Как быстро рука возвращается в стойку, когда ЛКМ отпущена")]
-        public float handReturnRate = 7f;
-        [Tooltip("Насколько цепко дубина следует за курсором в замахе. Больше — резче удар")]
-        public float handFollowRate = 30f;
-        public float clubHeightOffset = -0.15f;
+        [Tooltip("Жёсткость суставов рук. Держит стойку — при малых значениях дубина "
+               + "болтается и уезжает за спину. Применяется при сборке бойца: "
+               + "чтобы увидеть эффект, перезапусти раунд по R")]
+        public float armDriveSpring = 1500f;
+        // Дальность подобрана под длину руки: тянуть дальше бессмысленно, рука упрётся
+        // в пределы суставов и замах станет вязким.
+        public float handMinReach = 0.55f;
+        public float handMaxReach = 1.35f;
+        public float clubHeightOffset = -0.05f;
+
+        [Header("Замах")]
+        [Tooltip("За сколько секунд удержания заряд набирается полностью")]
+        public float swingChargeTime = 0.55f;
+        [Tooltip("Длительность самого проноса. Меньше — резче удар")]
+        public float swingStrikeTime = 0.22f;
+        [Tooltip("Возврат в стойку после удара")]
+        public float swingRecoverTime = 0.18f;
+        [Tooltip("Пауза перед следующим замахом")]
+        public float swingCooldown = 0.15f;
+        [Tooltip("Ширина дуги проноса в градусах")]
+        [Range(60f, 220f)] public float swingArcDegrees = 150f;
+        [Tooltip("На сколько дубина отводится назад при замахе")]
+        public float windUpReach = 0.95f;
+        [Tooltip("Во сколько раз слабее незаряженный удар по сравнению с полным")]
+        [Range(0.1f, 1f)] public float swingWeakestPower = 0.5f;
         [Tooltip("Жёсткость притяжения дубины к точке прицела")]
         public float clubKP = 420f;
         public float clubKD = 34f;

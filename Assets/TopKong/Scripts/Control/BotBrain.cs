@@ -3,10 +3,10 @@ using UnityEngine;
 namespace TopKong
 {
     /// <summary>
-    /// Бот. Пользуется ровно теми же двумя рычагами, что и игрок — MoveInput и HandOffset,
-    /// поэтому у него нет ни телепортов, ни бесплатных ударов: он так же прыгает
-    /// на одной руке-ноге и так же разгоняет дубину, просто "мышью" ему работает
-    /// синусоида, а не рука.
+    /// Бот. Пользуется ровно теми же рычагами, что и игрок — MoveInput, FacingTarget
+    /// и SwingHeld, — поэтому у него нет ни телепортов, ни бесплатных ударов: он так же
+    /// прыгает, так же разворачивается к цели и так же копит замах, просто кнопку
+    /// за него жмёт таймер.
     ///
     /// Приоритет поведения жёсткий: сначала не упасть самому, и только потом драться.
     /// Без этого боты сносят друг друга в первые пять секунд и раунд заканчивается
@@ -26,15 +26,11 @@ namespace TopKong
         float _strafeSign = 1f;
         float _strafeTimer;
 
-        bool _swinging;
-        float _swingPhase;
-        float _swingDir = 1f;
-        float _swingAimDeg;
-        float _swingTime = 0.3f;
-        float _swingCooldown;
+        bool _holding;
+        float _holdUntil;
+        float _nextSwingAt;
         float _reaction;
 
-        Vector3 _hand;
         float _skill;
 
         public void Init(GameTuning tuning, Arena arena, MatchManager match)
@@ -45,7 +41,6 @@ namespace TopKong
             _match = match;
             // Небольшой разброс, чтобы боты не действовали как один организм.
             _skill = Mathf.Clamp01(_t.botSkill + Random.Range(-0.15f, 0.15f));
-            _hand = _f.Facing * _t.handRestReachIdle;
             _reaction = _t.botReaction;
         }
 
@@ -59,7 +54,8 @@ namespace TopKong
             if (!_f.ControlEnabled || _f.Stunned)
             {
                 _f.MoveInput = Vector2.zero;
-                _f.Swinging = false;
+                _f.SwingHeld = false;
+                _holding = false;
                 return;
             }
 
@@ -158,70 +154,44 @@ namespace TopKong
             _f.MoveInput = new Vector2(dir.x, dir.z);
         }
 
+        /// <summary>
+        /// Замах у бота — это удержание кнопки на время. Дугу, тайминги и накопление
+        /// считает тот же SwingAction, что и у игрока; здесь только решение,
+        /// когда нажать и когда отпустить.
+        /// </summary>
         void UpdateSwing(float dt)
         {
-            _swingCooldown -= dt;
-
-            Vector3 me = _f.GroundPosition;
-            Vector3 toTarget = _target != null ? _target.GroundPosition - me : Vector3.zero;
-            float distance = toTarget.magnitude;
-
-            if (!_swinging)
+            if (_holding)
             {
-                bool inRange = _target != null && distance < _t.botSwingRange;
-                if (inRange && _swingCooldown <= 0f)
+                if (Time.time >= _holdUntil)
                 {
-                    _reaction -= dt;
-                    if (_reaction <= 0f) StartSwing(toTarget);
-                }
-                else
-                {
+                    _f.SwingHeld = false;
+                    _holding = false;
+                    _nextSwingAt = Time.time + Mathf.Lerp(1.2f, 0.4f, _skill);
                     _reaction = _t.botReaction * Mathf.Lerp(1.6f, 0.5f, _skill);
                 }
-
-                // Вне замаха дубина прижата к телу — тот же короткий радиус, что у игрока
-                // с отпущенной кнопкой, иначе бот выглядел бы вечно замахнувшимся.
-                Vector3 rest = (_target != null && distance > 0.001f ? toTarget / distance : _f.Facing)
-                               * _t.handRestReachIdle;
-                _hand = Vector3.Lerp(_hand, rest, Mathf.Clamp01(_t.handReturnRate * 1.5f * dt));
+                return;
             }
-            else
+
+            _f.SwingHeld = false;
+
+            float distance = _target != null
+                ? (_target.GroundPosition - _f.GroundPosition).magnitude
+                : float.MaxValue;
+
+            if (distance > _t.botSwingRange || Time.time < _nextSwingAt)
             {
-                _swingPhase += dt / _swingTime;
-                if (_swingPhase >= 1f)
-                {
-                    _swinging = false;
-                    _swingPhase = 0f;
-                    _swingDir = -_swingDir;
-                    _swingCooldown = Mathf.Lerp(1.15f, 0.35f, _skill);
-                    _reaction = _t.botReaction * Mathf.Lerp(1.6f, 0.5f, _skill);
-                }
-                else
-                {
-                    // Проносим руку дугой сквозь цель. Скорость проноса — это и есть
-                    // "как быстро бот двигает мышью", то есть сила удара.
-                    const float sweep = 75f;
-                    float angle = _swingAimDeg + Mathf.Lerp(-sweep, sweep, _swingPhase) * _swingDir;
-                    // Рука выпрямляется к середине замаха.
-                    float reach = Mathf.Lerp(_t.handRestReach, _t.handMaxReach,
-                        Mathf.Sin(_swingPhase * Mathf.PI));
-                    _hand = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * reach;
-                }
+                _reaction = _t.botReaction * Mathf.Lerp(1.6f, 0.5f, _skill);
+                return;
             }
 
-            _f.Swinging = _swinging;
-            _f.HandOffset = _hand + Vector3.up * _t.clubHeightOffset;
-        }
+            _reaction -= dt;
+            if (_reaction > 0f) return;
 
-        void StartSwing(Vector3 toTarget)
-        {
-            _swinging = true;
-            _swingPhase = 0f;
-            // Чем ниже мастерство, тем быстрее промахивается и тем медленнее машет.
-            _swingTime = Mathf.Lerp(0.42f, 0.17f, _skill);
-            float error = Random.Range(-1f, 1f) * Mathf.Lerp(24f, 5f, _skill);
-            Vector3 aim = toTarget.sqrMagnitude > 0.0001f ? toTarget.normalized : _f.Facing;
-            _swingAimDeg = Mathf.Atan2(aim.x, aim.z) * Mathf.Rad2Deg + error;
+            // Чем выше мастерство, тем полнее бот заряжает удар.
+            _holding = true;
+            _f.SwingHeld = true;
+            _holdUntil = Time.time + Mathf.Lerp(0.15f, _t.swingChargeTime, _skill);
         }
     }
 }

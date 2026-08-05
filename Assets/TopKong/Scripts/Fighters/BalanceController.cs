@@ -23,6 +23,7 @@ namespace TopKong
         float _suspensionMute;
         float _getUpTimer;
         bool _recovering;
+        bool _kickRightFoot;
 
         public bool Grounded { get; private set; }
 
@@ -256,7 +257,10 @@ namespace TopKong
             // независимо от того, сколько их уже было подряд.
             RB.SetVel(hips, new Vector3(horizontal.x, _t.hopUp, horizontal.z));
 
-            var foot = _f.LegFoot;
+            // Толчок уходит в ноги поочерёдно. Отдельной анимации ходьбы нет, но
+            // чередование само по себе читается как походка — бесплатно и убедительно.
+            _kickRightFoot = !_kickRightFoot;
+            var foot = _kickRightFoot ? _f.LegFootRight : _f.LegFootLeft;
             if (foot != null)
             {
                 foot.AddForce(Vector3.down * _t.legKick - dir * (_t.legKick * 0.35f),

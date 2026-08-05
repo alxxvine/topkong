@@ -4,28 +4,45 @@ using UnityEngine;
 namespace TopKong
 {
     /// <summary>
-    /// Собирает бойца целиком из примитивов: семь физических тел, скреплённых ConfigurableJoint.
+    /// Собирает бойца целиком из примитивов: десять физических тел на ConfigurableJoint.
+    /// Обычное человеческое тело — две ноги, две руки, — и дубина, которую руки держат вдвоём.
     ///
-    /// Два решения, на которых держится вся стабильность рига:
+    /// Три решения, на которых держится вся стабильность рига:
     ///
     /// 1. Физические объекты имеют scale = 1, а всё масштабирование живёт на дочерних
     ///    объектах-картинках. Якоря суставов задаются через InverseTransformPoint, и на
     ///    отмасштабированном трансформе они разъезжаются самым неочевидным образом.
     ///    Коллайдеры поэтому настраиваются числами (radius/height), а не scale.
     ///
-    /// 2. Риг собирается сразу в позе покоя, и только потом навешиваются суставы.
+    /// 2. Риг собирается сразу в стойке, и только потом навешиваются суставы.
     ///    ConfigurableJoint запоминает текущий взаимный поворот как ноль, поэтому
-    ///    targetRotation = identity означает "вернись в позу, в которой тебя собрали" —
-    ///    и не нужна та самая инвертированная математика, на которой обычно спотыкаются
-    ///    активные ragdoll'ы.
+    ///    targetRotation = identity означает "вернись в позу, в которой тебя собрали".
+    ///    Стойку не нужно описывать отдельно — она и есть поза сборки.
+    ///
+    /// 3. Двуручный хват — замкнутая петля: грудь → правая рука → дубина → левая рука
+    ///    → грудь. PhysX решает петли хуже, чем деревья, и они склонны дрожать. Поэтому
+    ///    цепь несимметричная: правая рука держит дубину обычным суставом, а левая
+    ///    присоединяется к ней замыкающим — мягким, с широкими пределами и без проекции.
+    ///    Проекция на замыкающем суставе тянет одеяло на себя и вызывает ровно то дрожание,
+    ///    от которого мы уходим.
     /// </summary>
     public static class FighterBuilder
     {
         // Все координаты — локальные, от точки спавна на поверхности арены.
-        // Рост около 2.1 единицы: таз на 1.0, макушка на 2.13.
-        const float HipsY = 1.00f;
-        const float ChestY = 1.46f;
-        const float HeadY = 1.92f;
+        // Рост около 2.0: стопы на нуле, макушка на 2.02.
+        const float HipsY = 0.95f;
+        const float ChestY = 1.40f;
+        const float HeadY = 1.82f;
+        const float HipHalfWidth = 0.13f;
+        const float ShoulderHalfWidth = 0.28f;
+        const float ShoulderY = 1.58f;
+
+        // Дубина в стойке: перед грудью, горизонтально, набалдашником вправо.
+        static readonly Vector3 ClubCenter = new Vector3(0.28f, 1.35f, 0.35f);
+        static readonly Vector3 GripRight = new Vector3(0.05f, 1.35f, 0.35f);
+        static readonly Vector3 GripLeft = new Vector3(-0.12f, 1.35f, 0.35f);
+        // Смещение набалдашника в локальных осях дубины (её локальная Y смотрит в +X мира).
+        static readonly Vector3 ClubHeadLocal = new Vector3(0f, 0.40f, 0f);
 
         public static Fighter Build(
             Transform parent,
@@ -56,66 +73,65 @@ namespace TopKong
             var root = rootGo.transform;
 
             // --- корпус ---
-            var hips = AddPart(root, "Hips", new Vector3(0f, HipsY, 0f), Quaternion.identity, 12f, fighter, bodies);
-            AddCapsule(hips.gameObject, 0.17f, 0.50f, Vector3.zero, darkMat, colliders);
+            var hips = AddPart(root, "Hips", new Vector3(0f, HipsY, 0f), Quaternion.identity, 11f, fighter, bodies);
+            AddCapsule(hips.gameObject, 0.19f, 0.46f, Vector3.zero, darkMat, colliders);
 
-            var chest = AddPart(root, "Chest", new Vector3(0f, ChestY, 0f), Quaternion.identity, 14f, fighter, bodies);
-            AddCapsule(chest.gameObject, 0.23f, 0.62f, Vector3.zero, skinMat, colliders);
+            var chest = AddPart(root, "Chest", new Vector3(0f, ChestY, 0f), Quaternion.identity, 15f, fighter, bodies);
+            AddCapsule(chest.gameObject, 0.24f, 0.60f, Vector3.zero, skinMat, colliders);
 
             var head = AddPart(root, "Head", new Vector3(0f, HeadY, 0f), Quaternion.identity, 4f, fighter, bodies);
-            AddSphere(head.gameObject, 0.21f, Vector3.zero, skinMat, colliders);
+            AddSphere(head.gameObject, 0.20f, Vector3.zero, skinMat, colliders);
             // Нашлёпка-нос: без неё невозможно понять, куда боец повёрнут.
-            AddVisualOnly(head.transform, PrimitiveType.Cube, new Vector3(0f, 0.02f, 0.19f), Quaternion.identity,
+            AddVisualOnly(head.transform, PrimitiveType.Cube, new Vector3(0f, 0.02f, 0.18f), Quaternion.identity,
                 new Vector3(0.12f, 0.08f, 0.14f), darkMat);
 
-            // --- рука-нога: единственная опора, на ней же прыжки ---
-            var legUpper = AddPart(root, "LegArmUpper", new Vector3(0f, 0.72f, 0f), Quaternion.identity, 5f, fighter, bodies);
-            AddCapsule(legUpper.gameObject, 0.115f, 0.44f, Vector3.zero, skinMat, colliders);
+            // --- ноги ---
+            var legL = BuildLeg(root, -HipHalfWidth, "L", skinMat, darkMat, fighter, bodies, colliders);
+            var legR = BuildLeg(root, HipHalfWidth, "R", skinMat, darkMat, fighter, bodies, colliders);
 
-            var legFoot = AddPart(root, "LegArmFoot", new Vector3(0f, 0.34f, 0f), Quaternion.identity, 4f, fighter, bodies);
-            AddCapsule(legFoot.gameObject, 0.12f, 0.42f, Vector3.zero, skinMat, colliders);
-            // Кулак на месте стопы — от него боец и отталкивается.
-            AddSphere(legFoot.gameObject, 0.17f, new Vector3(0f, -0.17f, 0f), darkMat, colliders);
-
-            // --- рука-дубина: повёрнута так, что её длинная ось смотрит в +X ---
-            var armRot = Quaternion.Euler(0f, 0f, -90f);
-            var clubUpper = AddPart(root, "ClubArmUpper", new Vector3(0.55f, 1.55f, 0f), armRot, 4f, fighter, bodies);
-            AddCapsule(clubUpper.gameObject, 0.10f, 0.62f, Vector3.zero, skinMat, colliders);
-
-            var club = AddPart(root, "Club", new Vector3(1.32f, 1.50f, 0f), armRot, 8f, fighter, bodies);
-            AddCapsule(club.gameObject, 0.09f, 0.82f, Vector3.zero, woodMat, colliders);
-            AddSphere(club.gameObject, 0.26f, new Vector3(0f, 0.46f, 0f), metalMat, colliders);
-            // Шипы на набалдашнике — чистая косметика, коллайдеров не добавляют.
+            // --- дубина: длинная ось смотрит в +X ---
+            var club = AddPart(root, "Club", ClubCenter, Quaternion.Euler(0f, 0f, -90f), 9f, fighter, bodies);
+            AddCapsule(club.gameObject, 0.075f, 0.90f, Vector3.zero, woodMat, colliders);
+            AddSphere(club.gameObject, 0.24f, ClubHeadLocal, metalMat, colliders);
             for (int i = 0; i < 4; i++)
             {
                 var dir = Quaternion.Euler(0f, 90f * i, 0f) * Vector3.forward;
                 AddVisualOnly(club.transform, PrimitiveType.Cube,
-                    new Vector3(0f, 0.46f, 0f) + dir * 0.26f,
+                    ClubHeadLocal + dir * 0.24f,
                     Quaternion.LookRotation(dir),
-                    new Vector3(0.12f, 0.12f, 0.14f), metalMat);
+                    new Vector3(0.11f, 0.11f, 0.13f), metalMat);
             }
 
+            // --- руки: обе идут от плеча к рукояти ---
+            var armR = AddLimb(root, "ArmR", new Vector3(ShoulderHalfWidth, ShoulderY, 0f), GripRight,
+                0.085f, 3f, skinMat, fighter, bodies, colliders);
+            var armL = AddLimb(root, "ArmL", new Vector3(-ShoulderHalfWidth, ShoulderY, 0f), GripLeft,
+                0.085f, 3f, skinMat, fighter, bodies, colliders);
+
             // --- суставы ---
-            // Порядок и якоря в мировых координатах; тела уже стоят в позе покоя.
-            AddJoint(chest, hips, root.TransformPoint(new Vector3(0f, 1.21f, 0f)),
-                -20f, 20f, 25f, 20f, 1200f, 90f, t, joints);
+            AddJoint(chest, hips, root.TransformPoint(new Vector3(0f, 1.14f, 0f)),
+                -20f, 20f, 25f, 20f, 1400f, 100f, t, joints);
 
-            AddJoint(head, chest, root.TransformPoint(new Vector3(0f, 1.74f, 0f)),
-                -25f, 25f, 30f, 25f, 400f, 30f, t, joints);
+            AddJoint(head, chest, root.TransformPoint(new Vector3(0f, 1.66f, 0f)),
+                -25f, 25f, 30f, 25f, 450f, 32f, t, joints);
 
-            AddJoint(legUpper, hips, root.TransformPoint(new Vector3(0f, 0.90f, 0f)),
-                -70f, 70f, 40f, 60f, 600f, 45f, t, joints);
+            AttachLeg(root, legL, hips, -HipHalfWidth, t, joints);
+            AttachLeg(root, legR, hips, HipHalfWidth, t, joints);
 
-            AddJoint(legFoot, legUpper, root.TransformPoint(new Vector3(0f, 0.52f, 0f)),
-                -60f, 60f, 20f, 40f, 350f, 25f, t, joints);
+            // Руки держат дубину жёстко: стойка должна быть стойкой, а не висящей плетью.
+            AddJoint(armR, chest, root.TransformPoint(new Vector3(ShoulderHalfWidth, ShoulderY, 0f)),
+                -80f, 80f, 70f, 80f, t.armDriveSpring, t.armDriveSpring * 0.07f, t, joints);
 
-            // Плечо и локоть намеренно слабые: дубину тащит ClubDriver напрямую за тело,
-            // а суставы только не дают руке вывернуться и возвращают её в стойку.
-            AddJoint(clubUpper, chest, root.TransformPoint(new Vector3(0.26f, 1.57f, 0f)),
-                -95f, 95f, 85f, 95f, 300f, 22f, t, joints);
+            AddJoint(club, armR, root.TransformPoint(GripRight),
+                -70f, 70f, 60f, 70f, t.armDriveSpring * 0.8f, t.armDriveSpring * 0.06f, t, joints);
 
-            AddJoint(club, clubUpper, root.TransformPoint(new Vector3(0.90f, 1.53f, 0f)),
-                -100f, 100f, 90f, 100f, 200f, 16f, t, joints);
+            AddJoint(armL, chest, root.TransformPoint(new Vector3(-ShoulderHalfWidth, ShoulderY, 0f)),
+                -80f, 80f, 70f, 80f, t.armDriveSpring * 0.6f, t.armDriveSpring * 0.05f, t, joints);
+
+            // Замыкание петли. Мягко, широко и без проекции — иначе плечи затрясёт.
+            AddJoint(armL, club, root.TransformPoint(GripLeft),
+                -90f, 90f, 85f, 90f, t.armDriveSpring * 0.25f, t.armDriveSpring * 0.03f, t, joints,
+                projection: false);
 
             // Тела одного бойца не должны толкать друг друга — иначе риг сам себя трясёт.
             // Соперников это не касается: столкновения между бойцами и есть игра.
@@ -143,9 +159,12 @@ namespace TopKong
                 Hips = hips,
                 Chest = chest,
                 Head = head,
-                LegUpper = legUpper,
-                LegFoot = legFoot,
-                ClubUpper = clubUpper,
+                LegLUpper = legL.Upper,
+                LegLFoot = legL.Foot,
+                LegRUpper = legR.Upper,
+                LegRFoot = legR.Foot,
+                ArmR = armR,
+                ArmL = armL,
                 Club = club,
                 Bodies = bodies.ToArray(),
                 Colliders = colliders.ToArray(),
@@ -155,6 +174,38 @@ namespace TopKong
             }, t, arena, fx, teamColor, displayName, isPlayer);
 
             return fighter;
+        }
+
+        struct Leg
+        {
+            public Rigidbody Upper;
+            public Rigidbody Foot;
+        }
+
+        static Leg BuildLeg(Transform root, float x, string suffix, Material skin, Material dark,
+            Fighter owner, List<Rigidbody> bodies, List<Collider> colliders)
+        {
+            var upper = AddPart(root, "Leg" + suffix + "Upper", new Vector3(x, 0.68f, 0f),
+                Quaternion.identity, 5f, owner, bodies);
+            AddCapsule(upper.gameObject, 0.11f, 0.44f, Vector3.zero, skin, colliders);
+
+            var foot = AddPart(root, "Leg" + suffix + "Foot", new Vector3(x, 0.28f, 0f),
+                Quaternion.identity, 4f, owner, bodies);
+            AddCapsule(foot.gameObject, 0.10f, 0.40f, Vector3.zero, skin, colliders);
+            AddBox(foot.gameObject, new Vector3(0.18f, 0.10f, 0.28f), new Vector3(0f, -0.23f, 0.05f),
+                dark, colliders);
+
+            return new Leg { Upper = upper, Foot = foot };
+        }
+
+        static void AttachLeg(Transform root, Leg leg, Rigidbody hips, float x,
+            GameTuning t, List<ConfigurableJoint> joints)
+        {
+            AddJoint(leg.Upper, hips, root.TransformPoint(new Vector3(x, 0.88f, 0f)),
+                -65f, 65f, 35f, 45f, 700f, 50f, t, joints);
+
+            AddJoint(leg.Foot, leg.Upper, root.TransformPoint(new Vector3(x, 0.48f, 0f)),
+                -60f, 60f, 15f, 25f, 450f, 32f, t, joints);
         }
 
         static Rigidbody AddPart(Transform root, string name, Vector3 localPos, Quaternion localRot,
@@ -187,6 +238,22 @@ namespace TopKong
             return rb;
         }
 
+        /// <summary>Конечность между двумя точками: сама считает длину, центр и поворот.</summary>
+        static Rigidbody AddLimb(Transform root, string name, Vector3 from, Vector3 to,
+            float radius, float mass, Material mat, Fighter owner,
+            List<Rigidbody> bodies, List<Collider> colliders)
+        {
+            Vector3 delta = to - from;
+            float length = delta.magnitude;
+            Quaternion rot = length > 0.0001f
+                ? Quaternion.FromToRotation(Vector3.up, delta / length)
+                : Quaternion.identity;
+
+            var rb = AddPart(root, name, (from + to) * 0.5f, rot, mass, owner, bodies);
+            AddCapsule(rb.gameObject, radius, Mathf.Max(length, radius * 2f), Vector3.zero, mat, colliders);
+            return rb;
+        }
+
         static void AddCapsule(GameObject go, float radius, float height, Vector3 center,
             Material mat, List<Collider> colliders)
         {
@@ -214,6 +281,17 @@ namespace TopKong
                 Vector3.one * radius * 2f, mat);
         }
 
+        static void AddBox(GameObject go, Vector3 size, Vector3 center,
+            Material mat, List<Collider> colliders)
+        {
+            var col = go.AddComponent<BoxCollider>();
+            col.size = size;
+            col.center = center;
+            colliders.Add(col);
+
+            AddVisualOnly(go.transform, PrimitiveType.Cube, center, Quaternion.identity, size, mat);
+        }
+
         static void AddVisualOnly(Transform parent, PrimitiveType type, Vector3 localPos,
             Quaternion localRot, Vector3 localScale, Material mat)
         {
@@ -236,7 +314,8 @@ namespace TopKong
 
         static void AddJoint(Rigidbody body, Rigidbody connectedTo, Vector3 worldAnchor,
             float xLow, float xHigh, float yLimit, float zLimit,
-            float spring, float damper, GameTuning t, List<ConfigurableJoint> joints)
+            float spring, float damper, GameTuning t, List<ConfigurableJoint> joints,
+            bool projection = true)
         {
             var j = body.gameObject.AddComponent<ConfigurableJoint>();
 
@@ -269,7 +348,9 @@ namespace TopKong
             j.targetRotation = Quaternion.identity;
 
             j.enablePreprocessing = false;
-            j.projectionMode = JointProjectionMode.PositionAndRotation;
+            j.projectionMode = projection
+                ? JointProjectionMode.PositionAndRotation
+                : JointProjectionMode.None;
             j.projectionDistance = 0.08f;
             j.projectionAngle = 25f;
             j.enableCollision = false;
@@ -287,7 +368,7 @@ namespace TopKong
             var go = new GameObject("ClubTrail");
             go.transform.SetParent(club, false);
             // На конце дубины, а не в центре тела: рисовать надо путь ударной части.
-            go.transform.localPosition = new Vector3(0f, 0.46f, 0f);
+            go.transform.localPosition = ClubHeadLocal;
 
             var trail = go.AddComponent<TrailRenderer>();
             trail.time = 0.35f;

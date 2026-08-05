@@ -155,8 +155,8 @@ namespace TopKong
                     + "  (" + player.LastHitStrength.ToString("0.00") + ")"
                 : L("Попадание: —", "Hit: —"));
 
-            Line(L("Замах: ", "Swinging: ")
-                + (player.Swinging ? L("да", "yes") : L("нет", "no")));
+            Line(L("Состояние: ", "State: ") + player.Swing.State
+                + "  " + L("заряд ", "charge ") + player.SwingCharge.ToString("0.00"));
             Line(L("Вертикаль: ", "Upright: ") + player.Uprightness.ToString("0.00")
                 + (player.Recovering ? L("  (встаёт)", "  (getting up)") : ""));
             Line(L("Время: ", "Time: ")
@@ -170,34 +170,44 @@ namespace TopKong
                 _small);
         }
 
-        /// <summary>Скорость дубины прямо сейчас — она же сила удара, если попасть.</summary>
+        /// <summary>Заряд замаха: сколько силы боец успел накопить, пока держишь кнопку.</summary>
         void DrawSwingMeter(float w, float h)
         {
             var player = _match.Player;
             if (player == null || !player.IsAlive) return;
 
-            float fill = Mathf.Clamp01(player.SwingSpeed / Mathf.Max(0.01f, _t.maxImpactSpeed));
+            var swing = player.Swing;
+            if (swing == null) return;
+
+            float fill = Mathf.Clamp01(player.SwingCharge);
             float barW = Mathf.Min(360f, w * 0.32f);
             var back = new Rect((w - barW) * 0.5f, h - 62f, barW, 16f);
 
             Box(back, new Color(0f, 0f, 0f, 0.5f));
-            // Порог, ниже которого касание вообще не считается ударом.
-            float threshold = Mathf.Clamp01(_t.minImpactSpeed / Mathf.Max(0.01f, _t.maxImpactSpeed));
-            Box(new Rect(back.x + back.width * threshold - 1f, back.y - 3f, 2f, back.height + 6f),
-                new Color(1f, 1f, 1f, 0.35f));
             Box(new Rect(back.x + 2f, back.y + 2f, (back.width - 4f) * fill, back.height - 4f),
                 Color.Lerp(new Color(0.4f, 0.7f, 1f), new Color(1f, 0.45f, 0.2f), fill));
 
+            string caption;
+            Color color;
+            switch (swing.State)
+            {
+                case SwingState.WindUp:
+                    caption = L("ЗАМАХ", "WINDING UP");
+                    color = new Color(1f, 0.8f, 0.4f);
+                    break;
+                case SwingState.Strike:
+                    caption = L("УДАР", "STRIKE");
+                    color = new Color(1f, 0.55f, 0.25f);
+                    break;
+                default:
+                    caption = L("ЗАЖМИ ЛКМ — ЗАМАХ, ОТПУСТИ — УДАР", "HOLD LMB TO WIND UP, RELEASE TO STRIKE");
+                    color = new Color(0.7f, 0.74f, 0.8f);
+                    break;
+            }
+
             var label = new GUIStyle(_mid) { fontSize = 14 };
-            // Пока ЛКМ не зажата, рука не работает — подсказываем это прямо на полоске,
-            // иначе непонятно, почему дубина не двигается вслед за мышью.
-            label.normal.textColor = player.Swinging
-                ? new Color(1f, 0.8f, 0.4f)
-                : new Color(0.7f, 0.74f, 0.8f);
-            GUI.Label(new Rect(back.x, back.y - 22f, back.width, 20f),
-                player.Swinging
-                    ? L("СИЛА ЗАМАХА", "SWING POWER")
-                    : L("ЗАЖМИ ЛКМ И МАШИ", "HOLD LMB AND SWING"), label);
+            label.normal.textColor = color;
+            GUI.Label(new Rect(back.x - 60f, back.y - 22f, back.width + 120f, 20f), caption, label);
         }
 
         void DrawControls(float w, float h)
@@ -205,11 +215,11 @@ namespace TopKong
             string text = L(
                 "WASD / стрелки — прыжки\n" +
                 "мышь — прицел, боец смотрит на точку\n" +
-                "ЛКМ + мышь — удар (веди быстрее — бьёт сильнее)\n" +
+                "ЛКМ: зажал — замах, отпустил — удар\n" +
                 "R — новый раунд      Esc — освободить курсор",
                 "WASD / arrows - hop\n" +
                 "mouse - aim, the fighter faces the dot\n" +
-                "LMB + mouse - swing (sweep faster to hit harder)\n" +
+                "LMB: hold to wind up, release to strike\n" +
                 "R - new round      Esc - release cursor");
 
             var rect = new Rect(18f, h - 112f, 440f, 96f);

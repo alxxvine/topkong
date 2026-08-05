@@ -4,14 +4,15 @@ using UnityEngine;
 namespace TopKong
 {
     /// <summary>
-    /// Боец: активный ragdoll с рукой-дубиной и рукой-ногой.
+    /// Боец: активный ragdoll с двуручной дубиной.
     ///
-    /// Управление снаружи сводится к двум полям — MoveInput и HandOffset. Их одинаково
-    /// выставляют и PlayerController, и BotBrain, поэтому бот дерётся ровно теми же
-    /// мышцами, что и игрок, без отдельной "ИИ-физики".
+    /// Управление снаружи сводится к трём полям — MoveInput, FacingTarget и SwingHeld.
+    /// Их одинаково выставляют и PlayerController, и BotBrain, поэтому бот дерётся ровно
+    /// теми же мышцами, что и игрок, без отдельной "ИИ-физики".
     ///
-    /// Контроллеры баланса и дубины намеренно не MonoBehaviour: тогда порядок их вызова
-    /// внутри FixedUpdate задаётся здесь явно и не зависит от Script Execution Order.
+    /// Контроллеры баланса, замаха и дубины намеренно не MonoBehaviour: тогда порядок
+    /// их вызова внутри FixedUpdate задаётся здесь явно и не зависит от
+    /// Script Execution Order.
     /// </summary>
     public class Fighter : MonoBehaviour
     {
@@ -20,9 +21,12 @@ namespace TopKong
             public Rigidbody Hips;
             public Rigidbody Chest;
             public Rigidbody Head;
-            public Rigidbody LegUpper;
-            public Rigidbody LegFoot;
-            public Rigidbody ClubUpper;
+            public Rigidbody LegLUpper;
+            public Rigidbody LegLFoot;
+            public Rigidbody LegRUpper;
+            public Rigidbody LegRFoot;
+            public Rigidbody ArmR;
+            public Rigidbody ArmL;
             public Rigidbody Club;
             public Rigidbody[] Bodies;
             public Collider[] Colliders;
@@ -37,6 +41,7 @@ namespace TopKong
         GameFx _fx;
         BalanceController _balance;
         ClubDriver _clubDriver;
+        SwingAction _swing;
 
         JointDrive[] _baseDrives;
         float _driveScale = 1f;
@@ -48,12 +53,17 @@ namespace TopKong
         public Rigidbody Hips => _rig.Hips;
         public Rigidbody Chest => _rig.Chest;
         public Rigidbody Club => _rig.Club;
-        public Rigidbody ClubUpper => _rig.ClubUpper;
-        public Rigidbody LegFoot => _rig.LegFoot;
+        public Rigidbody ArmR => _rig.ArmR;
+        public Rigidbody ArmL => _rig.ArmL;
+        public Rigidbody LegFootLeft => _rig.LegLFoot;
+        public Rigidbody LegFootRight => _rig.LegRFoot;
+
+        /// <summary>Состояние удара — им пользуются ClubDriver, HUD и звук.</summary>
+        public SwingAction Swing => _swing;
 
         /// <summary>
-        /// Масса, которую подвеска обязана удержать: всё тело за вычетом руки-ноги —
-        /// та стоит на арене и держит себя сама.
+        /// Масса, которую подвеска обязана удержать: всё тело за вычетом ног —
+        /// те стоят на арене и держат себя сами.
         /// </summary>
         public float SupportedMass { get; private set; }
 
@@ -75,9 +85,6 @@ namespace TopKong
         /// <summary>Куда игрок или бот хочет прыгать: x — вправо, y — вперёд, в осях камеры.</summary>
         public Vector2 MoveInput { get; set; }
 
-        /// <summary>Смещение точки прицела дубины относительно груди, в мировых осях.</summary>
-        public Vector3 HandOffset { get; set; }
-
         /// <summary>
         /// Куда боец должен быть развёрнут. Раньше поворот брался из направления на дубину,
         /// и получалась петля: тело гналось за рукой, а рука пружинила к телу. Она сходилась,
@@ -86,8 +93,18 @@ namespace TopKong
         /// </summary>
         public Vector3 FacingTarget { get; set; }
 
-        /// <summary>Идёт замах (у игрока — зажата ЛКМ). Корпус в это время помогает руке.</summary>
-        public bool Swinging { get; set; }
+        /// <summary>Кнопка удара удерживается — боец копит замах.</summary>
+        public bool SwingHeld
+        {
+            get => _swing != null && _swing.Held;
+            set { if (_swing != null) _swing.Held = value; }
+        }
+
+        /// <summary>Идёт пронос. Корпус в это время помогает рукам.</summary>
+        public bool Swinging => _swing != null && _swing.Striking;
+
+        /// <summary>Набранный заряд замаха 0..1 — его показывает полоска в HUD.</summary>
+        public float SwingCharge => _swing != null ? _swing.Charge : 0f;
 
         /// <summary>Пока false, боец стоит, но не двигается и не машет — используется во вступлении.</summary>
         public bool ControlEnabled { get; set; }
@@ -144,12 +161,12 @@ namespace TopKong
             }
         }
 
-        /// <summary>Направление на точку прицела дубины.</summary>
+        /// <summary>Направление, в котором боец целится. Совпадает с заданным поворотом.</summary>
         public Vector3 AimDirection
         {
             get
             {
-                Vector3 d = HandOffset;
+                Vector3 d = FacingTarget;
                 d.y = 0f;
                 return d.sqrMagnitude < 1e-4f ? Facing : d.normalized;
             }
@@ -173,16 +190,18 @@ namespace TopKong
 
             float total = 0f;
             foreach (var b in rig.Bodies) total += b.mass;
-            SupportedMass = total - rig.LegUpper.mass - rig.LegFoot.mass;
+            SupportedMass = total
+                - rig.LegLUpper.mass - rig.LegLFoot.mass
+                - rig.LegRUpper.mass - rig.LegRFoot.mass;
 
             _balance = new BalanceController(this, t, arena);
             _balance.Hopped += OnHopped;
+            _swing = new SwingAction(this, t);
             _clubDriver = new ClubDriver(this, t);
 
             rig.Impact.Init(this, t, fx);
 
             FacingTarget = Facing;
-            HandOffset = Facing * t.handRestReachIdle + Vector3.up * t.clubHeightOffset;
         }
 
         void OnHopped()
@@ -211,6 +230,14 @@ namespace TopKong
             _wasSwinging = Swinging;
 
             UpdateDrives(dt);
+
+            if (Stunned)
+            {
+                // Обмякшему бойцу замах не докрутить: сбрасываем удержание, автомат
+                // сам доиграет до стойки, пока тело болтается.
+                _swing.Held = false;
+            }
+            _swing.Tick(dt);
 
             if (!Stunned)
             {
@@ -272,7 +299,7 @@ namespace TopKong
             if (!IsAlive) return;
             IsAlive = false;
             ControlEnabled = false;
-            Swinging = false;
+            SwingHeld = false;
 
             // Дальше он просто падает: приводы в ноль, трение почти убрано.
             _driveScale = 0f;
