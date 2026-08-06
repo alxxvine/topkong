@@ -37,6 +37,9 @@ export class SwingAction {
     this.reach = T.carryReach;
     this.lean = 0;
     this.height = T.carryDrop;
+    // Наклон дубины к земле. В покое почти отвесный: только так «волочится
+    // за спиной» читается как волочится, а не как парящий на уровне колен шар.
+    this.pitch = T.carryPitch;
 
     /** Сила удара 0..1: во столько раз он весомее незаряженного. */
     this.power = 1;
@@ -91,7 +94,7 @@ export class SwingAction {
 
   updatePose(dt) {
     const half = T.swingArcDegrees * 0.5;
-    let targetAngle, targetReach, targetLean, targetHeight, blend;
+    let targetAngle, targetReach, targetLean, targetHeight, targetPitch, blend;
 
     switch (this.state) {
       case SwingState.WindUp:
@@ -101,7 +104,10 @@ export class SwingAction {
         targetAngle = lerp(T.carryAngle * -this.side, -this.side * (half + 25), this.charge);
         targetReach = lerp(T.carryReach, T.windUpReach, this.charge);
         targetLean = -0.5 * this.charge;
-        targetHeight = lerp(T.carryDrop, 0.18, this.charge);
+        targetHeight = lerp(T.carryDrop, 0.14, this.charge);
+        // Из-за спины к плечу: набалдашник задирается вверх, и по одному
+        // этому видно, что сейчас прилетит.
+        targetPitch = lerp(T.carryPitch, -22, this.charge);
         blend = 10 * dt;
         break;
 
@@ -114,6 +120,8 @@ export class SwingAction {
         targetReach = lerp(ClubRestReach, T.handMaxReach, Math.sin(phase * Math.PI));
         targetLean = Math.sin(phase * Math.PI);
         targetHeight = 0;
+        // Пронос идёт плоско: удар должен приходиться в корпус, а не в настил.
+        targetPitch = 0;
         // Во время удара поза ставится напрямую: любое сглаживание здесь
         // размазало бы тайминг, ради которого сценарный удар и делался.
         blend = 1;
@@ -125,6 +133,7 @@ export class SwingAction {
         targetReach = T.carryReach;
         targetLean = 0;
         targetHeight = T.carryDrop;
+        targetPitch = T.carryPitch;
         blend = 7 * dt;
         break;
 
@@ -135,6 +144,7 @@ export class SwingAction {
         targetReach = T.carryReach;
         targetLean = 0;
         targetHeight = T.carryDrop;
+        targetPitch = T.carryPitch;
         blend = 5 * dt;
         break;
     }
@@ -144,6 +154,7 @@ export class SwingAction {
     this.reach = lerp(this.reach, targetReach, blend);
     this.lean = lerp(this.lean, targetLean, blend);
     this.height = lerp(this.height, targetHeight, blend);
+    this.pitch = lerp(this.pitch, targetPitch, blend);
   }
 
   reset() {
@@ -156,5 +167,6 @@ export class SwingAction {
     this.reach = T.carryReach;
     this.lean = 0;
     this.height = T.carryDrop;
+    this.pitch = T.carryPitch;
   }
 }

@@ -22,20 +22,36 @@ export const P = {
   Head: 0, Chest: 1, Hips: 2,
   HipL: 3, KneeL: 4, FootL: 5,
   HipR: 6, KneeR: 7, FootR: 8,
-  ShoulderR: 9, HandR: 10,
-  ShoulderL: 11, HandL: 12,
-  ClubTip: 13,
+  ShoulderR: 9, ElbowR: 10, HandR: 11,
+  ShoulderL: 12, ElbowL: 13, HandL: 14,
+  ClubTip: 15,
 };
-const COUNT = 14;
+const COUNT = 16;
 
 // Радиусы для касания настила и массы для решателя связей. Массы взяты
 // из Unity-рига: голова лёгкая, грудь тяжёлая, дубина весит как нога —
 // от этого зависит, что кого тащит при падении.
-const RADIUS = [0.20, 0.24, 0.19, 0.12, 0.11, 0.10, 0.12, 0.11, 0.10, 0.10, 0.085, 0.10, 0.085, 0.24];
-const MASS =   [4,    15,   11,   5,    5,    4,    5,    5,    4,    5,    3,     5,    3,     9];
+const RADIUS = [
+  0.20, 0.24, 0.19,
+  0.12, 0.11, 0.10,
+  0.12, 0.11, 0.10,
+  0.10, 0.08, 0.075,
+  0.10, 0.08, 0.075,
+  0.17,
+];
+const MASS = [
+  4, 15, 11,
+  5, 5, 4,
+  5, 5, 4,
+  5, 2, 1.5,
+  5, 2, 1.5,
+  9,
+];
 
 // Связи скелета. Кроме очевидных костей есть раскосы по корпусу:
 // без них тело складывается пополам и выглядит как мешок, а не как человек.
+// У рук появился локоть — та же двухзвенная цепь, что и под управлением,
+// иначе тряпка складывала бы руки не так, как их только что видели стоящими.
 const LINKS = [
   [P.Head, P.Chest], [P.Chest, P.Hips],
   [P.Head, P.Hips],                                     // раскос корпуса
@@ -46,7 +62,8 @@ const LINKS = [
   [P.Chest, P.ShoulderL], [P.Chest, P.ShoulderR], [P.ShoulderL, P.ShoulderR],
   [P.Head, P.ShoulderL], [P.Head, P.ShoulderR],
   [P.ShoulderL, P.HipR], [P.ShoulderR, P.HipL],         // X-раскос корпуса
-  [P.ShoulderR, P.HandR], [P.ShoulderL, P.HandL],
+  [P.ShoulderR, P.ElbowR], [P.ElbowR, P.HandR],
+  [P.ShoulderL, P.ElbowL], [P.ElbowL, P.HandL],
   [P.HandL, P.HandR],                                   // двуручный хват
   [P.HandR, P.ClubTip], [P.HandL, P.ClubTip],
 ];
@@ -56,6 +73,7 @@ const _center = new THREE.Vector3();
 const _rot = new THREE.Quaternion();
 const _dir = new THREE.Vector3();
 const _grip = new THREE.Vector3();
+const AXIS_Y = new THREE.Vector3(0, 1, 0);
 
 /** Опорные позиции частиц в стойке — из них берутся длины всех связей. */
 function restPositions() {
@@ -66,16 +84,18 @@ function restPositions() {
   out[P.Hips] = pose.hips.clone();
   out[P.HipL] = Rig.hipJoint(false);
   out[P.HipR] = Rig.hipJoint(true);
-  out[P.KneeL] = Rig.knee(pose.footLeft, false);
-  out[P.KneeR] = Rig.knee(pose.footRight, true);
+  out[P.KneeL] = pose.kneeLeft.clone();
+  out[P.KneeR] = pose.kneeRight.clone();
   out[P.FootL] = pose.footLeft.clone();
   out[P.FootR] = pose.footRight.clone();
   out[P.ShoulderR] = Rig.shoulder(true);
   out[P.ShoulderL] = Rig.shoulder(false);
+  out[P.ElbowR] = pose.elbowRight.clone();
+  out[P.ElbowL] = pose.elbowLeft.clone();
   out[P.HandR] = pose.handRight.clone();
   out[P.HandL] = pose.handLeft.clone();
   // Набалдашник — вдоль оси дубины, в стойке она смотрит вперёд.
-  out[P.ClubTip] = pose.club.clone().add(new THREE.Vector3(0, 0, Rig.ClubHeadLocal.y));
+  out[P.ClubTip] = pose.club.clone().addScaledVector(pose.clubDir, Rig.ClubHeadLocal.y);
   return out;
 }
 
@@ -248,11 +268,24 @@ export class Ragdoll {
     bones.head.quaternion.copy(_rot);
 
     limbTo(bones.legLUpper, p[P.HipL], p[P.KneeL]);
-    limbTo(bones.legLFoot, p[P.KneeL], p[P.FootL]);
+    limbTo(bones.legLLower, p[P.KneeL], p[P.FootL]);
     limbTo(bones.legRUpper, p[P.HipR], p[P.KneeR]);
-    limbTo(bones.legRFoot, p[P.KneeR], p[P.FootR]);
-    limbTo(bones.armR, p[P.ShoulderR], p[P.HandR]);
-    limbTo(bones.armL, p[P.ShoulderL], p[P.HandL]);
+    limbTo(bones.legRLower, p[P.KneeR], p[P.FootR]);
+
+    // Стопы разворачиваются вслед за тем, куда лежит корпус, но остаются
+    // горизонтальными: ботинок, кувыркающийся вокруг щиколотки, читается
+    // как поломка, а не как физика.
+    _v.copy(p[P.Chest]).sub(p[P.Hips]);
+    _v.y = 0;
+    const footYaw = _v.lengthSq() > 1e-8 ? Math.atan2(_v.x, _v.z) : 0;
+    bones.footL.position.copy(p[P.FootL]);
+    bones.footL.quaternion.setFromAxisAngle(AXIS_Y, footYaw);
+    bones.footR.position.copy(p[P.FootR]);
+    bones.footR.quaternion.setFromAxisAngle(AXIS_Y, footYaw);
+    limbTo(bones.armRUpper, p[P.ShoulderR], p[P.ElbowR]);
+    limbTo(bones.armRFore, p[P.ElbowR], p[P.HandR]);
+    limbTo(bones.armLUpper, p[P.ShoulderL], p[P.ElbowL]);
+    limbTo(bones.armLFore, p[P.ElbowL], p[P.HandL]);
 
     // Дубина: ось от середины хвата к набалдашнику, центр — на длине хвата.
     // Та же формула, что в PoseDriver.Apply, поэтому переход её не дёргает.
@@ -300,10 +333,13 @@ export function gatherWorldPoints(fighter, out) {
   set(out, P.HandR, pose.handRight);
   set(out, P.HandL, pose.handLeft);
 
+  set(out, P.KneeL, pose.kneeLeft);
+  set(out, P.KneeR, pose.kneeRight);
+  set(out, P.ElbowL, pose.elbowLeft);
+  set(out, P.ElbowR, pose.elbowRight);
+
   set(out, P.HipL, Rig.hipJoint(false, _v));
   set(out, P.HipR, Rig.hipJoint(true, _v));
-  set(out, P.KneeL, Rig.knee(pose.footLeft, false, _v));
-  set(out, P.KneeR, Rig.knee(pose.footRight, true, _v));
   set(out, P.ShoulderL, Rig.shoulder(false, _v));
   set(out, P.ShoulderR, Rig.shoulder(true, _v));
 

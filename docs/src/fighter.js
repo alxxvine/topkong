@@ -27,7 +27,8 @@ export const BodyState = {
 // Порядок костей — тот же, в котором их пишет PoseDriver.apply.
 // По нему запоминается поза старта при вставании.
 const BONE_ORDER = ['hips', 'chest', 'head', 'club',
-  'legLUpper', 'legLFoot', 'legRUpper', 'legRFoot', 'armR', 'armL'];
+  'legLUpper', 'legLLower', 'legRUpper', 'legRLower', 'footL', 'footR',
+  'armRUpper', 'armRFore', 'armLUpper', 'armLFore'];
 
 const TRAIL_POINTS = 26;
 
@@ -99,42 +100,55 @@ export class Fighter {
     const wood = mat(new THREE.Color(0x5c3d21), 0.85);
     const metal = mat(new THREE.Color(0x9ea3ad), 0.32, 0.75);
 
-    const rest = Rig.restPose();
-
     this.bones.hips = this.bone('hips');
     capsule(this.bones.hips, 0.19, 0.46, dark);
 
     this.bones.chest = this.bone('chest');
-    capsule(this.bones.chest, 0.24, 0.60, skin);
+    capsule(this.bones.chest, 0.235, 0.50, skin);
+    // Шея и плечи — дети груди, а не отдельные кости: они не двигаются
+    // относительно корпуса, а нужны только чтобы голова и руки к чему-то
+    // крепились. Без них они висели рядом с торсом сами по себе.
+    capsule(this.bones.chest, 0.085, 0.24,
+      skin, new THREE.Vector3(0, Rig.NeckY - Rig.ChestY, 0));
+    sphere(this.bones.chest, 0.115, skin,
+      new THREE.Vector3(Rig.ShoulderHalfWidth, Rig.ShoulderY - Rig.ChestY, 0));
+    sphere(this.bones.chest, 0.115, skin,
+      new THREE.Vector3(-Rig.ShoulderHalfWidth, Rig.ShoulderY - Rig.ChestY, 0));
 
     this.bones.head = this.bone('head');
-    sphere(this.bones.head, 0.20, skin);
-    box(this.bones.head, 0.12, 0.08, 0.14, new THREE.Vector3(0, 0.02, 0.18), dark);
+    sphere(this.bones.head, Rig.HeadRadius, skin);
+    box(this.bones.head, 0.12, 0.08, 0.14, new THREE.Vector3(0, 0.02, 0.165), dark);
 
-    // Ноги строятся на длину из стойки и потом только переставляются:
-    // тянуть капсулу по кадрам незачем, разницу видно только если искать.
-    this.bones.legLUpper = this.limbBone('legLUpper',
-      Rig.hipJoint(false), Rig.knee(rest.footLeft, false), Rig.LegRadius, skin);
-    this.bones.legLFoot = this.limbBone('legLFoot',
-      Rig.knee(rest.footLeft, false), rest.footLeft, Rig.FootRadius, skin);
-    box(this.bones.legLFoot, 0.18, 0.10, 0.28, new THREE.Vector3(0, -0.16, 0.04), dark);
+    // Каждая конечность — две кости постоянной длины. Длина берётся из рига,
+    // а не из текущей позы: IK гарантирует, что звено всегда ровно такое,
+    // поэтому капсулу не нужно ни тянуть, ни пересобирать.
+    this.bones.legLUpper = this.segment('legLUpper', Rig.ThighLength, Rig.LegRadius, skin);
+    this.bones.legLLower = this.segment('legLLower', Rig.ShinLength, Rig.FootRadius, skin);
+    this.bones.legRUpper = this.segment('legRUpper', Rig.ThighLength, Rig.LegRadius, skin);
+    this.bones.legRLower = this.segment('legRLower', Rig.ShinLength, Rig.FootRadius, skin);
 
-    this.bones.legRUpper = this.limbBone('legRUpper',
-      Rig.hipJoint(true), Rig.knee(rest.footRight, true), Rig.LegRadius, skin);
-    this.bones.legRFoot = this.limbBone('legRFoot',
-      Rig.knee(rest.footRight, true), rest.footRight, Rig.FootRadius, skin);
-    box(this.bones.legRFoot, 0.18, 0.10, 0.28, new THREE.Vector3(0, -0.16, 0.04), dark);
+    // Стопы — отдельные кости, и это не педантизм. Пока ботинок висел
+    // на голени, он заваливался вместе с ней и на каждом шаге торчал
+    // из-под ноги под случайным углом.
+    this.bones.footL = this.foot(dark);
+    this.bones.footR = this.foot(dark);
 
-    this.bones.armR = this.limbBone('armR', Rig.shoulder(true), rest.handRight, Rig.ArmRadius, skin);
-    this.bones.armL = this.limbBone('armL', Rig.shoulder(false), rest.handLeft, Rig.ArmRadius, skin);
+    // Плечо чуть толще предплечья — по этому и читается, где локоть.
+    this.bones.armRUpper = this.segment('armRUpper', Rig.UpperArmLength, Rig.ArmRadius, skin);
+    this.bones.armRFore = this.segment('armRFore', Rig.ForeArmLength, Rig.ArmRadius * 0.85, skin);
+    this.bones.armLUpper = this.segment('armLUpper', Rig.UpperArmLength, Rig.ArmRadius, skin);
+    this.bones.armLFore = this.segment('armLFore', Rig.ForeArmLength, Rig.ArmRadius * 0.85, skin);
+    // Кисти: без них предплечье обрывается в пустоту прямо на рукояти.
+    sphere(this.bones.armRFore, Rig.ArmRadius, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
+    sphere(this.bones.armLFore, Rig.ArmRadius, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
 
     this.bones.club = this.bone('club');
-    capsule(this.bones.club, 0.075, 0.90, wood);
+    capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
     sphere(this.bones.club, Rig.ClubHeadRadius, metal, Rig.ClubHeadLocal);
     for (let i = 0; i < 4; i++) {
       const angle = i * Math.PI * 0.5;
       const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
-      const spike = box(this.bones.club, 0.11, 0.11, 0.13,
+      const spike = box(this.bones.club, 0.08, 0.08, 0.10,
         _v.copy(Rig.ClubHeadLocal).addScaledVector(dir, Rig.ClubHeadRadius), metal);
       spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
     }
@@ -150,9 +164,17 @@ export class Fighter {
     return g;
   }
 
-  limbBone(name, from, to, radius, material) {
+  /** Звено цепи: капсула фиксированной длины, вытянутая по локальной оси Y. */
+  segment(name, length, radius, material) {
     const g = this.bone(name);
-    capsule(g, radius, Math.max(from.distanceTo(to), radius * 2), material);
+    capsule(g, radius, Math.max(length, radius * 2), material);
+    return g;
+  }
+
+  /** Ботинок: коробка от щиколотки вперёд и вниз, до самого настила. */
+  foot(material) {
+    const g = this.bone('foot');
+    box(g, 0.16, 0.09, 0.26, new THREE.Vector3(0, -0.048, 0.05), material);
     return g;
   }
 

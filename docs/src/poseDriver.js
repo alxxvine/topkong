@@ -23,13 +23,19 @@ const POINT_COUNT = 8;
 const STIFFNESS = [2.4, 1.0, 0.6, 0.4, 2.0, 2.0, 0.55, 0.55];
 
 const _v = new THREE.Vector3();
-const _knee = new THREE.Vector3();
-const _from = new THREE.Vector3();
 const _center = new THREE.Vector3();
 const _rot = new THREE.Quaternion();
 const _handMid = new THREE.Vector3();
+const _clubDir = new THREE.Vector3();
 const _hipsRot = new THREE.Quaternion();
 const _chestRot = new THREE.Quaternion();
+// Опорные точки цепей держим по отдельности: solveTwoBone читает root уже
+// после того, как в него что-то записали, и общий временный вектор
+// перетирался бы между вызовами.
+const _shoulderR = new THREE.Vector3();
+const _shoulderL = new THREE.Vector3();
+const _hipL = new THREE.Vector3();
+const _hipR = new THREE.Vector3();
 
 export class PoseDriver {
   constructor(fighter) {
@@ -88,7 +94,7 @@ export class PoseDriver {
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height);
+      swing.height, swing.pitch);
 
     // На проносе желе почти выключается: там важен точный тайминг и точное
     // положение набалдашника — по его смещению считается сила попадания,
@@ -214,20 +220,49 @@ export class PoseDriver {
     // и рассинхрон с позициями; так поза остаётся связной сама собой.
     Rig.aim(_v.copy(pose.chest).sub(pose.hips), _hipsRot);
     Rig.aim(_v.copy(pose.head).sub(pose.chest), _chestRot);
+
+    // Сначала конечности. IK подтягивает недостижимую кисть к границе
+    // досягаемости и пишет фактическое положение обратно в позу — дальше
+    // с ним работают все, включая ragdoll.
+    Rig.solveTwoBone(Rig.shoulder(true, _shoulderR), pose.handRight,
+      Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(true),
+      pose.elbowRight, pose.handRight);
+    Rig.solveTwoBone(Rig.shoulder(false, _shoulderL), pose.handLeft,
+      Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(false),
+      pose.elbowLeft, pose.handLeft);
+    Rig.solveTwoBone(Rig.hipJoint(false, _hipL), pose.footLeft,
+      Rig.ThighLength, Rig.ShinLength, Rig.legPole(), pose.kneeLeft, pose.footLeft);
+    Rig.solveTwoBone(Rig.hipJoint(true, _hipR), pose.footRight,
+      Rig.ThighLength, Rig.ShinLength, Rig.legPole(), pose.kneeRight, pose.footRight);
+
+    // Дубина садится в фактические кисти, а направление берёт из своей
+    // желейной точки: отставание и вес у неё остаются, но оторваться
+    // от рук она больше не может.
     _handMid.copy(pose.handLeft).add(pose.handRight).multiplyScalar(0.5);
+    _clubDir.copy(pose.club).sub(_handMid);
+    if (_clubDir.lengthSq() < 1e-6) _clubDir.copy(pose.clubDir);
+    _clubDir.normalize();
+    pose.club.copy(_handMid).addScaledVector(_clubDir, Rig.ClubGripOffset);
 
     this.set(b.hips, pose.hips, _hipsRot);
     this.set(b.chest, pose.chest, _chestRot);
     this.set(b.head, pose.head, _chestRot);
-    this.set(b.club, pose.club, Rig.aim(_v.copy(pose.club).sub(_handMid), _rot));
+    this.set(b.club, pose.club, Rig.aim(_clubDir, _rot));
 
-    this.placeLimb(b.legLUpper, Rig.hipJoint(false, _from), Rig.knee(pose.footLeft, false, _knee));
-    this.placeLimb(b.legLFoot, Rig.knee(pose.footLeft, false, _from), pose.footLeft);
-    this.placeLimb(b.legRUpper, Rig.hipJoint(true, _from), Rig.knee(pose.footRight, true, _knee));
-    this.placeLimb(b.legRFoot, Rig.knee(pose.footRight, true, _from), pose.footRight);
+    this.placeLimb(b.legLUpper, _hipL, pose.kneeLeft);
+    this.placeLimb(b.legLLower, pose.kneeLeft, pose.footLeft);
+    this.placeLimb(b.legRUpper, _hipR, pose.kneeRight);
+    this.placeLimb(b.legRLower, pose.kneeRight, pose.footRight);
 
-    this.placeLimb(b.armR, Rig.shoulder(true, _from), pose.handRight);
-    this.placeLimb(b.armL, Rig.shoulder(false, _from), pose.handLeft);
+    // Стопа стоит ровно и смотрит вперёд, как бы ни была согнута нога.
+    _rot.identity();
+    this.set(b.footL, pose.footLeft, _rot);
+    this.set(b.footR, pose.footRight, _rot);
+
+    this.placeLimb(b.armRUpper, _shoulderR, pose.elbowRight);
+    this.placeLimb(b.armRFore, pose.elbowRight, pose.handRight);
+    this.placeLimb(b.armLUpper, _shoulderL, pose.elbowLeft);
+    this.placeLimb(b.armLFore, pose.elbowLeft, pose.handLeft);
   }
 
   placeLimb(bone, from, to) {

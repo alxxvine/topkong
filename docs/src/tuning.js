@@ -46,17 +46,24 @@ export const tuning = {
   jellyDamping: 8,
 
   // --- Удар ---
+  // reach и drop теперь задают положение ХВАТА, а не центра дубины: кисти
+  // обязаны оказаться там, куда руки дотягиваются. Прежние значения уводили
+  // хват на 1.13 м от плеча при длине руки 0.68 — рука до дубины физически
+  // не доставала и висела в воздухе отдельным обрубком.
   carryAngle: 155,
-  carryReach: 0.5,
-  carryDrop: -0.75,
+  carryReach: 0.18,
+  carryDrop: -0.42,
+  // Наклон дубины к земле в покое, градусов. Почти отвесно — она свисает
+  // из опущенных рук и волочится набалдашником по настилу.
+  carryPitch: 62,
   chargeMoveSlow: 0.45,
   swingChargeTime: 0.5,
   swingStrikeTime: 0.18,
   swingRecoverTime: 0.16,
   swingCooldown: 0.12,
   swingArcDegrees: 150,
-  windUpReach: 0.85,
-  handMaxReach: 1.15,
+  windUpReach: 0.50,
+  handMaxReach: 0.62,
   swingWeakestPower: 0.5,
 
   // --- Удары ---
@@ -160,14 +167,15 @@ export const tuneGroups = [
     title: 'Замах',
     items: [
       ['carryAngle', 90, 180, 1],
-      ['carryReach', 0.1, 1.2, 0.02],
-      ['carryDrop', -1.2, 0.4, 0.02],
+      ['carryReach', 0, 0.6, 0.02],
+      ['carryDrop', -0.7, 0.2, 0.02],
+      ['carryPitch', -30, 90, 2],
       ['swingChargeTime', 0.1, 1.5, 0.02],
       ['swingStrikeTime', 0.06, 0.5, 0.01],
       ['swingRecoverTime', 0.05, 0.6, 0.01],
       ['swingArcDegrees', 60, 260, 5],
-      ['windUpReach', 0.3, 1.4, 0.02],
-      ['handMaxReach', 0.6, 1.8, 0.02],
+      ['windUpReach', 0.1, 0.8, 0.02],
+      ['handMaxReach', 0.3, 0.9, 0.02],
     ],
   },
   {
@@ -211,7 +219,10 @@ export const tuneGroups = [
   },
 ];
 
-const STORAGE_KEY = 'topkong.tuning.v1';
+// Версия в ключе — не формальность. carryReach и carryDrop теперь задают
+// положение хвата, а не центра дубины, и старые сохранённые значения
+// снова растащили бы руки. Меняем ключ вместе со смыслом полей.
+const STORAGE_KEY = 'topkong.tuning.v2';
 
 /** Подтянуть сохранённые значения. Настройки переживают перезагрузку —
  *  иначе подбирать ощущения с телефона невозможно. */
