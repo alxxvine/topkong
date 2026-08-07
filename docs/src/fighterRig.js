@@ -72,9 +72,17 @@ const _delta = new THREE.Vector3();
 const _axis = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 
+/** Где висит свободная кисть, когда дубину несут одной рукой. */
+export const FreeHandHalfWidth = 0.32;
+export const FreeHandY = 0.96;
+
 /** Полный набор локальных позиций тела. */
 export function makePose() {
   return {
+    /** true — дубину держит правая рука. Сторона переключается вместе с дугой. */
+    holdRight: true,
+    /** 0 — несёт одной рукой, 1 — обе на рукояти. */
+    twoHanded: 1,
     hips: new THREE.Vector3(),
     chest: new THREE.Vector3(),
     head: new THREE.Vector3(),
@@ -105,9 +113,11 @@ export function makePose() {
  * @param {number} sway      заваливание вбок; им и делается вся шаткость походки
  * @param {number} clubHeight смещение хвата по высоте; отрицательное — руки опущены
  * @param {number} clubPitchDeg наклон дубины к земле: 0 — горизонтально, 90 — отвесно вниз
+ * @param {number} twoHanded 0 — несёт одной рукой, 1 — обе кисти на рукояти
  */
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
-                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0) {
+                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0,
+                            twoHanded = 1) {
   // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
   // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
   // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
@@ -130,13 +140,45 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   const anchorY = GripY + bob + clubHeight;
   pose.grip.set(flatX * clubReach, anchorY, lean * 0.12 + flatZ * clubReach);
 
+  // Держит та рука, на чьей стороне оказался хват. Опущенную вниз дубину
+  // нельзя держать двумя руками: дальняя кисть до неё не дотягивается,
+  // и раньше именно поэтому дубина висела ровно за спиной по центру —
+  // единственное место, куда доставали обе. Теперь её несут одной рукой
+  // сбоку, а вторая подхватывает рукоять на замахе.
+  const holdRight = pose.grip.x >= 0;
+  pose.holdRight = holdRight;
+  pose.twoHanded = twoHanded;
+
   // Поперечная ось: по ней кисти разводятся вдоль рукояти.
   const sideX = flatZ;
   const sideZ = -flatX;
-  pose.handRight.set(
-    pose.grip.x + sideX * HandHalfWidth, anchorY, pose.grip.z + sideZ * HandHalfWidth);
-  pose.handLeft.set(
-    pose.grip.x - sideX * HandHalfWidth, anchorY, pose.grip.z - sideZ * HandHalfWidth);
+
+  const gripRx = pose.grip.x + sideX * HandHalfWidth;
+  const gripRz = pose.grip.z + sideZ * HandHalfWidth;
+  const gripLx = pose.grip.x - sideX * HandHalfWidth;
+  const gripLz = pose.grip.z - sideZ * HandHalfWidth;
+
+  // Свободная рука висит у бедра и качается в противофазе своей ноге —
+  // без этого она едет вдоль тела доской и выдаёт всю походку.
+  const swingR = Math.cos(phaseL) * stride * 0.6;
+  const swingL = -Math.cos(phaseL) * stride * 0.6;
+
+  hand(pose.handRight, holdRight, gripRx, gripRz, 1, swingR);
+  hand(pose.handLeft, !holdRight, gripLx, gripLz, -1, swingL);
+
+  function hand(out, holding, gx, gz, sign, swing) {
+    if (holding) {
+      // Держащая кисть при одноручном хвате садится на саму рукоять,
+      // а не отступает от неё вбок: отступ нужен только второй руке.
+      out.set(
+        lerpN(pose.grip.x, gx, twoHanded), anchorY, lerpN(pose.grip.z, gz, twoHanded));
+      return;
+    }
+    out.set(
+      lerpN(sign * FreeHandHalfWidth, gx, twoHanded),
+      lerpN(FreeHandY + bob, anchorY, twoHanded),
+      lerpN(lean * 0.05 + swing, gz, twoHanded));
+  }
 
   // Наклон отдельно от разворота: без него дубина всегда горизонтальна,
   // и «волочится за спиной» выглядит как парящий на уровне колен шар.
@@ -148,6 +190,8 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
 
   return pose;
 }
+
+const lerpN = (a, b, t) => a + (b - a) * t;
 
 function foot(out, x, phase, stride) {
   // Подъём только на передней половине шага: сзади нога скользит по земле.

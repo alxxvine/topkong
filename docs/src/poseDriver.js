@@ -94,7 +94,7 @@ export class PoseDriver {
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height, swing.pitch);
+      swing.height, swing.pitch, swing.twoHanded);
 
     // На проносе желе почти выключается: там важен точный тайминг и точное
     // положение набалдашника — по его смещению считается сила попадания,
@@ -238,7 +238,15 @@ export class PoseDriver {
     // Дубина садится в фактические кисти, а направление берёт из своей
     // желейной точки: отставание и вес у неё остаются, но оторваться
     // от рук она больше не может.
+    //
+    // Точка хвата — не середина между кистями: при одноручном хвате
+    // свободная рука висит у бедра, и середина утащила бы дубину к животу.
+    // Поэтому середина подмешивается ровно настолько, насколько вторая рука
+    // уже пришла на рукоять.
+    const hold = pose.holdRight ? pose.handRight : pose.handLeft;
     _handMid.copy(pose.handLeft).add(pose.handRight).multiplyScalar(0.5);
+    _handMid.lerpVectors(hold, _handMid, clamp01(pose.twoHanded));
+
     _clubDir.copy(pose.club).sub(_handMid);
     if (_clubDir.lengthSq() < 1e-6) _clubDir.copy(pose.clubDir);
     _clubDir.normalize();

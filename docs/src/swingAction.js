@@ -40,6 +40,10 @@ export class SwingAction {
     // Наклон дубины к земле. В покое почти отвесный: только так «волочится
     // за спиной» читается как волочится, а не как парящий на уровне колен шар.
     this.pitch = T.carryPitch;
+    // 0 — несёт одной рукой, 1 — обе кисти на рукояти. Вторая рука
+    // приходит на замахе: по ней состояние читается ещё до того,
+    // как дубина начала подниматься.
+    this.twoHanded = 0;
 
     /** Сила удара 0..1: во столько раз он весомее незаряженного. */
     this.power = 1;
@@ -155,6 +159,13 @@ export class SwingAction {
     this.lean = lerp(this.lean, targetLean, blend);
     this.height = lerp(this.height, targetHeight, blend);
     this.pitch = lerp(this.pitch, targetPitch, blend);
+
+    // Хват сглаживается своей скоростью, а не общим blend: на проносе тот
+    // равен единице, и вторая рука прыгала бы на рукоять рывком.
+    const wantTwoHanded = this.state === SwingState.Guard ? 0
+      : this.state === SwingState.WindUp ? Math.min(1, this.charge * 3)
+        : this.state === SwingState.Strike ? 1 : 0;
+    this.twoHanded = lerp(this.twoHanded, wantTwoHanded, clamp01(14 * dt));
   }
 
   reset() {
@@ -168,5 +179,6 @@ export class SwingAction {
     this.lean = 0;
     this.height = T.carryDrop;
     this.pitch = T.carryPitch;
+    this.twoHanded = 0;
   }
 }
