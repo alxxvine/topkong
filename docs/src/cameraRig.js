@@ -62,12 +62,35 @@ export class CameraRig {
     return out;
   }
 
+  /**
+   * Отъезд камеры, при котором арена целиком влезает в кадр.
+   *
+   * camDistance подбиралась на широком экране, и на телефоне в портрете
+   * арену обрезало со всех сторон — а вся игра про край, которого при этом
+   * не видно. Узкое место — горизонтальный угол обзора: он получается
+   * из вертикального через соотношение сторон и на портрете вдвое меньше.
+   *
+   * camDistance остаётся минимумом: на широком экране требуемое расстояние
+   * меньше него, и там ничего не меняется.
+   */
+  fitDistance() {
+    const halfV = (T.camFov * 0.5) * DEG;
+    const aspect = Math.max(0.2, this.cam.aspect);
+    const halfH = Math.atan(Math.tan(halfV) * aspect);
+    const r = T.arenaRadius * T.camFitMargin;
+
+    const byWidth = r / Math.max(0.02, Math.sin(halfH));
+    // По вертикали диск сплющен наклоном камеры, поэтому требуется меньше.
+    const byHeight = r * Math.sin(T.camPitch * DEG) / Math.max(0.02, Math.sin(halfV));
+    return Math.max(T.camDistance, byWidth, byHeight);
+  }
+
   desiredPosition(focus, out) {
     _euler.set(T.camPitch * DEG, T.camYaw * DEG, 0);
     _quat.setFromEuler(_euler);
     // Камера смотрит вниз-вперёд, значит стоит она позади и выше точки внимания.
     _dir.set(0, 0, 1).applyQuaternion(_quat);
-    return out.copy(focus).addScaledVector(_dir, -T.camDistance);
+    return out.copy(focus).addScaledVector(_dir, -this.fitDistance());
   }
 
   /**

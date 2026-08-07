@@ -227,6 +227,29 @@
   }
 
   #boot.gone { display: none; }
+
+  /* --- узкий экран: панель уезжает в нижнюю шторку ---
+     На телефоне панель шириной 288px занимала три четверти экрана и налезала
+     на HUD. Крутить ползунок и одновременно смотреть на арену было нельзя,
+     а ради этого панель и делалась. Внизу она оставляет верх кадра свободным,
+     а тач-виджеты уступают ей место, когда она раскрыта. */
+  @media (max-width: 560px) {
+    #tune {
+      top: auto;
+      left: 8px;
+      right: 8px;
+      width: auto;
+      bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+      max-height: 44%;
+    }
+
+    #tune:not(.folded) ~ #touch #stick,
+    #tune:not(.folded) ~ #touch #swing {
+      bottom: calc(46% + 12px);
+    }
+
+    #hud { font-size: 11px; }
+  }
 </style>
 </head>
 <body>
@@ -265,24 +288,24 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "11";</script>
+<script>window.TK_BUILD = "12";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=11",
-    "tk/main.js":         "./src/main.js?v=11",
-    "tk/tuning.js":       "./src/tuning.js?v=11",
-    "tk/mathx.js":        "./src/mathx.js?v=11",
-    "tk/arena.js":        "./src/arena.js?v=11",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=11",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=11",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=11",
-    "tk/swingAction.js":  "./src/swingAction.js?v=11",
-    "tk/locomotion.js":   "./src/locomotion.js?v=11",
-    "tk/body.js":         "./src/body.js?v=11",
-    "tk/fighter.js":      "./src/fighter.js?v=11",
-    "tk/input.js":        "./src/input.js?v=11",
-    "tk/ui.js":           "./src/ui.js?v=11"
+    "three":              "./vendor/three.module.js?v=12",
+    "tk/main.js":         "./src/main.js?v=12",
+    "tk/tuning.js":       "./src/tuning.js?v=12",
+    "tk/mathx.js":        "./src/mathx.js?v=12",
+    "tk/arena.js":        "./src/arena.js?v=12",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=12",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=12",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=12",
+    "tk/swingAction.js":  "./src/swingAction.js?v=12",
+    "tk/locomotion.js":   "./src/locomotion.js?v=12",
+    "tk/body.js":         "./src/body.js?v=12",
+    "tk/fighter.js":      "./src/fighter.js?v=12",
+    "tk/input.js":        "./src/input.js?v=12",
+    "tk/ui.js":           "./src/ui.js?v=12"
   }
 }
 </script>

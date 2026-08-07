@@ -140,6 +140,9 @@ export const tuning = {
   camPitch: 55,
   camYaw: 0,
   camDistance: 21,
+  // Запас вокруг арены при автоподгонке кадра. 1 — диск впритык по краям,
+  // больше — с полями. camDistance при этом остаётся нижней границей.
+  camFitMargin: 1.06,
   camFov: 42,
   camFollowWeight: 0.45,
   camSmooth: 0.18,
@@ -240,6 +243,7 @@ export const tuneGroups = [
       ['arenaRadius', 3, 16, 0.25],
       ['camPitch', 25, 85, 1],
       ['camDistance', 10, 40, 0.5],
+      ['camFitMargin', 0.8, 1.6, 0.02],
       ['camFov', 20, 80, 1],
       ['camFollowWeight', 0, 1, 0.05],
       ['dummyCount', 0, 6, 1],
