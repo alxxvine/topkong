@@ -288,8 +288,12 @@ export class Fighter {
     // снова начинают держать тело.
     const inControl = controlEnabled && body.strength > T.controlStrength;
 
-    this.swing.held = inControl && this.swing.held;
-    this.swing.tick(dt);
+    // Без дубины бить нечем: замах не считается вовсе, иначе боец
+    // размахивает пустой рукой и портит замер походки.
+    this.swing.held = inControl && this.swing.held && T.withClub;
+    if (T.withClub) this.swing.tick(dt);
+    else this.swing.reset();
+    this.bones.club.visible = T.withClub;
     this.locomotion.tick(dt, inControl);
 
     const pose = this.poseDriver.tick(dt, this.locomotion.planarSpeed,
@@ -385,7 +389,7 @@ export class Fighter {
   }
 
   updateTrail() {
-    const on = T.showClubTrail && this.state !== BodyState.Dead;
+    const on = T.withClub && T.showClubTrail && this.state !== BodyState.Dead;
     this.trail.visible = on;
     if (!on) return;
 
@@ -419,6 +423,7 @@ export class Fighter {
    * диаметра и точечная проверка просто прошла бы сквозь соперника.
    */
   checkHits(others, dt, now, onHit) {
+    if (!T.withClub) return;
     if (!this.alive || !this.swing.striking) return;
     if (this.swingSpeed < T.minImpactSpeed) return;
 

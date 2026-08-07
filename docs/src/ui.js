@@ -10,6 +10,9 @@ import { tuning as T, tuneGroups, saveTuning, resetTuning } from 'tk/tuning.js';
 export class Ui {
   constructor() {
     this.hud = document.getElementById('hud');
+    // Кнопка удара исчезает вместе с оружием: живая на вид, но мёртвая
+    // на нажатие кнопка сбивает с толку сильнее, чем её отсутствие.
+    this.swingButton = document.getElementById('swing');
     this.panel = document.getElementById('tune');
     this.body = document.getElementById('tuneBody');
     this.rows = [];

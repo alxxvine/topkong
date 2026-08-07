@@ -4,6 +4,7 @@ import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
 import { Fighter, BodyState } from 'tk/fighter.js';
+import { P } from 'tk/body.js';
 import { Input } from 'tk/input.js';
 import { Ui } from 'tk/ui.js';
 
@@ -154,6 +155,7 @@ export async function start() {
     rig.tick(real, player.alive ? player.position : null);
 
     ui.setHud(hudText(player, arena, fps, input));
+    if (ui.swingButton) ui.swingButton.style.display = T.withClub ? '' : 'none';
     renderer.render(scene, camera);
   }
 
@@ -309,6 +311,13 @@ function hudText(player, arena, fps, input) {
     [BodyState.Dead]: 'выбыл',
   }[player.state];
 
+  // Прогиб корпуса — насколько грудь ушла от вертикали над тазом. Это
+  // и есть та самая желейность в одном числе: по нему видно, живёт тело
+  // или едет бруском.
+  const hips = player.body.pos[P.Hips];
+  const chest = player.body.pos[P.Chest];
+  const bend = Math.hypot(chest.x - hips.x, chest.z - hips.z);
+
   const swing = player.swing.state === 'guard' && !player.swing.held
     ? 'несёт'
     : player.swing.state === 'windup'
@@ -321,9 +330,12 @@ function hudText(player, arena, fps, input) {
     // на любом скриншоте сразу видно, дошла правка или висит старый кэш.
     `сборка ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
     `тело      ${state}   мышцы ${(player.body.strength * 100).toFixed(0)}%`,
-    `дубина    ${swing}`,
+    // Без дубины строки про неё нет вовсе: пустое «несёт» на экране
+    // сбивает с толку сильнее, чем отсутствие строки.
+    T.withClub ? `дубина    ${swing}` : 'дубина    снята (настройки)',
     `скорость  ${player.locomotion.planarSpeed.toFixed(2)} м/с`,
-    `набалдашник ${player.swingSpeed.toFixed(1)} м/с`,
+    ...(T.withClub ? [`набалдашник ${player.swingSpeed.toFixed(1)} м/с`] : []),
+    `скрут     ${player.poseDriver.twist.toFixed(0)}°   прогиб ${(bend * 100).toFixed(1)} см`,
     `до края   ${edge.toFixed(2)} м    растяжение ${(player.body.maxStretch * 100).toFixed(1)} см`,
   ].join('\n');
 }

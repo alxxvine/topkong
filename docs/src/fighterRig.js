@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DEG, clamp } from 'tk/mathx.js';
+import { tuning as T } from 'tk/tuning.js';
 
 // Геометрия тела и вычисление позы. Порт FighterRig.cs.
 //
@@ -61,9 +62,11 @@ export const LegRadius = 0.11;
 export const FootRadius = 0.10;
 export const ArmRadius = 0.075;
 
-// Полюса IK: куда выгибается сустав. Локоть уходит наружу и вниз, колено вперёд.
-const ARM_POLE_RIGHT = new THREE.Vector3(1, -0.9, -0.35).normalize();
-const ARM_POLE_LEFT = new THREE.Vector3(-1, -0.9, -0.35).normalize();
+// Полюса IK: куда выгибается сустав. Локоть уходит ВНИЗ и чуть наружу,
+// колено вперёд. Раньше наружу было столько же, сколько вниз, и в стойке
+// с руками перед корпусом локти расходились в стороны крыльями.
+const ARM_POLE_RIGHT = new THREE.Vector3(0.5, -1, -0.25).normalize();
+const ARM_POLE_LEFT = new THREE.Vector3(-0.5, -1, -0.25).normalize();
 const LEG_POLE = new THREE.Vector3(0, -0.15, 1).normalize();
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -75,9 +78,9 @@ const _side = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _basis = new THREE.Matrix4();
 
-/** Где висит свободная кисть: дубину всегда несут одной рукой. */
-export const FreeHandHalfWidth = 0.32;
-export const FreeHandY = 0.96;
+// FreeHandHalfWidth / FreeHandY больше нет: они держали кисть у бедра,
+// то есть задавали ровно ту позу «руки по швам», от которой мы уходим.
+// Положение кистей в стойке теперь в настройках — guardWidth и guardHeight.
 
 /** Полный набор локальных позиций тела. */
 export function makePose() {
@@ -85,11 +88,13 @@ export function makePose() {
     hips: new THREE.Vector3(),
     chest: new THREE.Vector3(),
     head: new THREE.Vector3(),
-    // Плечи — часть позы, а не константа. Пока они были константой,
-    // скручиваться корпусу было нечем: цель плеча не знала ни про шаг,
-    // ни про наклон, ни про разворот.
+    // Плечи и тазобедренные суставы — часть позы, а не константы. Пока они
+    // были константами, скручиваться и подседать телу было нечем: опусти
+    // таз, и связь таз↔бедро порвётся, потому что бедро осталось на месте.
     shoulderLeft: new THREE.Vector3(),
     shoulderRight: new THREE.Vector3(),
+    hipLeft: new THREE.Vector3(),
+    hipRight: new THREE.Vector3(),
     footLeft: new THREE.Vector3(),
     footRight: new THREE.Vector3(),
     kneeLeft: new THREE.Vector3(),
@@ -123,33 +128,56 @@ export function makePose() {
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
                             lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0,
                             twistDeg = 0) {
+  // Подсед опускает ВЕСЬ верх тела разом. Опустить один таз нельзя:
+  // расстояния таз↔грудь↔голова держат связи, и попытка просадить
+  // что-то одно кончится дракой позы с решателем.
+  const crouch = T.stanceCrouch;
+
   // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
   // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
   // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
   // на разную величину — и тело заваливается само, оставаясь связным.
-  pose.hips.set(sway * 0.02, HipsY + bob, lean * 0.02);
-  pose.chest.set(sway * 0.10, ChestY + bob, lean * 0.12);
-  pose.head.set(sway * 0.22, HeadY + bob, lean * 0.20);
+  pose.hips.set(sway * 0.02, HipsY + bob - crouch, lean * 0.02);
+  pose.chest.set(sway * 0.10, ChestY + bob - crouch, lean * 0.12);
+  pose.head.set(sway * 0.22, HeadY + bob - crouch, lean * 0.20);
 
   // Плечи живут между грудью и головой и качаются вместе с ними.
   const shoulderSide = sway * 0.16;
   const shoulderFwd = lean * 0.16;
-  pose.shoulderRight.set(ShoulderHalfWidth + shoulderSide, ShoulderY + bob, shoulderFwd);
-  pose.shoulderLeft.set(-ShoulderHalfWidth + shoulderSide, ShoulderY + bob, shoulderFwd);
+  pose.shoulderRight.set(ShoulderHalfWidth + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
+  pose.shoulderLeft.set(-ShoulderHalfWidth + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
+
+  // Тазобедренные суставы едут вместе с тазом — иначе подсед их оторвёт.
+  pose.hipRight.set(HipHalfWidth + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
+  pose.hipLeft.set(-HipHalfWidth + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
 
   // Ноги в противофазе: одна выносится вперёд и приподнимается, другая позади.
+  // Стойка шире таза: сведённые стопы читаются как «по стойке смирно».
   const phaseL = stepPhase * Math.PI * 2;
   const phaseR = phaseL + Math.PI;
-  foot(pose.footLeft, -HipHalfWidth, phaseL, stride, lift);
-  foot(pose.footRight, HipHalfWidth, phaseR, stride, lift);
+  const half = HipHalfWidth + T.stanceWidth;
+  foot(pose.footLeft, -half, phaseL, stride, lift);
+  foot(pose.footRight, half, phaseR, stride, lift);
 
   const a = clubAngleDeg * DEG;
   const flatX = Math.sin(a);
   const flatZ = Math.cos(a);
 
   // Хват выносится по горизонтали — там, где кисти действительно окажутся.
-  const anchorY = GripY + bob + clubHeight;
+  const anchorY = GripY + bob - crouch + clubHeight;
   pose.grip.set(flatX * clubReach, anchorY, lean * 0.12 + flatZ * clubReach);
+
+  // Руки в стойке держатся ПЕРЕД телом, а не висят по швам. Опущенные вдоль
+  // корпуса руки — это поза человека в очереди, а не бойца; по ней вообще
+  // не читается, что он собирается драться.
+  //
+  // Кисти качаются в противофазе своим ногам: вынесена левая нога — вперёд
+  // идёт правая рука. Без этого руки едут вдоль тела досками и выдают всю
+  // походку.
+  const guardY = T.guardHeight + bob - crouch;
+  const swing = Math.cos(phaseL) * T.armSwing * stride;
+  guardHand(pose.handRight, 1, guardY, lean, swing);
+  guardHand(pose.handLeft, -1, guardY, lean, -swing);
 
   // Дубина всегда в одной и той же руке — правой. Ни перехвата между
   // ударами, ни подхвата второй рукой на тяжёлом замахе: боец правша,
@@ -158,14 +186,7 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Раньше держащая рука выбиралась по знаку grip.x, то есть менялась
   // вместе со стороной дуги, и оружие перекладывалось из руки в руку
   // после каждого удара.
-  pose.handRight.set(pose.grip.x, anchorY, pose.grip.z);
-
-  // Свободная рука висит у бедра и качается в противофазе своей ноге —
-  // без этого она едет вдоль тела доской и выдаёт всю походку.
-  pose.handLeft.set(
-    -FreeHandHalfWidth,
-    FreeHandY + bob,
-    lean * 0.05 - Math.cos(phaseL) * stride * 0.6);
+  if (T.withClub) pose.handRight.set(pose.grip.x, anchorY, pose.grip.z);
 
   // Наклон отдельно от разворота: без него дубина всегда горизонтальна,
   // и «волочится за спиной» выглядит как парящий на уровне колен шар.
@@ -193,6 +214,16 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
     twistY(pose.clubDir, ts, tc);
   }
 
+  // Без дубины набалдашник всё равно остаётся частицей: выкидывать его
+  // из скелета значило бы пересобирать связи и их длины на ходу. Вместо
+  // этого он вешается прямо под кисть, ровно на длину связи, чтобы она
+  // не оказалась растянутой, а масса ему снимается в body.js — так он
+  // болтается следом и ничего никуда не тянет.
+  if (!T.withClub) {
+    pose.grip.copy(pose.handRight);
+    pose.clubDir.set(0, -1, 0);
+  }
+
   pose.club.copy(pose.grip).addScaledVector(pose.clubDir, ClubGripOffset);
 
   return pose;
@@ -204,6 +235,19 @@ function twistY(v, sin, cos) {
   const z = -v.x * sin + v.z * cos;
   v.x = x;
   v.z = z;
+}
+
+/**
+ * Кисть в стойке: вынесена вперёд, разведена в сторону и приподнята.
+ *
+ * @param {number} side  +1 правая, -1 левая
+ * @param {number} swing вклад шага: вперёд-назад в противофазе своей ноге
+ */
+function guardHand(out, side, y, lean, swing) {
+  return out.set(
+    side * T.guardWidth,
+    y,
+    T.guardForward + lean * 0.08 + swing);
 }
 
 function foot(out, x, phase, stride, lift) {
@@ -221,13 +265,10 @@ function foot(out, x, phase, stride, lift) {
  */
 export const PivotRadius = 0.40;
 
-// Отдельной функции shoulder() больше нет намеренно. Она возвращала
-// постоянную точку, и все, кто ею пользовался, получали плечо, не знающее
-// ни про наклон, ни про шаг, ни про скрут. Плечо теперь живёт в позе.
-
-export function hipJoint(right, out = new THREE.Vector3()) {
-  return out.set(right ? HipHalfWidth : -HipHalfWidth, HipJointY, 0);
-}
+// Отдельных функций shoulder() и hipJoint() больше нет намеренно. Они
+// возвращали постоянные точки, и все, кто ими пользовался, получали сустав,
+// не знающий ни про наклон, ни про шаг, ни про скрут, ни про подсед.
+// Оба сустава теперь живут в позе.
 
 export const armPole = (right) => (right ? ARM_POLE_RIGHT : ARM_POLE_LEFT);
 export const legPole = () => LEG_POLE;
@@ -342,9 +383,9 @@ export function solveRestJoints(pose) {
     ARM_POLE_RIGHT, pose.elbowRight, pose.handRight);
   solveTwoBone(pose.shoulderLeft, pose.handLeft, UpperArmLength, ForeArmLength,
     ARM_POLE_LEFT, pose.elbowLeft, pose.handLeft);
-  solveTwoBone(hipJoint(false), pose.footLeft, ThighLength, ShinLength,
+  solveTwoBone(pose.hipLeft, pose.footLeft, ThighLength, ShinLength,
     LEG_POLE, pose.kneeLeft, pose.footLeft);
-  solveTwoBone(hipJoint(true), pose.footRight, ThighLength, ShinLength,
+  solveTwoBone(pose.hipRight, pose.footRight, ThighLength, ShinLength,
     LEG_POLE, pose.kneeRight, pose.footRight);
   return pose;
 }

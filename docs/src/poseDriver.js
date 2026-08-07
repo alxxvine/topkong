@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
 import { clamp, clamp01, lerp, moveTowards, deltaAngle, noiseSigned, inverseLerp, RAD, DEG } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
@@ -16,13 +15,6 @@ import * as Rig from 'tk/fighterRig.js';
 //
 // Анимаций в проекте по-прежнему нет ни одной: стойка, шаг с подскоком
 // и дуга удара — это формулы.
-
-// Опорные точки ног держим по отдельности: solveTwoBone читает root уже
-// после того, как в него что-то записали, и общий временный вектор
-// перетирался бы между вызовами. Плечи в этом больше не нуждаются —
-// они лежат в самой позе.
-const _hipL = new THREE.Vector3();
-const _hipR = new THREE.Vector3();
 
 export class PoseDriver {
   constructor(fighter) {
@@ -171,9 +163,9 @@ export class PoseDriver {
     Rig.solveTwoBone(pose.shoulderLeft, pose.handLeft,
       Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(false),
       pose.elbowLeft, pose.handLeft);
-    Rig.solveTwoBone(Rig.hipJoint(false, _hipL), pose.footLeft,
+    Rig.solveTwoBone(pose.hipLeft, pose.footLeft,
       Rig.ThighLength, Rig.ShinLength, Rig.legPole(), pose.kneeLeft, pose.footLeft);
-    Rig.solveTwoBone(Rig.hipJoint(true, _hipR), pose.footRight,
+    Rig.solveTwoBone(pose.hipRight, pose.footRight,
       Rig.ThighLength, Rig.ShinLength, Rig.legPole(), pose.kneeRight, pose.footRight);
   }
 
