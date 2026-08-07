@@ -249,8 +249,46 @@
 
 <div id="boot">загрузка…</div>
 
+<!--
+  Номер сборки и карта импортов живут в одном файле, и это главное.
+
+  GitHub Pages отдаёт статику с max-age=600, а каждый из модулей кэшируется
+  браузером независимо. В окне обновления это собирало смесь старых и новых
+  файлов: сигнатуры функций и имена костей между версиями менялись, так что
+  смесь не падала с ошибкой, а тихо вела себя неправильно — и приходилось бы
+  ловить баги, которых в репозитории нет.
+
+  Здесь у каждого модуля свой versioned URL. Подъём номера меняет их все
+  разом, поэтому промежуточного состояния не существует по построению.
+  Исходники при этом не трогаются: внутри они импортируют друг друга
+  голыми именами tk/*.js, которые разрешает эта карта.
+
+  ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:
+      sed -i 's/?v=[0-9]*/?v=N/g; s/TK_BUILD = .[0-9]*./TK_BUILD = "N"/' docs/index.html
+-->
+<script>window.TK_BUILD = "5";</script>
+<script type="importmap">
+{
+  "imports": {
+    "three":              "./vendor/three.module.js?v=5",
+    "tk/main.js":         "./src/main.js?v=5",
+    "tk/tuning.js":       "./src/tuning.js?v=5",
+    "tk/mathx.js":        "./src/mathx.js?v=5",
+    "tk/arena.js":        "./src/arena.js?v=5",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=5",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=5",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=5",
+    "tk/swingAction.js":  "./src/swingAction.js?v=5",
+    "tk/locomotion.js":   "./src/locomotion.js?v=5",
+    "tk/ragdoll.js":      "./src/ragdoll.js?v=5",
+    "tk/fighter.js":      "./src/fighter.js?v=5",
+    "tk/input.js":        "./src/input.js?v=5",
+    "tk/ui.js":           "./src/ui.js?v=5"
+  }
+}
+</script>
 <script type="module">
-  import { start } from './src/main.js';
+  import { start } from 'tk/main.js';
   start().catch(err => {
     document.getElementById('boot').textContent = 'ошибка: ' + (err && err.message ? err.message : err);
     console.error(err);

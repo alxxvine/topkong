@@ -1,6 +1,6 @@
-import * as THREE from '../vendor/three.module.js';
-import { tuning as T } from './tuning.js';
-import { DEG, RAD, deltaAngle, clamp } from './mathx.js';
+import * as THREE from 'three';
+import { tuning as T } from 'tk/tuning.js';
+import { DEG, RAD, deltaAngle, clamp } from 'tk/mathx.js';
 
 // Движение и разворот управляемого бойца. Порт Locomotion.cs.
 //

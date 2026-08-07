@@ -1,6 +1,6 @@
-import * as THREE from '../vendor/three.module.js';
-import { tuning as T } from './tuning.js';
-import { clamp01, noiseSigned, DEG } from './mathx.js';
+import * as THREE from 'three';
+import { tuning as T } from 'tk/tuning.js';
+import { clamp01, noiseSigned, DEG } from 'tk/mathx.js';
 
 // Камера в духе Diablo: фиксированный наклон и фиксированный разворот.
 //

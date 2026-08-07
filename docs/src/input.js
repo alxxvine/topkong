@@ -1,4 +1,4 @@
-import * as THREE from '../vendor/three.module.js';
+import * as THREE from 'three';
 
 // Ввод: клавиатура, мышь и тач — три источника, один набор полей на выходе.
 //

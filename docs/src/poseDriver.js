@@ -1,7 +1,7 @@
-import * as THREE from '../vendor/three.module.js';
-import { tuning as T } from './tuning.js';
-import { clamp, clamp01, lerp, moveTowards, deltaAngle, noiseSigned, inverseLerp, RAD } from './mathx.js';
-import * as Rig from './fighterRig.js';
+import * as THREE from 'three';
+import { tuning as T } from 'tk/tuning.js';
+import { clamp, clamp01, lerp, moveTowards, deltaAngle, noiseSigned, inverseLerp, RAD } from 'tk/mathx.js';
+import * as Rig from 'tk/fighterRig.js';
 
 // Расставляет кости бойца, пока он под управлением. Порт PoseDriver.cs.
 //

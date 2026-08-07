@@ -1,11 +1,11 @@
-import * as THREE from '../vendor/three.module.js';
-import { tuning as T } from './tuning.js';
-import { clamp01, inverseLerp, lerp, RAD } from './mathx.js';
-import * as Rig from './fighterRig.js';
-import { PoseDriver } from './poseDriver.js';
-import { SwingAction } from './swingAction.js';
-import { Locomotion } from './locomotion.js';
-import { Ragdoll, gatherWorldPoints, makeWorldPointBuffer, P } from './ragdoll.js';
+import * as THREE from 'three';
+import { tuning as T } from 'tk/tuning.js';
+import { clamp01, inverseLerp, lerp, RAD } from 'tk/mathx.js';
+import * as Rig from 'tk/fighterRig.js';
+import { PoseDriver } from 'tk/poseDriver.js';
+import { SwingAction } from 'tk/swingAction.js';
+import { Locomotion } from 'tk/locomotion.js';
+import { Ragdoll, gatherWorldPoints, makeWorldPointBuffer, P } from 'tk/ragdoll.js';
 
 // Боец целиком: кости, состояние тела и переходы между управлением и тряпкой.
 //
@@ -272,6 +272,21 @@ export class Fighter {
     this.settleTime = 0;
     this.swing.reset();
     this.velocity.set(0, 0, 0);
+
+    // Кости обязаны стать мировыми здесь же, а не на следующем шаге.
+    // Группа уже уехала в ноль, а в костях всё ещё лежат локальные
+    // координаты — и если кадр отрисуется до следующего тика, тело
+    // на мгновение появляется ровно в центре арены. Именно это
+    // и выглядело как копия-призрак.
+    this.syncFromRagdoll();
+    this.group.updateMatrixWorld(true);
+  }
+
+  /** Разложить частицы в кости и подтянуть за ними позицию бойца. */
+  syncFromRagdoll() {
+    this.ragdoll.writeBones(this.bones);
+    const hips = this.ragdoll.pos[P.Hips];
+    this.position.set(hips.x, hips.y - Rig.HipsY, hips.z);
   }
 
   /**
@@ -313,6 +328,19 @@ export class Fighter {
     this.poseDriver.startPositions = positions;
     this.poseDriver.startRotations = rotations;
     this.poseDriver.blendFromStart = 0;
+
+    // Та же ловушка, что и при переходе в тряпку, только зеркальная:
+    // группа уже переехала под таз, а в костях ещё лежат мировые
+    // координаты, и кадр между этим и следующим тиком нарисовал бы тело
+    // со сложенным вдвое смещением. При blendFromStart = 0 PoseDriver
+    // выдаст ровно эти позы, так что здесь не новая логика, а та же самая,
+    // просто на кадр раньше.
+    for (let i = 0; i < BONE_ORDER.length; i++) {
+      const bone = this.bones[BONE_ORDER[i]];
+      bone.position.copy(positions[i]);
+      bone.quaternion.copy(rotations[i]);
+    }
+    this.group.updateMatrixWorld(true);
 
     this.state = BodyState.StandingUp;
     this.standTime = 0;
@@ -385,12 +413,10 @@ export class Fighter {
   tickRagdoll(dt) {
     this.ragdollTime += dt;
     this.ragdoll.step(dt);
-    this.ragdoll.writeBones(this.bones);
-
     // Камера и логика продолжают следить за телом: позиция бойца во время
     // полёта — это проекция таза на землю.
+    this.syncFromRagdoll();
     const hips = this.ragdoll.pos[P.Hips];
-    this.position.set(hips.x, hips.y - Rig.HipsY, hips.z);
 
     if (this.ragdoll.lowestY() < T.killY) {
       this.eliminate();

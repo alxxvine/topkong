@@ -1,5 +1,5 @@
-import * as THREE from '../vendor/three.module.js';
-import { tuning as T } from './tuning.js';
+import * as THREE from 'three';
+import { tuning as T } from 'tk/tuning.js';
 
 // Арена: диск, по краю которого всё и решается.
 //

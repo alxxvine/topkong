@@ -1,5 +1,5 @@
-import * as THREE from '../vendor/three.module.js';
-import { DEG, clamp } from './mathx.js';
+import * as THREE from 'three';
+import { DEG, clamp } from 'tk/mathx.js';
 
 // Геометрия тела и вычисление позы. Порт FighterRig.cs.
 //

@@ -1,4 +1,4 @@
-import { tuning as T, tuneGroups, saveTuning, resetTuning } from './tuning.js';
+import { tuning as T, tuneGroups, saveTuning, resetTuning } from 'tk/tuning.js';
 
 // Интерфейс: строка состояния и панель ползунков.
 //

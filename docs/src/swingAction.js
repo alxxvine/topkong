@@ -1,6 +1,6 @@
-import { tuning as T } from './tuning.js';
-import { clamp01, lerp, lerpAngle, lerpUnclamped } from './mathx.js';
-import { ClubRestReach } from './fighterRig.js';
+import { tuning as T } from 'tk/tuning.js';
+import { clamp01, lerp, lerpAngle, lerpUnclamped } from 'tk/mathx.js';
+import { ClubRestReach } from 'tk/fighterRig.js';
 
 // Удар как сценарий, а не как физика. Порт SwingAction.cs.
 //

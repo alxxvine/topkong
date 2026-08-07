@@ -1,11 +1,11 @@
-import * as THREE from '../vendor/three.module.js';
-import { tuning as T, loadTuning } from './tuning.js';
-import { clamp01, lerp } from './mathx.js';
-import { Arena, VOID_COLOR } from './arena.js';
-import { CameraRig } from './cameraRig.js';
-import { Fighter, BodyState } from './fighter.js';
-import { Input } from './input.js';
-import { Ui } from './ui.js';
+import * as THREE from 'three';
+import { tuning as T, loadTuning } from 'tk/tuning.js';
+import { clamp01, lerp } from 'tk/mathx.js';
+import { Arena, VOID_COLOR } from 'tk/arena.js';
+import { CameraRig } from 'tk/cameraRig.js';
+import { Fighter, BodyState } from 'tk/fighter.js';
+import { Input } from 'tk/input.js';
+import { Ui } from 'tk/ui.js';
 
 // Точка сборки: сцена, цикл, спавн и всё, что связывает модули между собой.
 //
@@ -305,7 +305,10 @@ function hudText(player, arena, fps, input) {
       : player.swing.state === 'strike' ? 'УДАР' : 'возврат';
 
   return [
-    `fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
+    // Номер сборки в кадре — не украшение. Проверить, что открыто в чужом
+    // браузере, я не могу: гейтвей не пускает наружу. По этой строке
+    // на любом скриншоте сразу видно, дошла правка или висит старый кэш.
+    `сборка ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
     `тело      ${state}`,
     `дубина    ${swing}`,
     `скорость  ${player.locomotion.planarSpeed.toFixed(2)} м/с`,
