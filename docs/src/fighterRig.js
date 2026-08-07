@@ -101,7 +101,8 @@ export function makePose() {
  * @param {object} pose      куда писать — переиспользуемый объект, без мусора на кадр
  * @param {number} bob       вертикальное смещение таза, им же делается подскок при шаге
  * @param {number} stepPhase 0..1, фаза шага; ноги ходят в противофазе
- * @param {number} stride    размах шага: 0 в покое, больше на скорости
+ * @param {number} stride    размах шага вперёд: 0 в покое, больше на скорости
+ * @param {number} lift      насколько высоко поднимается стопа за цикл
  * @param {number} clubAngleDeg куда развёрнута дубина относительно взгляда
  * @param {number} clubReach насколько хват вынесен от корпуса
  * @param {number} lean      наклон корпуса вперёд: от разгона и от удара
@@ -110,7 +111,7 @@ export function makePose() {
  * @param {number} clubPitchDeg наклон дубины к земле: 0 — горизонтально, 90 — отвесно вниз
  */
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
-                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0) {
+                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0) {
   // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
   // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
   // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
@@ -122,8 +123,8 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Ноги в противофазе: одна выносится вперёд и приподнимается, другая позади.
   const phaseL = stepPhase * Math.PI * 2;
   const phaseR = phaseL + Math.PI;
-  foot(pose.footLeft, -HipHalfWidth, phaseL, stride);
-  foot(pose.footRight, HipHalfWidth, phaseR, stride);
+  foot(pose.footLeft, -HipHalfWidth, phaseL, stride, lift);
+  foot(pose.footRight, HipHalfWidth, phaseR, stride, lift);
 
   const a = clubAngleDeg * DEG;
   const flatX = Math.sin(a);
@@ -160,12 +161,20 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   return pose;
 }
 
-function foot(out, x, phase, stride) {
-  // Подъём только на передней половине шага: сзади нога скользит по земле.
-  const lift = Math.max(0, Math.sin(phase)) * stride * 0.35;
+function foot(out, x, phase, stride, lift) {
+  // Подъём считается отдельно от длины шага, а не как доля от неё.
+  // Пока он был долей, разворот на месте не поднимал стопы вовсе — длина
+  // шага там нулевая, — и боец проворачивался юзом, как статуя на круге.
+  const up = Math.max(0, Math.sin(phase)) * lift;
   const forward = Math.cos(phase) * stride;
-  return out.set(x, FootY + lift, forward);
+  return out.set(x, FootY + up, forward);
 }
+
+/**
+ * Радиус, по которому едет стопа при развороте на месте. Не полуширина таза:
+ * стопа ходит по дуге шире неё за счёт стойки и выноса.
+ */
+export const PivotRadius = 0.40;
 
 export function shoulder(right, out = new THREE.Vector3()) {
   return out.set(right ? ShoulderHalfWidth : -ShoulderHalfWidth, ShoulderY, 0);

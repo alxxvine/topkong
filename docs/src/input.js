@@ -27,7 +27,10 @@ export class Input {
 
     this.touchMode = false;
     this.stickVector = new THREE.Vector2();
-    this.touchAim = null;
+    /** Направление прицела с правого стика, в экранных осях. */
+    this.aimVector = new THREE.Vector2();
+    /** Правый стик держат прямо сейчас — прицел ведёт он, а не курсор. */
+    this.aimStickHeld = false;
 
     this.bindKeyboard();
     this.bindMouse();
@@ -88,9 +91,9 @@ export class Input {
 
   bindTouch() {
     const stick = document.getElementById('stick');
-    const knob = document.getElementById('stickKnob');
+    const aim = document.getElementById('aim');
     const swing = document.getElementById('swing');
-    if (!stick || !swing) return;
+    if (!stick || !aim || !swing) return;
 
     // Виджеты показываются только на устройстве без мыши: на ноутбуке
     // они закрывали бы арену без всякой пользы.
@@ -99,36 +102,11 @@ export class Input {
       this.touchMode = true;
     }
 
-    let stickId = null;
-    const radius = 50;
-
-    const stickAt = (e) => {
-      const rect = stick.getBoundingClientRect();
-      const dx = e.clientX - (rect.left + rect.width / 2);
-      const dy = e.clientY - (rect.top + rect.height / 2);
-      const len = Math.hypot(dx, dy);
-      const k = len > radius ? radius / len : 1;
-      knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
-      this.stickVector.set(dx / radius, -dy / radius);
-      if (this.stickVector.length() > 1) this.stickVector.normalize();
-    };
-
-    stick.addEventListener('pointerdown', (e) => {
-      stickId = e.pointerId;
-      stick.setPointerCapture(e.pointerId);
-      stickAt(e);
-    });
-    stick.addEventListener('pointermove', (e) => {
-      if (e.pointerId === stickId) stickAt(e);
-    });
-    const stickEnd = (e) => {
-      if (e.pointerId !== stickId) return;
-      stickId = null;
-      knob.style.transform = '';
-      this.stickVector.set(0, 0);
-    };
-    stick.addEventListener('pointerup', stickEnd);
-    stick.addEventListener('pointercancel', stickEnd);
+    // Оба стика устроены одинаково, поэтому и собираются одной функцией.
+    // Прицельный отличается лишь тем, что не отпускает направление,
+    // когда палец убрали: боец должен остаться смотреть, куда навели.
+    this.bindStick(stick, 'stickKnob', this.stickVector, false);
+    this.bindStick(aim, 'aimKnob', this.aimVector, true);
 
     swing.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -142,22 +120,54 @@ export class Input {
     swing.addEventListener('pointerup', swingEnd);
     swing.addEventListener('pointercancel', swingEnd);
 
-    // Касание по самой арене задаёт прицел: без этого на телефоне
-    // повернуться некуда.
-    this.canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'touch') return;
-      this.setTouchAim(e);
-    });
-    this.canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType !== 'touch') return;
-      this.setTouchAim(e);
-    });
+    // Тыканья в арену ради разворота больше нет: палец закрывал ровно то
+    // место, куда целишься, и прицеливаться приходилось вслепую.
   }
 
-  setTouchAim(e) {
-    const rect = this.canvas.getBoundingClientRect();
-    this.pointer.set(e.clientX - rect.left, e.clientY - rect.top);
-    this.hasPointer = true;
+  /**
+   * Один стик. keepDirection означает, что после отпускания направление
+   * сохраняется — так ведёт себя прицел: убрал палец, а боец продолжает
+   * смотреть туда же.
+   */
+  bindStick(el, knobId, out, keepDirection) {
+    const knob = document.getElementById(knobId);
+    const radius = 44;
+    let id = null;
+
+    const at = (e) => {
+      const rect = el.getBoundingClientRect();
+      const dx = e.clientX - (rect.left + rect.width / 2);
+      const dy = e.clientY - (rect.top + rect.height / 2);
+      const len = Math.hypot(dx, dy);
+      const k = len > radius ? radius / len : 1;
+      knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+      out.set(dx / radius, -dy / radius);
+      if (out.length() > 1) out.normalize();
+      if (keepDirection) this.aimStickHeld = true;
+    };
+
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      id = e.pointerId;
+      // Захват указателя — оптимизация, а не обязательство: он позволяет
+      // вести палец за пределами кружка. Если браузер откажет, исключение
+      // из обработчика убило бы стик целиком, поэтому отказ просто
+      // проглатывается.
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* см. выше */ }
+      at(e);
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerId === id) at(e);
+    });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      knob.style.transform = '';
+      // Направление хода отпускается, направление прицела — нет.
+      if (!keepDirection) out.set(0, 0);
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
 
   /** Собрать направление хода из клавиш и стика. */

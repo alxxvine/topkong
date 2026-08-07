@@ -176,37 +176,50 @@
   body.touch #touch { display: block; }
   body.touch #hint { display: none; }
 
-  #stick, #swing {
+  /* Два стика, как в обычных мобильных экшенах: левый ведёт, правый целит.
+     Тыкать пальцем в арену ради разворота неудобно — палец закрывает
+     ровно то место, куда смотришь, и целиться приходится вслепую. */
+  #stick, #aim, #swing {
     position: absolute;
     bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     border-radius: 50%;
     pointer-events: auto;
   }
 
-  #stick {
-    left: 24px;
-    width: 132px;
-    height: 132px;
+  #stick, #aim {
+    width: 118px;
+    height: 118px;
     border: 1px solid var(--line);
     background: rgba(255, 255, 255, 0.05);
   }
 
-  #stickKnob {
+  #stick { left: 18px; }
+
+  #aim {
+    right: 18px;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  #stickKnob, #aimKnob {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 54px;
-    height: 54px;
-    margin: -27px 0 0 -27px;
+    width: 50px;
+    height: 50px;
+    margin: -25px 0 0 -25px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.22);
     pointer-events: none;
   }
 
+  #aimKnob { background: rgba(255, 255, 255, 0.32); }
+
+  /* Кнопка удара — над прицельным стиком, под тем же большим пальцем. */
   #swing {
-    right: 24px;
-    width: 108px;
-    height: 108px;
+    right: 32px;
+    bottom: calc(158px + env(safe-area-inset-bottom, 0px));
+    width: 86px;
+    height: 86px;
     border: 1px solid rgba(255, 179, 71, 0.5);
     background: rgba(255, 179, 71, 0.14);
     color: var(--accent);
@@ -247,15 +260,23 @@
       max-height: 44%;
     }
 
-    /* Панель внизу, значит и стик с кнопкой удара живут выше неё,
-       а не поверх: свёрнутый заголовок занимает свои сорок пикселей. */
-    #stick, #swing {
-      bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    /* Панель внизу, значит стики живут выше неё, а не поверх:
+       свёрнутый заголовок занимает свои сорок пикселей. */
+    #stick, #aim {
+      bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    }
+
+    #swing {
+      bottom: calc(204px + env(safe-area-inset-bottom, 0px));
     }
 
     #tune:not(.folded) ~ #touch #stick,
-    #tune:not(.folded) ~ #touch #swing {
+    #tune:not(.folded) ~ #touch #aim {
       bottom: calc(48% + 12px);
+    }
+
+    #tune:not(.folded) ~ #touch #swing {
+      bottom: calc(48% + 144px);
     }
 
     /* Панель внизу — над HUD её нет, и ширину ему резать незачем. */
@@ -280,6 +301,7 @@
 
   <div id="touch">
     <div id="stick"><div id="stickKnob"></div></div>
+    <div id="aim"><div id="aimKnob"></div></div>
     <div id="swing">УДАР</div>
   </div>
 </div>
@@ -302,24 +324,24 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "13";</script>
+<script>window.TK_BUILD = "16";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=13",
-    "tk/main.js":         "./src/main.js?v=13",
-    "tk/tuning.js":       "./src/tuning.js?v=13",
-    "tk/mathx.js":        "./src/mathx.js?v=13",
-    "tk/arena.js":        "./src/arena.js?v=13",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=13",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=13",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=13",
-    "tk/swingAction.js":  "./src/swingAction.js?v=13",
-    "tk/locomotion.js":   "./src/locomotion.js?v=13",
-    "tk/body.js":         "./src/body.js?v=13",
-    "tk/fighter.js":      "./src/fighter.js?v=13",
-    "tk/input.js":        "./src/input.js?v=13",
-    "tk/ui.js":           "./src/ui.js?v=13"
+    "three":              "./vendor/three.module.js?v=16",
+    "tk/main.js":         "./src/main.js?v=16",
+    "tk/tuning.js":       "./src/tuning.js?v=16",
+    "tk/mathx.js":        "./src/mathx.js?v=16",
+    "tk/arena.js":        "./src/arena.js?v=16",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=16",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=16",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=16",
+    "tk/swingAction.js":  "./src/swingAction.js?v=16",
+    "tk/locomotion.js":   "./src/locomotion.js?v=16",
+    "tk/body.js":         "./src/body.js?v=16",
+    "tk/fighter.js":      "./src/fighter.js?v=16",
+    "tk/input.js":        "./src/input.js?v=16",
+    "tk/ui.js":           "./src/ui.js?v=16"
   }
 }
 </script>

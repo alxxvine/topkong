@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
-import { clamp, clamp01, lerp, moveTowards, deltaAngle, noiseSigned, inverseLerp, RAD } from 'tk/mathx.js';
+import { clamp, clamp01, lerp, moveTowards, deltaAngle, noiseSigned, inverseLerp, RAD, DEG } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
 
 // Считает ЦЕЛЕВУЮ позу бойца — ту, которую тело пытается принять.
@@ -32,10 +32,12 @@ export class PoseDriver {
     this.stepPhase = 0;
     this.bob = 0;
     this.stride = 0;
+    this.lift = 0;
     this.lean = 0;
     this.sway = 0;
     this.clubLag = 0;
     this.lastYaw = 0;
+    this.yawRate = 0;
     this.lastSpeed = 0;
     this.noiseSeed = Math.random() * 100;
 
@@ -50,11 +52,23 @@ export class PoseDriver {
   tick(dt, planarSpeed, grounded) {
     const swing = this.f.swing;
 
-    // Шаг крутится тем быстрее, чем быстрее боец едет. В покое фаза
-    // подтягивается к целому, чтобы ноги вставали ровно.
-    const normalized = clamp01(planarSpeed / Math.max(0.1, T.maxRunSpeed));
-    const targetStride = normalized * T.stepLength;
+    // Разворот считается движением наравне с ходьбой. Иначе на месте
+    // цикл шага стоит, стопы едут юзом вокруг оси, и боец проворачивается
+    // как статуя на поворотном круге — замерено, по 27 см проскальзывания
+    // на разворот в 180 градусов.
+    const yaw = this.f.yaw * RAD;
+    this.yawRate = deltaAngle(this.lastYaw, yaw) / Math.max(1e-5, dt);
+    this.lastYaw = yaw;
+    const pivotSpeed = Math.abs(this.yawRate) * DEG * Rig.PivotRadius;
+
+    // Длина шага — только от перемещения: на месте боец переступает,
+    // а не вышагивает вперёд.
+    const strideNorm = clamp01(planarSpeed / Math.max(0.1, T.maxRunSpeed));
+    const normalized = clamp01((planarSpeed + pivotSpeed) / Math.max(0.1, T.maxRunSpeed));
+
+    const targetStride = strideNorm * T.stepLength;
     this.stride = moveTowards(this.stride, grounded ? targetStride : 0, dt * 3);
+    this.lift = moveTowards(this.lift, grounded ? normalized * T.stepLift : 0, dt * 0.6);
 
     if (normalized > 0.05 && grounded) {
       this.stepPhase += dt * T.stepRate * normalized;
@@ -73,7 +87,7 @@ export class PoseDriver {
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height, swing.pitch);
+      swing.height, swing.pitch, this.lift);
 
     this.solveJoints();
     return this.pose;
@@ -125,11 +139,8 @@ export class PoseDriver {
 
     // 3. Дубина отстаёт от разворота. Физически она отстаёт и сама, но здесь
     // отставание задаётся в цели — так им можно управлять, а не только
-    // наблюдать его.
-    const yaw = this.f.yaw * RAD;
-    const yawRate = deltaAngle(this.lastYaw, yaw) / Math.max(1e-5, dt);
-    this.lastYaw = yaw;
-
+    // наблюдать его. Скорость разворота уже посчитана в tick.
+    const yawRate = this.yawRate;
     const striking = this.f.swing.striking;
     const lagTarget = striking ? 0 : clamp(-yawRate * T.limbLag, -60, 60);
     this.clubLag = lerp(this.clubLag, lagTarget, clamp01((striking ? 25 : 9) * dt));
@@ -140,6 +151,7 @@ export class PoseDriver {
     this.stepPhase = 0;
     this.bob = 0;
     this.stride = 0;
+    this.lift = 0;
     this.lean = 0;
     this.sway = 0;
     this.clubLag = 0;

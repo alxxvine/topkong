@@ -95,6 +95,18 @@ export async function start() {
       _basis.right.x * move.x + _basis.forward.x * move.y,
       _basis.right.z * move.x + _basis.forward.z * move.y
     );
+    // Прицел: с телефона его ведёт правый стик, с мыши — курсор.
+    // Стик отдаёт направление в экранных осях, и в мир оно переводится
+    // тем же базисом, что и ход, — иначе «вправо» на стике означало бы
+    // не то же самое, что «вправо» на экране.
+    if (input.aimStickHeld && input.aimVector.lengthSq() > 0.04) {
+      const ax = _basis.right.x * input.aimVector.x + _basis.forward.x * input.aimVector.y;
+      const az = _basis.right.z * input.aimVector.x + _basis.forward.z * input.aimVector.y;
+      const len = Math.hypot(ax, az) || 1;
+      input.aim.set(
+        player.position.x + (ax / len) * 6, 0, player.position.z + (az / len) * 6);
+    }
+
     player.facingTarget.copy(input.aim).sub(player.position);
     player.facingTarget.y = 0;
     player.swing.held = input.swingHeld;
