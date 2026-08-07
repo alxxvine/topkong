@@ -263,27 +263,26 @@
   Исходники при этом не трогаются: внутри они импортируют друг друга
   голыми именами tk/*.js, которые разрешает эта карта.
 
-  ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:
-      sed -i 's/?v=[0-9]*/?v=N/g; s/TK_BUILD = .[0-9]*./TK_BUILD = "N"/' docs/index.html
+  ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "5";</script>
+<script>window.TK_BUILD = "6";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=5",
-    "tk/main.js":         "./src/main.js?v=5",
-    "tk/tuning.js":       "./src/tuning.js?v=5",
-    "tk/mathx.js":        "./src/mathx.js?v=5",
-    "tk/arena.js":        "./src/arena.js?v=5",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=5",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=5",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=5",
-    "tk/swingAction.js":  "./src/swingAction.js?v=5",
-    "tk/locomotion.js":   "./src/locomotion.js?v=5",
-    "tk/ragdoll.js":      "./src/ragdoll.js?v=5",
-    "tk/fighter.js":      "./src/fighter.js?v=5",
-    "tk/input.js":        "./src/input.js?v=5",
-    "tk/ui.js":           "./src/ui.js?v=5"
+    "three":              "./vendor/three.module.js?v=6",
+    "tk/main.js":         "./src/main.js?v=6",
+    "tk/tuning.js":       "./src/tuning.js?v=6",
+    "tk/mathx.js":        "./src/mathx.js?v=6",
+    "tk/arena.js":        "./src/arena.js?v=6",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=6",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=6",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=6",
+    "tk/swingAction.js":  "./src/swingAction.js?v=6",
+    "tk/locomotion.js":   "./src/locomotion.js?v=6",
+    "tk/ragdoll.js":      "./src/ragdoll.js?v=6",
+    "tk/fighter.js":      "./src/fighter.js?v=6",
+    "tk/input.js":        "./src/input.js?v=6",
+    "tk/ui.js":           "./src/ui.js?v=6"
   }
 }
 </script>

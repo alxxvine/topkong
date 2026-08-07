@@ -32,7 +32,6 @@ export const FootY = 0.10;
 
 export const ShoulderHalfWidth = 0.28;
 export const ShoulderY = 1.58;
-export const HandHalfWidth = 0.10;
 
 // Длины звеньев. Размах руки 0.68 — это плечо на высоте 1.58 и кисть,
 // свисающая до 0.90, то есть до середины бедра. Ровно те пропорции,
@@ -72,17 +71,13 @@ const _delta = new THREE.Vector3();
 const _axis = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 
-/** Где висит свободная кисть, когда дубину несут одной рукой. */
+/** Где висит свободная кисть: дубину всегда несут одной рукой. */
 export const FreeHandHalfWidth = 0.32;
 export const FreeHandY = 0.96;
 
 /** Полный набор локальных позиций тела. */
 export function makePose() {
   return {
-    /** true — дубину держит правая рука. Сторона переключается вместе с дугой. */
-    holdRight: true,
-    /** 0 — несёт одной рукой, 1 — обе на рукояти. */
-    twoHanded: 1,
     hips: new THREE.Vector3(),
     chest: new THREE.Vector3(),
     head: new THREE.Vector3(),
@@ -113,11 +108,9 @@ export function makePose() {
  * @param {number} sway      заваливание вбок; им и делается вся шаткость походки
  * @param {number} clubHeight смещение хвата по высоте; отрицательное — руки опущены
  * @param {number} clubPitchDeg наклон дубины к земле: 0 — горизонтально, 90 — отвесно вниз
- * @param {number} twoHanded 0 — несёт одной рукой, 1 — обе кисти на рукояти
  */
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
-                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0,
-                            twoHanded = 1) {
+                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0) {
   // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
   // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
   // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
@@ -140,45 +133,21 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   const anchorY = GripY + bob + clubHeight;
   pose.grip.set(flatX * clubReach, anchorY, lean * 0.12 + flatZ * clubReach);
 
-  // Держит та рука, на чьей стороне оказался хват. Опущенную вниз дубину
-  // нельзя держать двумя руками: дальняя кисть до неё не дотягивается,
-  // и раньше именно поэтому дубина висела ровно за спиной по центру —
-  // единственное место, куда доставали обе. Теперь её несут одной рукой
-  // сбоку, а вторая подхватывает рукоять на замахе.
-  const holdRight = pose.grip.x >= 0;
-  pose.holdRight = holdRight;
-  pose.twoHanded = twoHanded;
-
-  // Поперечная ось: по ней кисти разводятся вдоль рукояти.
-  const sideX = flatZ;
-  const sideZ = -flatX;
-
-  const gripRx = pose.grip.x + sideX * HandHalfWidth;
-  const gripRz = pose.grip.z + sideZ * HandHalfWidth;
-  const gripLx = pose.grip.x - sideX * HandHalfWidth;
-  const gripLz = pose.grip.z - sideZ * HandHalfWidth;
+  // Дубина всегда в одной и той же руке — правой. Ни перехвата между
+  // ударами, ни подхвата второй рукой на тяжёлом замахе: боец правша,
+  // и это его свойство, а не следствие геометрии позы.
+  //
+  // Раньше держащая рука выбиралась по знаку grip.x, то есть менялась
+  // вместе со стороной дуги, и оружие перекладывалось из руки в руку
+  // после каждого удара.
+  pose.handRight.set(pose.grip.x, anchorY, pose.grip.z);
 
   // Свободная рука висит у бедра и качается в противофазе своей ноге —
   // без этого она едет вдоль тела доской и выдаёт всю походку.
-  const swingR = Math.cos(phaseL) * stride * 0.6;
-  const swingL = -Math.cos(phaseL) * stride * 0.6;
-
-  hand(pose.handRight, holdRight, gripRx, gripRz, 1, swingR);
-  hand(pose.handLeft, !holdRight, gripLx, gripLz, -1, swingL);
-
-  function hand(out, holding, gx, gz, sign, swing) {
-    if (holding) {
-      // Держащая кисть при одноручном хвате садится на саму рукоять,
-      // а не отступает от неё вбок: отступ нужен только второй руке.
-      out.set(
-        lerpN(pose.grip.x, gx, twoHanded), anchorY, lerpN(pose.grip.z, gz, twoHanded));
-      return;
-    }
-    out.set(
-      lerpN(sign * FreeHandHalfWidth, gx, twoHanded),
-      lerpN(FreeHandY + bob, anchorY, twoHanded),
-      lerpN(lean * 0.05 + swing, gz, twoHanded));
-  }
+  pose.handLeft.set(
+    -FreeHandHalfWidth,
+    FreeHandY + bob,
+    lean * 0.05 - Math.cos(phaseL) * stride * 0.6);
 
   // Наклон отдельно от разворота: без него дубина всегда горизонтальна,
   // и «волочится за спиной» выглядит как парящий на уровне колен шар.
@@ -190,8 +159,6 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
 
   return pose;
 }
-
-const lerpN = (a, b, t) => a + (b - a) * t;
 
 function foot(out, x, phase, stride) {
   // Подъём только на передней половине шага: сзади нога скользит по земле.

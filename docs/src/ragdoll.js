@@ -64,8 +64,10 @@ const LINKS = [
   [P.ShoulderL, P.HipR], [P.ShoulderR, P.HipL],         // X-раскос корпуса
   [P.ShoulderR, P.ElbowR], [P.ElbowR, P.HandR],
   [P.ShoulderL, P.ElbowL], [P.ElbowL, P.HandL],
-  [P.HandL, P.HandR],                                   // двуручный хват
-  [P.HandR, P.ClubTip], [P.HandL, P.ClubTip],
+  // Дубина висит на одной правой кисти. Связей с левой рукой нет намеренно:
+  // пока хват считался двуручным, они при переходе в тряпку дёргали
+  // свободную руку через всё тело к рукояти.
+  [P.HandR, P.ClubTip],
 ];
 
 const _v = new THREE.Vector3();

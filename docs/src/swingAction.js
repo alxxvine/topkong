@@ -30,20 +30,14 @@ export class SwingAction {
     this.timer = 0;
     this.cooldown = 0;
     this.charge = 0;
-    // Сторона дуги чередуется: слева-направо, потом обратно.
-    this.side = 1;
 
-    this.angle = T.carryAngle * -this.side;
+    this.angle = T.carryAngle;
     this.reach = T.carryReach;
     this.lean = 0;
     this.height = T.carryDrop;
-    // Наклон дубины к земле. В покое почти отвесный: только так «волочится
-    // за спиной» читается как волочится, а не как парящий на уровне колен шар.
+    // Наклон дубины к земле. В покое почти отвесный: только так «висит
+    // сбоку» читается как висит, а не как парящий на уровне колен шар.
     this.pitch = T.carryPitch;
-    // 0 — несёт одной рукой, 1 — обе кисти на рукояти. Вторая рука
-    // приходит на замахе: по ней состояние читается ещё до того,
-    // как дубина начала подниматься.
-    this.twoHanded = 0;
 
     /** Сила удара 0..1: во столько раз он весомее незаряженного. */
     this.power = 1;
@@ -79,7 +73,6 @@ export class SwingAction {
         if (this.timer >= T.swingStrikeTime) {
           this.state = SwingState.Recover;
           this.timer = 0;
-          this.side = -this.side;
           this.cooldown = T.swingCooldown;
         }
         break;
@@ -105,12 +98,12 @@ export class SwingAction {
         // Замах обязан читаться до того, как что-то полетит: дубина
         // поднимается из-за спины тем выше, чем больше заряд, корпус
         // отклоняется назад. Состояние видно по одной позе, без интерфейса.
-        targetAngle = lerp(T.carryAngle * -this.side, -this.side * (half + 25), this.charge);
+        targetAngle = lerp(T.carryAngle, half + 25, this.charge);
         targetReach = lerp(T.carryReach, T.windUpReach, this.charge);
         targetLean = -0.5 * this.charge;
         targetHeight = lerp(T.carryDrop, 0.14, this.charge);
-        // Из-за спины к плечу: набалдашник задирается вверх, и по одному
-        // этому видно, что сейчас прилетит.
+        // Из-за плеча вверх: набалдашник задирается, и по одному этому
+        // видно, что сейчас прилетит.
         targetPitch = lerp(T.carryPitch, -22, this.charge);
         blend = 10 * dt;
         break;
@@ -120,7 +113,10 @@ export class SwingAction {
         // Ease-out: пронос резкий в начале и доводится к концу. Линейная
         // развёртка выглядит как равномерное вращение манипулятора, а не как удар.
         const eased = 1 - (1 - phase) * (1 - phase);
-        targetAngle = lerpUnclamped(-(half + 25), half, eased) * this.side;
+        // Дуга всегда одна и та же: справа, где дубина висит, через прицел
+        // влево. Раньше сторона чередовалась, и вместе с ней после каждого
+        // удара менялась рука — оружие перекладывалось само собой.
+        targetAngle = lerpUnclamped(half + 25, -half, eased);
         targetReach = lerp(ClubRestReach, T.handMaxReach, Math.sin(phase * Math.PI));
         targetLean = Math.sin(phase * Math.PI);
         targetHeight = 0;
@@ -133,7 +129,7 @@ export class SwingAction {
       }
 
       case SwingState.Recover:
-        targetAngle = T.carryAngle * -this.side;
+        targetAngle = T.carryAngle;
         targetReach = T.carryReach;
         targetLean = 0;
         targetHeight = T.carryDrop;
@@ -142,9 +138,10 @@ export class SwingAction {
         break;
 
       default:
-        // Покой: дубина волочится за спиной. Отдельного «состояния готовности»
-        // рисовать не нужно — разница между «несу» и «замахиваюсь» видна сама.
-        targetAngle = T.carryAngle * -this.side;
+        // Покой: дубина висит сбоку в опущенной руке. Отдельного «состояния
+        // готовности» рисовать не нужно — разница между «несу» и «замахиваюсь»
+        // видна по самой позе.
+        targetAngle = T.carryAngle;
         targetReach = T.carryReach;
         targetLean = 0;
         targetHeight = T.carryDrop;
@@ -159,13 +156,6 @@ export class SwingAction {
     this.lean = lerp(this.lean, targetLean, blend);
     this.height = lerp(this.height, targetHeight, blend);
     this.pitch = lerp(this.pitch, targetPitch, blend);
-
-    // Хват сглаживается своей скоростью, а не общим blend: на проносе тот
-    // равен единице, и вторая рука прыгала бы на рукоять рывком.
-    const wantTwoHanded = this.state === SwingState.Guard ? 0
-      : this.state === SwingState.WindUp ? Math.min(1, this.charge * 3)
-        : this.state === SwingState.Strike ? 1 : 0;
-    this.twoHanded = lerp(this.twoHanded, wantTwoHanded, clamp01(14 * dt));
   }
 
   reset() {
@@ -174,11 +164,10 @@ export class SwingAction {
     this.timer = 0;
     this.cooldown = 0;
     this.charge = 0;
-    this.angle = T.carryAngle * -this.side;
+    this.angle = T.carryAngle;
     this.reach = T.carryReach;
     this.lean = 0;
     this.height = T.carryDrop;
     this.pitch = T.carryPitch;
-    this.twoHanded = 0;
   }
 }
