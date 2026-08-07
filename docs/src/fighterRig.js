@@ -70,6 +70,10 @@ const UP = new THREE.Vector3(0, 1, 0);
 const _delta = new THREE.Vector3();
 const _axis = new THREE.Vector3();
 const _pole = new THREE.Vector3();
+const _up = new THREE.Vector3();
+const _side = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _basis = new THREE.Matrix4();
 
 /** Где висит свободная кисть: дубину всегда несут одной рукой. */
 export const FreeHandHalfWidth = 0.32;
@@ -81,6 +85,11 @@ export function makePose() {
     hips: new THREE.Vector3(),
     chest: new THREE.Vector3(),
     head: new THREE.Vector3(),
+    // Плечи — часть позы, а не константа. Пока они были константой,
+    // скручиваться корпусу было нечем: цель плеча не знала ни про шаг,
+    // ни про наклон, ни про разворот.
+    shoulderLeft: new THREE.Vector3(),
+    shoulderRight: new THREE.Vector3(),
     footLeft: new THREE.Vector3(),
     footRight: new THREE.Vector3(),
     kneeLeft: new THREE.Vector3(),
@@ -109,9 +118,11 @@ export function makePose() {
  * @param {number} sway      заваливание вбок; им и делается вся шаткость походки
  * @param {number} clubHeight смещение хвата по высоте; отрицательное — руки опущены
  * @param {number} clubPitchDeg наклон дубины к земле: 0 — горизонтально, 90 — отвесно вниз
+ * @param {number} twistDeg  разворот плечевого пояса относительно таза
  */
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
-                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0) {
+                            lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0,
+                            twistDeg = 0) {
   // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
   // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
   // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
@@ -119,6 +130,12 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   pose.hips.set(sway * 0.02, HipsY + bob, lean * 0.02);
   pose.chest.set(sway * 0.10, ChestY + bob, lean * 0.12);
   pose.head.set(sway * 0.22, HeadY + bob, lean * 0.20);
+
+  // Плечи живут между грудью и головой и качаются вместе с ними.
+  const shoulderSide = sway * 0.16;
+  const shoulderFwd = lean * 0.16;
+  pose.shoulderRight.set(ShoulderHalfWidth + shoulderSide, ShoulderY + bob, shoulderFwd);
+  pose.shoulderLeft.set(-ShoulderHalfWidth + shoulderSide, ShoulderY + bob, shoulderFwd);
 
   // Ноги в противофазе: одна выносится вперёд и приподнимается, другая позади.
   const phaseL = stepPhase * Math.PI * 2;
@@ -156,9 +173,37 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   const cp = Math.cos(p);
   pose.clubDir.set(flatX * cp, -Math.sin(p), flatZ * cp);
 
+  // Скрут корпуса. Всё, что выше таза, доворачивается вокруг его оси —
+  // и плечи расходятся вперёд-назад по-настоящему, а не просто едут вбок.
+  //
+  // Руки и хват крутятся вместе с плечами не для красоты: рука растёт
+  // из плеча, и если плечо уехало, а цель кисти осталась на месте,
+  // мышца начнёт тянуть кисть обратно и съест весь скрут.
+  if (twistDeg !== 0) {
+    const t = twistDeg * DEG;
+    const ts = Math.sin(t);
+    const tc = Math.cos(t);
+    twistY(pose.chest, ts, tc);
+    twistY(pose.head, ts, tc);
+    twistY(pose.shoulderRight, ts, tc);
+    twistY(pose.shoulderLeft, ts, tc);
+    twistY(pose.grip, ts, tc);
+    twistY(pose.handRight, ts, tc);
+    twistY(pose.handLeft, ts, tc);
+    twistY(pose.clubDir, ts, tc);
+  }
+
   pose.club.copy(pose.grip).addScaledVector(pose.clubDir, ClubGripOffset);
 
   return pose;
+}
+
+/** Поворот вокруг вертикали. Та же формула, по которой поза уходит в мир. */
+function twistY(v, sin, cos) {
+  const x = v.x * cos + v.z * sin;
+  const z = -v.x * sin + v.z * cos;
+  v.x = x;
+  v.z = z;
 }
 
 function foot(out, x, phase, stride, lift) {
@@ -176,9 +221,9 @@ function foot(out, x, phase, stride, lift) {
  */
 export const PivotRadius = 0.40;
 
-export function shoulder(right, out = new THREE.Vector3()) {
-  return out.set(right ? ShoulderHalfWidth : -ShoulderHalfWidth, ShoulderY, 0);
-}
+// Отдельной функции shoulder() больше нет намеренно. Она возвращала
+// постоянную точку, и все, кто ею пользовался, получали плечо, не знающее
+// ни про наклон, ни про шаг, ни про скрут. Плечо теперь живёт в позе.
 
 export function hipJoint(right, out = new THREE.Vector3()) {
   return out.set(right ? HipHalfWidth : -HipHalfWidth, HipJointY, 0);
@@ -229,6 +274,38 @@ export function solveTwoBone(root, target, l1, l2, pole, outJoint, outEnd) {
   return outEnd;
 }
 
+/**
+ * Полный поворот кости: куда смотрит её локальная +Y и куда — локальная +X.
+ *
+ * Существует потому, что aim() задаёт только одну ось, а разворот вокруг неё
+ * оставляет на усмотрение setFromUnitVectors. Для капсулы руки это неважно —
+ * она симметрична. Для груди и головы важно решающе: к груди прикручены шары
+ * плеч, к голове морда, и с одной лишь осью Y они замирали в мировых
+ * координатах. Боец разворачивался, а плечи и лицо оставались смотреть
+ * в одну и ту же сторону — тело от этого и читалось деревянным.
+ *
+ * sideways ортогонализуется к up, так что передавать можно живой вектор
+ * между частицами, не выпрямляя его заранее.
+ */
+export function orient(up, sideways, out = new THREE.Quaternion()) {
+  _up.copy(up);
+  if (_up.lengthSq() < 1e-10) _up.copy(UP);
+  _up.normalize();
+
+  _side.copy(sideways).addScaledVector(_up, -sideways.dot(_up));
+  if (_side.lengthSq() < 1e-10) {
+    // Плечи сложились в одну точку — берём любую ось поперёк, лишь бы
+    // базис не выродился и кость не схлопнулась в ноль.
+    _side.set(1, 0, 0).addScaledVector(_up, -_up.x);
+    if (_side.lengthSq() < 1e-10) _side.set(0, 0, 1).addScaledVector(_up, -_up.z);
+  }
+  _side.normalize();
+
+  _fwd.crossVectors(_side, _up);
+  _basis.makeBasis(_side, _up, _fwd);
+  return out.setFromRotationMatrix(_basis);
+}
+
 /** Поворот, направляющий локальную ось Y вдоль вектора. Аналог FromToRotation(up, dir). */
 export function aim(direction, out = new THREE.Quaternion()) {
   if (direction.lengthSq() < 1e-12) return out.identity();
@@ -261,11 +338,9 @@ export function restPose(pose = makePose()) {
  * а сборщику тела и ragdoll'у хватает статичной стойки.
  */
 export function solveRestJoints(pose) {
-  const shoulderR = shoulder(true);
-  const shoulderL = shoulder(false);
-  solveTwoBone(shoulderR, pose.handRight, UpperArmLength, ForeArmLength,
+  solveTwoBone(pose.shoulderRight, pose.handRight, UpperArmLength, ForeArmLength,
     ARM_POLE_RIGHT, pose.elbowRight, pose.handRight);
-  solveTwoBone(shoulderL, pose.handLeft, UpperArmLength, ForeArmLength,
+  solveTwoBone(pose.shoulderLeft, pose.handLeft, UpperArmLength, ForeArmLength,
     ARM_POLE_LEFT, pose.elbowLeft, pose.handLeft);
   solveTwoBone(hipJoint(false), pose.footLeft, ThighLength, ShinLength,
     LEG_POLE, pose.kneeLeft, pose.footLeft);

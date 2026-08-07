@@ -233,7 +233,7 @@ export class Fighter {
     // Разложить кости сразу, иначе первый кадр рисует позу с прошлой жизни.
     this.poseDriver.tick(1 / 120, 0, true);
     this.body.setTargets(this.poseDriver.pose, yaw);
-    this.body.writeBones(this.bones);
+    this.body.writeBones(this.bones, this.poseDriver.headTurn);
     this.position.set(x, 0, z);
     this.group.updateMatrixWorld(true);
     this.updateClubHead(1 / 120, true);
@@ -297,7 +297,7 @@ export class Fighter {
 
     body.setTargets(pose, this.yaw);
     body.step(dt);
-    body.writeBones(this.bones);
+    body.writeBones(this.bones, this.poseDriver.headTurn);
 
     // Позиция бойца — проекция таза на землю. Она следствие физики,
     // а не то, что ей задают.

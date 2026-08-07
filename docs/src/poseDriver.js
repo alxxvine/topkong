@@ -17,11 +17,10 @@ import * as Rig from 'tk/fighterRig.js';
 // Анимаций в проекте по-прежнему нет ни одной: стойка, шаг с подскоком
 // и дуга удара — это формулы.
 
-// Опорные точки цепей держим по отдельности: solveTwoBone читает root уже
+// Опорные точки ног держим по отдельности: solveTwoBone читает root уже
 // после того, как в него что-то записали, и общий временный вектор
-// перетирался бы между вызовами.
-const _shoulderR = new THREE.Vector3();
-const _shoulderL = new THREE.Vector3();
+// перетирался бы между вызовами. Плечи в этом больше не нуждаются —
+// они лежат в самой позе.
 const _hipL = new THREE.Vector3();
 const _hipR = new THREE.Vector3();
 
@@ -40,6 +39,13 @@ export class PoseDriver {
     this.yawRate = 0;
     this.lastSpeed = 0;
     this.noiseSeed = Math.random() * 100;
+
+    /** Разворот плечевого пояса относительно таза, градусы. */
+    this.twist = 0;
+    /** Доворот головы относительно плеч, радианы. Читает его отрисовка. */
+    this.headTurn = 0;
+    /** Фаза дыхания. В покое тело иначе стоит абсолютно неподвижно. */
+    this.breath = Math.random();
 
     this.pose = Rig.makePose();
   }
@@ -84,13 +90,67 @@ export class PoseDriver {
     this.bob = lerp(this.bob, targetBob, clamp01(12 * dt));
 
     this.updateWobble(dt, planarSpeed, normalized);
+    this.updateTwist(dt, strideNorm, grounded);
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height, swing.pitch, this.lift);
+      swing.height, swing.pitch, this.lift, this.twist);
 
     this.solveJoints();
     return this.pose;
+  }
+
+  /**
+   * Скрут корпуса: насколько плечевой пояс развёрнут относительно таза
+   * и куда при этом смотрит голова.
+   *
+   * До этого такой степени свободы не было вовсе — вся поза разворачивалась
+   * на один угол, и корпус проворачивался цельным бруском. Замерено: за
+   * разворот на 180 градусов плечи уходили от таза на 3.6°, при ходьбе
+   * на 5.9°. У человека при обычном шаге это градусов пятнадцать.
+   *
+   * Складывается из четырёх независимых вкладов.
+   */
+  updateTwist(dt, strideNorm, grounded) {
+    const swing = this.f.swing;
+    // yawRate уже в градусах в секунду: RAD в этом проекте переводит ИЗ
+    // радиан, а не в них. Домножение на DEG здесь давало 0.4° вместо 23.
+    const yawRateDeg = this.yawRate;
+
+    // 1. Разворот. Плечи отстают от таза, голова наоборот забегает вперёд:
+    // человек сначала смотрит, куда поворачивается, и только потом доводит
+    // корпус. Из этой встречной пары и читается, что тело живое.
+    const fromTurn = clamp(-yawRateDeg * T.twistFromTurn, -T.twistMax, T.twistMax);
+    const headLead = yawRateDeg * T.headLead;
+
+    // 2. Шаг. Плечи идут в противофазе ногам: вынесена левая нога — вперёд
+    // уходит правое плечо. Знак отрицательный именно поэтому, а не случайно:
+    // при фазе 0 левая стопа впереди, и правое плечо должно уйти следом.
+    const fromStep = grounded
+      ? -Math.cos(this.stepPhase * Math.PI * 2) * T.twistFromStep * strideNorm
+      : 0;
+
+    // 3. Замах. Удар идёт от корпуса, а не от одной руки: на зарядке плечи
+    // закручиваются назад, на проносе раскручиваются вслед за дугой.
+    const fromSwing = (swing.angle - T.carryAngle) * T.twistFromSwing
+      + swing.charge * T.twistFromCharge;
+
+    // 4. Дыхание. Без него боец в покое стоит абсолютно неподвижно —
+    // ровно то, из-за чего он и читается манекеном.
+    this.breath += dt * T.breathRate;
+    const idle = clamp01(1 - strideNorm * 3);
+    const fromBreath = Math.sin(this.breath * Math.PI * 2) * T.breathTwist * idle;
+
+    const target = fromTurn + fromStep + fromSwing + fromBreath;
+    // Плечи набирают скрут не мгновенно: масса корпуса своё берёт.
+    this.twist = lerp(this.twist, target, clamp01(11 * dt));
+
+    // Голова доворачивается ОТ ПЛЕЧ, поэтому из её угла вычитается скрут:
+    // плечи и так уже уехали. Ограничение накладывается на итог, а не
+    // на слагаемое — иначе на быстром развороте отставание плеч и вынос
+    // головы складывались бы и шея выворачивалась.
+    const headOffset = clamp(headLead - this.twist, -T.headTurnMax, T.headTurnMax);
+    this.headTurn = lerp(this.headTurn, headOffset * DEG, clamp01(9 * dt));
   }
 
   /**
@@ -102,10 +162,13 @@ export class PoseDriver {
    */
   solveJoints() {
     const pose = this.pose;
-    Rig.solveTwoBone(Rig.shoulder(true, _shoulderR), pose.handRight,
+    // Корень руки — плечо из позы, а не постоянная точка рига: плечо теперь
+    // ездит вместе со скрутом, и IK обязана считать от того места,
+    // где оно оказалось.
+    Rig.solveTwoBone(pose.shoulderRight, pose.handRight,
       Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(true),
       pose.elbowRight, pose.handRight);
-    Rig.solveTwoBone(Rig.shoulder(false, _shoulderL), pose.handLeft,
+    Rig.solveTwoBone(pose.shoulderLeft, pose.handLeft,
       Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(false),
       pose.elbowLeft, pose.handLeft);
     Rig.solveTwoBone(Rig.hipJoint(false, _hipL), pose.footLeft,
@@ -157,5 +220,7 @@ export class PoseDriver {
     this.clubLag = 0;
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
+    this.twist = 0;
+    this.headTurn = 0;
   }
 }

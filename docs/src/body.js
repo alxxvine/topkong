@@ -58,12 +58,18 @@ const MASS = [
 // Сила мышцы у каждой частицы. Таз и корпус держат позу жёстко — на них
 // стоит вся стойка; кисть и дубина мягкие, чтобы у оружия читался вес,
 // а рука за ним тянулась, а не телепортировалась.
+//
+// Голова и плечи держат себя слабее прочего намеренно. Держи они позу так же
+// крепко, как таз, — вся верхняя часть шла бы за целью кадр в кадр, и физика
+// сверху не добавляла бы ничего: замерено, скрут корпуса за разворот на 180°
+// составлял 3.6 градуса. Геометрически они всё равно никуда не денутся,
+// их держат связи голова↔плечи и раскос голова↔таз.
 const MUSCLE = [
-  0.75, 1.00, 1.30,
+  0.40, 1.00, 1.30,
   1.20, 0.85, 1.00,
   1.20, 0.85, 1.00,
-  1.00, 0.55, 0.70,
-  1.00, 0.55, 0.70,
+  0.55, 0.55, 0.70,
+  0.55, 0.55, 0.70,
   0.45,
 ];
 
@@ -91,6 +97,7 @@ const LINKS = [
 ];
 
 const _v = new THREE.Vector3();
+const _side = new THREE.Vector3();
 const _center = new THREE.Vector3();
 const _rot = new THREE.Quaternion();
 const _dir = new THREE.Vector3();
@@ -117,8 +124,8 @@ function fillFromPose(out, pose) {
   out[P.KneeR].copy(pose.kneeRight);
   out[P.FootL].copy(pose.footLeft);
   out[P.FootR].copy(pose.footRight);
-  Rig.shoulder(true, out[P.ShoulderR]);
-  Rig.shoulder(false, out[P.ShoulderL]);
+  out[P.ShoulderR].copy(pose.shoulderRight);
+  out[P.ShoulderL].copy(pose.shoulderLeft);
   out[P.ElbowR].copy(pose.elbowRight);
   out[P.ElbowL].copy(pose.elbowLeft);
   out[P.HandR].copy(pose.handRight);
@@ -410,17 +417,45 @@ export class Body {
 
   // ------------------------------------------------------------------ кости
 
-  /** Разложить частицы в кости. Единственный способ, которым тело рисуется. */
-  writeBones(bones) {
+  /**
+   * Разложить частицы в кости. Единственный способ, которым тело рисуется.
+   *
+   * Таз, грудь и голова разворачиваются по полному базису, а не по одной оси.
+   * Разница не косметическая: к груди прикручены шары плеч, к голове — морда,
+   * и пока поворот брался из aim(голова − грудь), разворот вокруг вертикали
+   * оставался никаким. Плечи и лицо застывали в мировых координатах — боец
+   * поворачивался, а они смотрели всё туда же.
+   *
+   * headTurn — единственная величина, приходящая не из частиц. Голова у нас
+   * одна точка, а у точки нет разворота, поэтому доворот лица приходится
+   * задавать снаружи. Всё остальное по-прежнему выводится из тела.
+   */
+  writeBones(bones, headTurn = 0) {
     const p = this.pos;
 
-    Rig.aim(_v.copy(p[P.Chest]).sub(p[P.Hips]), _rot);
+    // Поперечная ось таза — линия бёдер, груди — линия плеч. Отсюда
+    // и берётся видимый скрут корпуса.
+    _side.copy(p[P.HipR]).sub(p[P.HipL]);
+    Rig.orient(_v.copy(p[P.Chest]).sub(p[P.Hips]), _side, _rot);
     bones.hips.position.copy(p[P.Hips]);
     bones.hips.quaternion.copy(_rot);
 
-    Rig.aim(_v.copy(p[P.Head]).sub(p[P.Chest]), _rot);
+    _side.copy(p[P.ShoulderR]).sub(p[P.ShoulderL]);
+    _v.copy(p[P.Head]).sub(p[P.Chest]);
+    Rig.orient(_v, _side, _rot);
     bones.chest.position.copy(p[P.Chest]);
     bones.chest.quaternion.copy(_rot);
+
+    // Голова доворачивается от линии плеч: смотреть она может и не туда,
+    // куда развёрнут корпус.
+    if (headTurn !== 0) {
+      const s = Math.sin(headTurn);
+      const c = Math.cos(headTurn);
+      const x = _side.x * c + _side.z * s;
+      _side.z = -_side.x * s + _side.z * c;
+      _side.x = x;
+    }
+    Rig.orient(_v, _side, _rot);
     bones.head.position.copy(p[P.Head]);
     bones.head.quaternion.copy(_rot);
 
@@ -433,11 +468,15 @@ export class Body {
     limbTo(bones.armLUpper, p[P.ShoulderL], p[P.ElbowL]);
     limbTo(bones.armLFore, p[P.ElbowL], p[P.HandL]);
 
-    // Стопы держатся горизонтально и разворачиваются вслед за корпусом:
-    // ботинок, кувыркающийся вокруг щиколотки, читается как поломка.
-    _v.copy(p[P.Chest]).sub(p[P.Hips]);
+    // Стопы держатся горизонтально и смотрят туда же, куда таз: ботинок,
+    // кувыркающийся вокруг щиколотки, читается как поломка.
+    //
+    // Направление берётся из линии бёдер, а не из наклона корпуса. Наклон —
+    // это несколько сантиметров в произвольную сторону, и atan2 от них
+    // выдавал стопам случайный разворот на каждом кадре.
+    _v.copy(p[P.HipR]).sub(p[P.HipL]);
     _v.y = 0;
-    const footYaw = _v.lengthSq() > 1e-8 ? Math.atan2(_v.x, _v.z) : 0;
+    const footYaw = _v.lengthSq() > 1e-8 ? Math.atan2(_v.x, _v.z) - Math.PI / 2 : 0;
     bones.footL.position.copy(p[P.FootL]);
     bones.footL.quaternion.setFromAxisAngle(AXIS_Y, footYaw);
     bones.footR.position.copy(p[P.FootR]);
