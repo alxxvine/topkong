@@ -1,17 +1,17 @@
-import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
-import { DEG, RAD, deltaAngle, clamp } from 'tk/mathx.js';
+import { DEG, RAD, deltaAngle, moveTowards } from 'tk/mathx.js';
+import { P } from 'tk/body.js';
 
-// Движение и разворот управляемого бойца. Порт Locomotion.cs.
+// Движение и разворот. Теперь это намерение, а не результат.
 //
-// В Unity этим двигали Rigidbody с FreezeRotation; здесь Rigidbody нет,
-// поэтому те же несколько строк движения написаны прямо — скорость по земле,
-// гравитация, проверка опоры и разворот. Ничего сверх этого контроллеру
-// персонажа и не нужно: пока боец под управлением, стоять ему помогать не надо,
-// вся настоящая физика начинается в момент, когда он становится тряпкой.
-
-const _wish = new THREE.Vector3();
-const _planar = new THREE.Vector3();
+// Раньше здесь двигался сам трансформ бойца, и куда его поставили — там он
+// и оказывался. Теперь тело физическое: локомоция задаёт ядру желаемую
+// скорость и крутит целевой разворот, а доедет ли туда тело и как оно при
+// этом завалится — решают мышцы и связи.
+//
+// Корень при этом остаётся авторитетным: ввод меняет намерение мгновенно.
+// Именно это удерживает управление от вязкости, из-за которой мы ушли
+// от физического тела в Unity-версии, — отстаёт картинка, а не реакция.
 
 export class Locomotion {
   constructor(fighter, arena) {
@@ -19,95 +19,93 @@ export class Locomotion {
     this.arena = arena;
     this.grounded = false;
     this.planarSpeed = 0;
+    /** Градусов в секунду. Хранится отдельно, чтобы у разворота был разгон. */
+    this.yawSpeed = 0;
   }
 
   tick(dt, controlEnabled) {
-    const f = this.f;
-
     this.probeGround();
+    this.measureSpeed(dt);
     this.applyMovement(dt, controlEnabled);
-    this.applyFacing(dt);
-
-    f.position.addScaledVector(f.velocity, dt);
-
-    if (this.grounded && f.velocity.y <= 0) {
-      f.position.y = 0;
-      f.velocity.y = 0;
-    }
+    this.applyFacing(dt, controlEnabled);
   }
 
+  /**
+   * Опора есть, если хотя бы одна стопа стоит на настиле. Проверять по тазу,
+   * как раньше, больше нельзя: таз живёт своей жизнью и на шаге подпрыгивает.
+   */
   probeGround() {
-    const f = this.f;
-    // Опора есть, только если под ногами настил. Шагнул за кромку — опоры нет,
-    // и дальше это уже не ходьба, а падение.
-    const overDeck = this.arena.isOverDeck(f.position.x, f.position.z, -0.05);
-    this.grounded = overDeck && f.position.y <= 0.02;
+    const p = this.f.body.pos;
+    this.grounded = this.footDown(p[P.FootL]) || this.footDown(p[P.FootR]);
+  }
+
+  footDown(foot) {
+    return foot.y < 0.22 && this.arena.isOverDeck(foot.x, foot.z, -0.05);
+  }
+
+  /** Скорость меряется по тазу: это честная скорость тела, а не заказанная. */
+  measureSpeed(dt) {
+    const p = this.f.body.pos[P.Hips];
+    const q = this.f.body.prev[P.Hips];
+    this.planarSpeed = Math.hypot(p.x - q.x, p.z - q.z) / Math.max(1e-5, dt);
   }
 
   applyMovement(dt, controlEnabled) {
     const f = this.f;
-
-    _wish.set(0, 0, 0);
-    if (controlEnabled) _wish.set(f.moveInput.x, 0, f.moveInput.y);
-    if (_wish.lengthSq() > 1) _wish.normalize();
-
-    // Пронос забирает управление: удар должен чего-то стоить, иначе им можно
-    // размахивать на бегу без всякого риска.
-    if (f.swing.striking) _wish.multiplyScalar(T.swingMoveLock);
-    // Пока копишь замах — идёшь медленно. Полная скорость только у того,
-    // кто дубину не поднимал: выбор между «быстро» и «готов ударить» и есть
-    // главное решение в бою.
-    else if (f.swing.held) _wish.multiplyScalar(T.chargeMoveSlow);
-
-    _planar.set(f.velocity.x, 0, f.velocity.z);
-
-    if (this.grounded) {
-      const rate = _wish.lengthSq() > 0.01 ? T.moveAccel : T.moveBrake;
-      moveTowardsVec(_planar, _wish.multiplyScalar(T.maxRunSpeed), rate * dt);
-    } else {
-      f.velocity.y += T.gravity * dt;
-      if (_wish.lengthSq() > 0.01) {
-        // В воздухе управление слабое: сбитый боец должен долетать до края,
-        // а не выруливать обратно на арену.
-        moveTowardsVec(_planar, _wish.multiplyScalar(T.maxRunSpeed), T.airControl * dt);
-      }
+    let wx = 0;
+    let wz = 0;
+    if (controlEnabled) {
+      wx = f.moveInput.x;
+      wz = f.moveInput.y;
+      const len = Math.hypot(wx, wz);
+      if (len > 1) { wx /= len; wz /= len; }
     }
 
-    this.planarSpeed = _planar.length();
-    f.velocity.x = _planar.x;
-    f.velocity.z = _planar.z;
+    // Пронос забирает управление: удар должен чего-то стоить.
+    let scale = 1;
+    if (f.swing.striking) scale = T.swingMoveLock;
+    else if (f.swing.held) scale = T.chargeMoveSlow;
+
+    const speed = T.maxRunSpeed * scale;
+    const moving = wx !== 0 || wz !== 0;
+    // В воздухе управление слабое: сбитый должен долетать до края,
+    // а не выруливать обратно на арену.
+    const rate = this.grounded
+      ? (moving ? T.moveAccel : T.moveBrake)
+      : T.airControl;
+
+    f.body.drive(wx * speed, wz * speed, rate, dt);
   }
 
   /**
-   * Разворот к прицелу. Тело расставляется формулами, поэтому поворот задаётся
-   * напрямую поворотом корня — никакой инерции дубины, за которую цеплялась
-   * прошлая схема.
+   * Разворот к прицелу — с разгоном и торможением.
+   *
+   * Плоская скорость в 420 градусов в секунду читалась как мгновенный
+   * доворот детали. Здесь у разворота есть угловое ускорение, а перед целью
+   * он тормозит ровно настолько, чтобы успеть остановиться: без этого
+   * инерция даёт вечное рыскание вокруг прицела.
    */
-  applyFacing(dt) {
+  applyFacing(dt, controlEnabled) {
     const f = this.f;
     const want = f.facingTarget;
-    if (want.x * want.x + want.z * want.z < 1e-8) return;
+    const hasTarget = controlEnabled && (want.x * want.x + want.z * want.z > 1e-8);
 
-    const target = Math.atan2(want.x, want.z) * RAD;
-    const current = f.yaw * RAD;
-    const step = T.turnSpeed * dt;
-    const diff = deltaAngle(current, target);
-    f.yaw = (current + clamp(diff, -step, step)) * DEG;
-  }
-}
+    let desired = 0;
+    if (hasTarget) {
+      const target = Math.atan2(want.x, want.z) * RAD;
+      const error = deltaAngle(f.yaw * RAD, target);
+      // Скорость, с которой ещё успеваем остановиться к цели.
+      const brakeSpeed = Math.sqrt(2 * T.turnAccel * Math.abs(error));
+      desired = Math.sign(error) * Math.min(T.turnSpeed, brakeSpeed);
+    }
 
-function moveTowardsVec(current, target, maxDelta) {
-  const dx = target.x - current.x;
-  const dy = target.y - current.y;
-  const dz = target.z - current.z;
-  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (dist <= maxDelta || dist < 1e-9) {
-    current.copy(target);
-    return current;
+    this.yawSpeed = moveTowards(this.yawSpeed, desired, T.turnAccel * dt);
+    f.yaw += this.yawSpeed * dt * DEG;
   }
-  const k = maxDelta / dist;
-  current.x += dx * k;
-  current.y += dy * k;
-  current.z += dz * k;
-  return current;
+
+  reset() {
+    this.yawSpeed = 0;
+    this.planarSpeed = 0;
+    this.grounded = false;
+  }
 }

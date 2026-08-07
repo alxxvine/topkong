@@ -5,40 +5,29 @@ import * as Rig from 'tk/fighterRig.js';
 import { PoseDriver } from 'tk/poseDriver.js';
 import { SwingAction } from 'tk/swingAction.js';
 import { Locomotion } from 'tk/locomotion.js';
-import { Ragdoll, gatherWorldPoints, makeWorldPointBuffer, P } from 'tk/ragdoll.js';
+import { Body, P } from 'tk/body.js';
 
 // Боец целиком: кости, состояние тела и переходы между управлением и тряпкой.
 //
-// Ровно как в Unity-версии, эти два режима работают по очереди, а не вместе.
-// Пока боец под управлением, кости расставляет PoseDriver и поза получается
-// именно такой, какой задумана. Прилетел удар — та же поза замораживается
-// в частицы, и дальше телом занимается только Верле.
-//
-// Так управление перестаёт бороться с физикой, а ragdoll остаётся там,
-// ради чего он и нужен: в полёте с арены.
+// Тело симулируется всегда — двух режимов больше нет. PoseDriver говорит,
+// какую позу боец ХОЧЕТ принять, мышцы в body.js его туда тянут, а получится
+// ли — зависит от того, насколько крепко они держат. Удар не переключает
+// режим, он просто отпускает мышцы.
 
+// Режимов тела больше нет: оно всегда физическое. Это лишь ярлык
+// для интерфейса и логики — держат ли сейчас мышцы позу.
 export const BodyState = {
-  Controlled: 'controlled',
-  Ragdoll: 'ragdoll',
-  StandingUp: 'standing',
+  Standing: 'standing',
+  Downed: 'downed',
   Dead: 'dead',
 };
-
-// Порядок костей — тот же, в котором их пишет PoseDriver.apply.
-// По нему запоминается поза старта при вставании.
-const BONE_ORDER = ['hips', 'chest', 'head', 'club',
-  'legLUpper', 'legLLower', 'legRUpper', 'legRLower', 'footL', 'footR',
-  'armRUpper', 'armRFore', 'armLUpper', 'armLFore'];
 
 const TRAIL_POINTS = 26;
 
 const _v = new THREE.Vector3();
-const _w = new THREE.Vector3();
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _impulse = new THREE.Vector3();
-const _q = new THREE.Quaternion();
-const _qi = new THREE.Quaternion();
 const AXIS_Y = new THREE.Vector3(0, 1, 0);
 
 let nextId = 1;
@@ -53,7 +42,6 @@ export class Fighter {
     this.color = new THREE.Color(options.color !== undefined ? options.color : 0xe0a267);
 
     this.position = new THREE.Vector3();
-    this.velocity = new THREE.Vector3();
     this.yaw = 0;
     this.moveInput = new THREE.Vector2();
     this.facingTarget = new THREE.Vector3(0, 0, 1);
@@ -67,15 +55,14 @@ export class Fighter {
     this.swing = new SwingAction();
     this.poseDriver = new PoseDriver(this);
     this.locomotion = new Locomotion(this, arena);
-    this.ragdoll = new Ragdoll(arena);
+    this.body = new Body(arena);
 
-    this.worldPoints = makeWorldPointBuffer();
-    this.state = BodyState.Controlled;
+    this.state = BodyState.Standing;
     this.alive = true;
 
-    this.ragdollTime = 0;
+    this.downTime = 0;
     this.settleTime = 0;
-    this.standTime = 0;
+    this.airTime = 0;
     this.deadTime = 0;
 
     // Скорость набалдашника меряется по смещению за кадр: кость кинематическая,
@@ -216,135 +203,64 @@ export class Fighter {
   // ------------------------------------------------------------- состояния
 
   spawn(x, z, yaw) {
-    this.position.set(x, 0, z);
-    this.velocity.set(0, 0, 0);
     this.yaw = yaw;
     this.facingTarget.set(Math.sin(yaw), 0, Math.cos(yaw));
     this.moveInput.set(0, 0);
 
-    this.state = BodyState.Controlled;
+    this.state = BodyState.Standing;
     this.alive = true;
-    this.ragdollTime = 0;
+    this.downTime = 0;
     this.settleTime = 0;
-    this.standTime = 0;
+    this.airTime = 0;
     this.deadTime = 0;
     this.swingSpeed = 0;
     this.lastHit.clear();
     this.trailPoints.length = 0;
 
     this.swing.reset();
-    this.ragdoll.active = false;
-    this.poseDriver.snapToRest();
-    this.syncGroup();
-    this.group.visible = true;
-    this.marker.visible = true;
-    this.group.updateMatrixWorld(true);
-    this.updateClubHead(1 / 60, true);
-  }
+    this.poseDriver.reset();
+    this.locomotion.reset();
+    this.body.reset(x, z, yaw);
 
-  /**
-   * Единственная точка входа в тряпку во всей игре.
-   * Импульс уже посчитан бьющим — здесь остаётся только заморозить позу.
-   */
-  goRagdoll(impulse, dt) {
-    if (!this.alive) return;
-
-    // Уже летит — значит его добивают. Импульс складывается с тем,
-    // что у тела есть: так добивание дотягивает до края, а не обнуляет
-    // работу первого удара.
-    if (this.state === BodyState.Ragdoll) {
-      this.ragdoll.push(impulse, Math.max(dt, 1 / 120));
-      this.settleTime = 0;
-      return;
-    }
-
-    this.group.updateMatrixWorld(true);
-    gatherWorldPoints(this, this.worldPoints);
-
-    // Группа уходит в ноль: частицы живут в мире, и кости во время полёта
-    // пишутся мировыми координатами напрямую.
+    // Группа бойца стоит в нуле навсегда: кости пишутся мировыми координатами
+    // прямо из частиц. Именно переключение группы между двумя системами
+    // отсчёта и порождало кадр с телом в центре арены.
     this.group.position.set(0, 0, 0);
     this.group.quaternion.identity();
+    this.group.visible = true;
+    this.marker.visible = true;
 
-    this.ragdoll.activate(this.worldPoints, impulse, Math.max(dt, 1 / 120));
-    this.state = BodyState.Ragdoll;
-    this.ragdollTime = 0;
-    this.settleTime = 0;
-    this.swing.reset();
-    this.velocity.set(0, 0, 0);
-
-    // Кости обязаны стать мировыми здесь же, а не на следующем шаге.
-    // Группа уже уехала в ноль, а в костях всё ещё лежат локальные
-    // координаты — и если кадр отрисуется до следующего тика, тело
-    // на мгновение появляется ровно в центре арены. Именно это
-    // и выглядело как копия-призрак.
-    this.syncFromRagdoll();
+    // Разложить кости сразу, иначе первый кадр рисует позу с прошлой жизни.
+    this.poseDriver.tick(1 / 120, 0, true);
+    this.body.setTargets(this.poseDriver.pose, yaw);
+    this.body.writeBones(this.bones);
+    this.position.set(x, 0, z);
     this.group.updateMatrixWorld(true);
-  }
-
-  /** Разложить частицы в кости и подтянуть за ними позицию бойца. */
-  syncFromRagdoll() {
-    this.ragdoll.writeBones(this.bones);
-    const hips = this.ragdoll.pos[P.Hips];
-    this.position.set(hips.x, hips.y - Rig.HipsY, hips.z);
+    this.updateClubHead(1 / 120, true);
   }
 
   /**
-   * Собрать бойца обратно в стойку из той позы, в которой он дошатался на земле.
+   * Принять удар. Единственная точка, где боец теряет управление.
    *
-   * Приём тот же, что в Unity: мировые позы костей запоминаются, корень
-   * переносится под таз, позы пересчитываются в его локальные координаты —
-   * и дальше PoseDriver подмешивает их к стойке с убывающим весом.
-   * Без этого боец телепортировался бы из позы «лежит» в позу «стоит».
+   * Отдельного режима «тряпка» больше нет: мышцы просто отпускаются.
+   * Тело всё это время симулировалось и продолжает — меняется лишь то,
+   * держит ли оно позу. Отсюда же исчезла вся машинерия перехода:
+   * ни заморозки позы, ни переноса координат, ни обратной сборки.
    */
-  beginStandUp() {
-    const p = this.ragdoll.pos;
+  takeHit(impulse, dt, index) {
+    if (!this.alive) return;
 
-    // Куда он развернётся: туда же, куда лежит корпус. Это читается
-    // как «поднялся с того места, где упал», а не как разворот на месте.
-    _v.copy(p[P.Chest]).sub(p[P.Hips]);
-    _v.y = 0;
-    if (_v.lengthSq() < 1e-6) _v.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    _v.normalize();
+    const step = Math.max(dt, 1 / 120);
+    // Верх тела получает добавку, поэтому боец опрокидывается сам,
+    // без отдельно заданного момента.
+    this.body.pushAll(impulse, step,
+      [P.Head, P.Chest, P.ShoulderL, P.ShoulderR], 0.5);
+    if (index !== undefined) this.body.push(index, impulse, step * 0.6);
 
-    this.position.set(p[P.Hips].x, 0, p[P.Hips].z);
-    this.velocity.set(0, 0, 0);
-    this.yaw = Math.atan2(_v.x, _v.z);
-    this.facingTarget.copy(_v);
-
-    this.syncGroup();
-    this.group.updateMatrixWorld(true);
-    _qi.copy(this.group.quaternion).invert();
-
-    const positions = [];
-    const rotations = [];
-    for (const name of BONE_ORDER) {
-      const bone = this.bones[name];
-      positions.push(this.group.worldToLocal(_w.copy(bone.position)).clone());
-      rotations.push(_q.copy(bone.quaternion).premultiply(_qi).clone());
-    }
-
-    this.poseDriver.resetJelly();
-    this.poseDriver.startPositions = positions;
-    this.poseDriver.startRotations = rotations;
-    this.poseDriver.blendFromStart = 0;
-
-    // Та же ловушка, что и при переходе в тряпку, только зеркальная:
-    // группа уже переехала под таз, а в костях ещё лежат мировые
-    // координаты, и кадр между этим и следующим тиком нарисовал бы тело
-    // со сложенным вдвое смещением. При blendFromStart = 0 PoseDriver
-    // выдаст ровно эти позы, так что здесь не новая логика, а та же самая,
-    // просто на кадр раньше.
-    for (let i = 0; i < BONE_ORDER.length; i++) {
-      const bone = this.bones[BONE_ORDER[i]];
-      bone.position.copy(positions[i]);
-      bone.quaternion.copy(rotations[i]);
-    }
-    this.group.updateMatrixWorld(true);
-
-    this.state = BodyState.StandingUp;
-    this.standTime = 0;
-    this.ragdoll.active = false;
+    this.body.strength = 0;
+    this.downTime = 0;
+    this.settleTime = 0;
+    this.swing.reset();
   }
 
   eliminate() {
@@ -360,17 +276,37 @@ export class Fighter {
   // ------------------------------------------------------------------ цикл
 
   tick(dt, controlEnabled) {
-    switch (this.state) {
-      case BodyState.Controlled:
-      case BodyState.StandingUp:
-        this.tickControlled(dt, controlEnabled);
-        break;
-      case BodyState.Ragdoll:
-        this.tickRagdoll(dt);
-        break;
-      case BodyState.Dead:
-        this.deadTime += dt;
-        return;
+    if (this.state === BodyState.Dead) {
+      this.deadTime += dt;
+      return;
+    }
+
+    const body = this.body;
+    this.updateStrength(dt);
+
+    // Управление возвращается не мгновенно, а по мере того, как мышцы
+    // снова начинают держать тело.
+    const inControl = controlEnabled && body.strength > T.controlStrength;
+
+    this.swing.held = inControl && this.swing.held;
+    this.swing.tick(dt);
+    this.locomotion.tick(dt, inControl);
+
+    const pose = this.poseDriver.tick(dt, this.locomotion.planarSpeed,
+      this.locomotion.grounded);
+
+    body.setTargets(pose, this.yaw);
+    body.step(dt);
+    body.writeBones(this.bones);
+
+    // Позиция бойца — проекция таза на землю. Она следствие физики,
+    // а не то, что ей задают.
+    const hips = body.pos[P.Hips];
+    this.position.set(hips.x, hips.y - Rig.HipsY, hips.z);
+
+    if (body.lowestY() < T.killY) {
+      this.eliminate();
+      return;
     }
 
     this.group.updateMatrixWorld(true);
@@ -379,87 +315,66 @@ export class Fighter {
     this.updateTrail();
   }
 
-  tickControlled(dt, controlEnabled) {
-    if (this.state === BodyState.StandingUp) {
-      this.standTime += dt;
-      const k = clamp01(this.standTime / Math.max(0.05, T.standUpTime));
-      // Мягкий вход: с линейным весом первый кадр вставания заметно дёргает.
-      this.poseDriver.blendFromStart = k * k * (3 - 2 * k);
-      if (k >= 1) {
-        this.state = BodyState.Controlled;
-        this.poseDriver.startPositions = null;
-        this.poseDriver.startRotations = null;
-      }
-      controlEnabled = false;
+  /**
+   * Восстановление силы мышц. Оно же — подъём с земли.
+   *
+   * Отдельного вставания больше нет и не нужно: мышцы наливаются силой,
+   * цель у них по-прежнему «стоять», и тело поднимает себя само. Прежняя
+   * схема запоминала позу, переносила корень, пересчитывала локальные
+   * координаты и интерполировала — всё это здесь просто не требуется.
+   */
+  updateStrength(dt) {
+    const body = this.body;
+
+    // Сорвался с настила — держать позу нечем. Без этого боец уезжал
+    // за кромку стоя по стойке смирно и так же, не сгибаясь, падал вниз.
+    this.airTime = this.locomotion.grounded ? 0 : this.airTime + dt;
+    if (this.airTime > T.airReleaseTime) {
+      body.strength = Math.max(0, body.strength - dt / 0.25);
+      this.downTime = 0;
+      this.settleTime = 0;
     }
 
-    this.swing.held = controlEnabled && this.swing.held;
-    this.swing.tick(dt);
-    this.locomotion.tick(dt, controlEnabled);
-    this.poseDriver.tick(dt, this.locomotion.planarSpeed, this.locomotion.grounded);
-    this.syncGroup();
-
-    // Шагнул за кромку — дальше это уже не ходьба. Тряпкой падать честнее:
-    // видно, что он именно сорвался, а не съехал по невидимой горке.
-    if (!this.locomotion.grounded && this.position.y < -0.15) {
-      _impulse.copy(this.velocity);
-      this.goRagdoll(_impulse, dt);
+    if (body.strength >= 1) {
+      this.state = BodyState.Standing;
+      this.settleTime = 0;
       return;
     }
 
-    if (this.position.y < T.killY) this.eliminate();
-  }
+    this.downTime += dt;
+    const hips = body.pos[P.Hips];
+    const onDeck = this.arena.isOverDeck(hips.x, hips.z, -0.2);
+    const calm = onDeck && body.speed(dt) < T.settleSpeed;
+    this.settleTime = calm ? this.settleTime + dt : 0;
 
-  tickRagdoll(dt) {
-    this.ragdollTime += dt;
-    this.ragdoll.step(dt);
-    // Камера и логика продолжают следить за телом: позиция бойца во время
-    // полёта — это проекция таза на землю.
-    this.syncFromRagdoll();
-    const hips = this.ragdoll.pos[P.Hips];
-
-    if (this.ragdoll.lowestY() < T.killY) {
-      this.eliminate();
-      return;
+    // Таймаут — страховка от тела, застрявшего в бесконечном мелком дрожании.
+    if (onDeck && (this.settleTime >= T.standUpSettle || this.downTime >= T.standUpTimeout)) {
+      body.strength = Math.min(1, body.strength + dt / Math.max(0.05, T.standUpTime));
     }
 
-    // Встаём, когда тряпка успокоилась и лежит на настиле. Таймаут —
-    // страховка от тела, застрявшего в бесконечном мелком дрожании.
-    const settled = this.ragdoll.speed(dt) < 0.6
-      && this.arena.isOverDeck(hips.x, hips.z, -0.2);
-    this.settleTime = settled ? this.settleTime + dt : 0;
-
-    if (this.settleTime >= T.standUpSettle || this.ragdollTime >= T.standUpTimeout) {
-      if (this.arena.isOverDeck(hips.x, hips.z, -0.2)) this.beginStandUp();
-    }
+    this.state = body.strength > T.controlStrength
+      ? BodyState.Standing
+      : BodyState.Downed;
   }
 
-  syncGroup() {
-    this.group.position.copy(this.position);
-    this.group.quaternion.setFromAxisAngle(AXIS_Y, this.yaw);
-  }
-
+  /**
+   * Скорость набалдашника. Раньше она вычислялась по смещению кости, потому
+   * что кость была кинематической и своей скорости не имела. Теперь
+   * набалдашник — настоящая частица, и это её честная скорость.
+   */
   updateClubHead(dt, snap) {
-    _v.copy(Rig.ClubHeadLocal)
-      .applyQuaternion(this.bones.club.quaternion)
-      .add(this.bones.club.position);
-    this.group.localToWorld(_v);
-
+    const tip = this.body.pos[P.ClubTip];
     if (snap) {
-      this.clubHead.copy(_v);
-      this.clubHeadPrev.copy(_v);
+      this.clubHead.copy(tip);
+      this.clubHeadPrev.copy(tip);
       this.swingSpeed = 0;
     } else {
       this.clubHeadPrev.copy(this.clubHead);
-      this.clubHead.copy(_v);
+      this.clubHead.copy(tip);
       this.swingSpeed = this.clubHeadPrev.distanceTo(this.clubHead) / Math.max(1e-5, dt);
     }
-
-    // Хват нужен второй точкой «лезвия»: в упор попадают древком, а не шаром.
-    _v.set(0, -Rig.ClubGripOffset, 0)
-      .applyQuaternion(this.bones.club.quaternion)
-      .add(this.bones.club.position);
-    this.clubGrip.copy(this.group.localToWorld(_v));
+    // Хват — вторая точка «лезвия»: в упор попадают древком, а не шаром.
+    this.clubGrip.copy(this.body.pos[P.HandR]);
   }
 
   updateMarker() {
@@ -535,7 +450,9 @@ export class Fighter {
       const power = lerp(T.minKnockback, T.maxKnockback, clamp01(strength));
       _impulse.multiplyScalar(power);
 
-      victim.goRagdoll(_impulse, dt);
+      // Куда именно пришёлся удар, разберём в отдельной итерации.
+      // Пока импульс прикладывается всему телу целиком.
+      victim.takeHit(_impulse, dt);
       victim.lastImpactSpeed = this.swingSpeed;
       victim.lastImpactPower = strength;
 
@@ -545,15 +462,8 @@ export class Fighter {
 
   /** Отрезок корпуса — по нему и проверяется попадание. */
   torsoSegment(outA, outB) {
-    if (this.state === BodyState.Ragdoll) {
-      outA.copy(this.ragdoll.pos[P.Hips]);
-      outB.copy(this.ragdoll.pos[P.Head]);
-      return;
-    }
-    outA.copy(this.bones.hips.position);
-    outB.copy(this.bones.head.position);
-    this.group.localToWorld(outA);
-    this.group.localToWorld(outB);
+    outA.copy(this.body.pos[P.Hips]);
+    outB.copy(this.body.pos[P.Head]);
   }
 
   get facingDegrees() { return this.yaw * RAD; }

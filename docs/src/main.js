@@ -235,7 +235,7 @@ class AimCursor {
   update(point, player) {
     this.ring.position.set(point.x, 0.02, point.z);
 
-    this.link.visible = T.showAimLink && player.state !== BodyState.Ragdoll;
+    this.link.visible = T.showAimLink && player.state === BodyState.Standing;
     if (!this.link.visible) return;
 
     const arr = this.link.geometry.getAttribute('position').array;
@@ -292,9 +292,8 @@ function hudText(player, arena, fps, input) {
   const dist = Math.hypot(player.position.x, player.position.z);
   const edge = Math.max(0, arena.radius - dist);
   const state = {
-    [BodyState.Controlled]: 'стоит',
-    [BodyState.Ragdoll]: 'ТРЯПКА',
-    [BodyState.StandingUp]: 'встаёт',
+    [BodyState.Standing]: 'стоит',
+    [BodyState.Downed]: 'СБИТ',
     [BodyState.Dead]: 'выбыл',
   }[player.state];
 
@@ -309,10 +308,10 @@ function hudText(player, arena, fps, input) {
     // браузере, я не могу: гейтвей не пускает наружу. По этой строке
     // на любом скриншоте сразу видно, дошла правка или висит старый кэш.
     `сборка ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
-    `тело      ${state}`,
+    `тело      ${state}   мышцы ${(player.body.strength * 100).toFixed(0)}%`,
     `дубина    ${swing}`,
     `скорость  ${player.locomotion.planarSpeed.toFixed(2)} м/с`,
     `набалдашник ${player.swingSpeed.toFixed(1)} м/с`,
-    `до края   ${edge.toFixed(2)} м`,
+    `до края   ${edge.toFixed(2)} м    растяжение ${(player.body.maxStretch * 100).toFixed(1)} см`,
   ].join('\n');
 }
