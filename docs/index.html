@@ -54,6 +54,10 @@
     color: var(--dim);
     text-shadow: 0 1px 3px #000;
     white-space: pre;
+    /* Место под панель справа резервируется жёстко: иначе на узком окне
+       строки HUD заезжают под заголовок «Настройки» и обрезаются. */
+    max-width: calc(100% - 310px);
+    overflow: hidden;
   }
 
   #hud b { color: var(--text); font-weight: 600; }
@@ -243,12 +247,22 @@
       max-height: 44%;
     }
 
-    #tune:not(.folded) ~ #touch #stick,
-    #tune:not(.folded) ~ #touch #swing {
-      bottom: calc(46% + 12px);
+    /* Панель внизу, значит и стик с кнопкой удара живут выше неё,
+       а не поверх: свёрнутый заголовок занимает свои сорок пикселей. */
+    #stick, #swing {
+      bottom: calc(76px + env(safe-area-inset-bottom, 0px));
     }
 
-    #hud { font-size: 11px; }
+    #tune:not(.folded) ~ #touch #stick,
+    #tune:not(.folded) ~ #touch #swing {
+      bottom: calc(48% + 12px);
+    }
+
+    /* Панель внизу — над HUD её нет, и ширину ему резать незачем. */
+    #hud {
+      font-size: 11px;
+      max-width: 100%;
+    }
   }
 </style>
 </head>
@@ -288,24 +302,24 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "12";</script>
+<script>window.TK_BUILD = "13";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=12",
-    "tk/main.js":         "./src/main.js?v=12",
-    "tk/tuning.js":       "./src/tuning.js?v=12",
-    "tk/mathx.js":        "./src/mathx.js?v=12",
-    "tk/arena.js":        "./src/arena.js?v=12",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=12",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=12",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=12",
-    "tk/swingAction.js":  "./src/swingAction.js?v=12",
-    "tk/locomotion.js":   "./src/locomotion.js?v=12",
-    "tk/body.js":         "./src/body.js?v=12",
-    "tk/fighter.js":      "./src/fighter.js?v=12",
-    "tk/input.js":        "./src/input.js?v=12",
-    "tk/ui.js":           "./src/ui.js?v=12"
+    "three":              "./vendor/three.module.js?v=13",
+    "tk/main.js":         "./src/main.js?v=13",
+    "tk/tuning.js":       "./src/tuning.js?v=13",
+    "tk/mathx.js":        "./src/mathx.js?v=13",
+    "tk/arena.js":        "./src/arena.js?v=13",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=13",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=13",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=13",
+    "tk/swingAction.js":  "./src/swingAction.js?v=13",
+    "tk/locomotion.js":   "./src/locomotion.js?v=13",
+    "tk/body.js":         "./src/body.js?v=13",
+    "tk/fighter.js":      "./src/fighter.js?v=13",
+    "tk/input.js":        "./src/input.js?v=13",
+    "tk/ui.js":           "./src/ui.js?v=13"
   }
 }
 </script>
