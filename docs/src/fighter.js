@@ -92,61 +92,45 @@ export class Fighter {
     const wood = mat(new THREE.Color(0x5c3d21), 0.85);
     const metal = mat(new THREE.Color(0x9ea3ad), 0.32, 0.75);
 
-    // Тело — картонная кукла: плоские трапеции на каждую кость, все размеры
-    // прямо из выкройки (см. fighterRig, константы через CM).
-    //
-    // Ни бесшовной оболочки, ни скиннинга здесь нет и не нужно. У картонной
-    // куклы стык на сгибе — не изъян, а то, из чего она сделана.
+    // Тело — картонная кукла строго по выкройке: голова 5x5, грудь трапеция
+    // 2 сверху и 3 снизу, таз квадрат 3x3, рука 6, нога 8. Стоп нет вовсе,
+    // нога цельная деталь. Панели расширяются к дальнему концу, а не
+    // к суставу, — от этого и весь силуэт.
     const D = Rig.PanelDepth;
 
-    // Торс на чертеже один кусок высотой 3, но кость у нас две: таз и грудь.
-    // Делим его по высоте, ширины на стыке совпадают, поэтому шва не видно.
-    const waist = (Rig.TorsoBottomWidth + Rig.TorsoTopWidth) * 0.5;
     this.bones.hips = this.bone('hips');
-    panel(this.bones.hips, Rig.TorsoHeight * 0.55 - (T.partGap || 0),
-      Rig.TorsoBottomWidth, waist, D * 1.9, card,
-      new THREE.Vector3(0, Rig.TorsoHeight * 0.12, 0));
+    panel(this.bones.hips, Rig.HipsSize, Rig.HipsSize, Rig.HipsSize, D * 2, card);
 
     this.bones.chest = this.bone('chest');
-    panel(this.bones.chest, Rig.TorsoHeight * 0.55 - (T.partGap || 0),
-      waist, Rig.TorsoTopWidth, D * 1.9, card,
-      new THREE.Vector3(0, (Rig.ShoulderY - Rig.ChestY) * 0.5, 0));
+    panel(this.bones.chest, Rig.ChestHeight,
+      Rig.ChestBottomWidth, Rig.ChestTopWidth, D * 2, card);
 
-    // Голова — куб пять на пять с лицом на передней грани. Никакой морды:
-    // просто лист картона, на котором нарисованы глаза.
     this.bones.head = this.bone('head');
-    box(this.bones.head, Rig.HeadSize, Rig.HeadSize, Rig.HeadSize * 0.86, null, card);
+    box(this.bones.head, Rig.HeadSize, Rig.HeadSize, Rig.HeadSize * 0.85, null, card);
     for (const side of [-1, 1]) {
-      const eye = box(this.bones.head, Rig.HeadSize * 0.15, Rig.HeadSize * 0.22, 0.02,
-        new THREE.Vector3(side * Rig.HeadSize * 0.21, Rig.HeadSize * 0.06,
-          Rig.HeadSize * 0.435), ink);
+      const eye = box(this.bones.head, Rig.HeadSize * 0.16, Rig.HeadSize * 0.24, 0.02,
+        new THREE.Vector3(side * Rig.HeadSize * 0.2, Rig.HeadSize * 0.05,
+          Rig.HeadSize * 0.43), ink);
       eye.rotation.z = side * 0.1;
     }
 
-    // Конечность — ОДНА трапеция на всю длину, как на выкройке: ни колена,
-    // ни локтя у картонной куклы нет. Нижние кости остаются пустыми: они
-    // по-прежнему нужны физике и отрисовке стоп, но своей панели не имеют.
-    const legLen = Rig.ThighLength + Rig.ShinLength;
-    this.bones.legLUpper = this.limbPanel('legLUpper', legLen,
-      Rig.ThighTopWidth, Rig.ShinBottomWidth, D * 1.3);
-    this.bones.legLLower = this.bone('legLLower');
-    this.bones.legRUpper = this.limbPanel('legRUpper', legLen,
-      Rig.ThighTopWidth, Rig.ShinBottomWidth, D * 1.3);
-    this.bones.legRLower = this.bone('legRLower');
-
-    // Стопы на выкройке отдельной деталью не идут — нога кончается срезом.
-    // Даём короткий носок, иначе боец стоит на рёбрах панелей.
-    for (const name of ['footL', 'footR']) {
-      this.bones[name] = this.bone(name);
-      box(this.bones[name], Rig.ShinBottomWidth, D * 0.6, Rig.ShinBottomWidth * 1.2,
-        new THREE.Vector3(0, -0.025, Rig.ShinBottomWidth * 0.25), dark);
+    // Нога и рука — по одной трапеции на всю длину. Узкий конец у сустава,
+    // широкий на воле: 2 у бедра и 3 внизу, 2 у плеча и 3 у кисти.
+    for (const name of ['legLUpper', 'legRUpper']) {
+      this.bones[name] = this.limbPanel(name, Rig.LegLength,
+        Rig.LegTopWidth, Rig.LegBottomWidth, D * 1.4);
     }
+    this.bones.legLLower = this.bone('legLLower');
+    this.bones.legRLower = this.bone('legRLower');
+    // Стоп на выкройке нет: кости оставлены пустыми, физике они ещё нужны.
+    this.bones.footL = this.bone('footL');
+    this.bones.footR = this.bone('footR');
 
-    this.bones.armRUpper = this.limbPanel('armRUpper', Rig.ArmSpan,
-      Rig.ArmTopWidth, Rig.ArmBottomWidth, D);
+    for (const name of ['armRUpper', 'armLUpper']) {
+      this.bones[name] = this.limbPanel(name, Rig.ArmLength,
+        Rig.ArmTopWidth, Rig.ArmBottomWidth, D);
+    }
     this.bones.armRFore = this.bone('armRFore');
-    this.bones.armLUpper = this.limbPanel('armLUpper', Rig.ArmSpan,
-      Rig.ArmTopWidth, Rig.ArmBottomWidth, D);
     this.bones.armLFore = this.bone('armLFore');
 
     this.bones.club = this.bone('club');
@@ -178,13 +162,13 @@ export class Fighter {
    * Локальная +Y кости смотрит на дальний сустав, поэтому широкий конец
    * панели внизу, узкий вверху — как на чертеже выкройки.
    */
-  limbPanel(name, length, wideEnd, narrowEnd, depth) {
+  limbPanel(name, length, nearWidth, farWidth, depth) {
     const g = this.bone(name);
     // Панель короче своей кости на зазор с обоих концов: части тела висят
     // НЕ впритык. Так на сгибе они не въезжают друг в друга, а в просвете
     // видно нить, на которой всё держится.
     panel(g, Math.max(0.02, length - (T.partGap || 0) * 2),
-      wideEnd, narrowEnd, depth, mat(this.color, 0.95));
+      nearWidth, farWidth, depth, mat(this.color, 0.95));
     return g;
   }
 

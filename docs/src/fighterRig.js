@@ -19,63 +19,61 @@ import { tuning as T } from 'tk/tuning.js';
 // по построению — звенья всегда своей длины, а недостижимую цель IK
 // подтягивает к границе досягаемости.
 
-// Размеры сняты с выкройки картонной куклы и переведены в метры одним
-// множителем. Множитель вынесен явно, чтобы чертёж и код можно было сверить
-// глазами: 5 в чертеже — это 5 * CM метров, и нигде не «примерно столько же».
+// Размеры сняты с выкройки и переведены в метры одним множителем. Он вынесен
+// явно, чтобы чертёж и код сверялись глазами: 5 в чертеже — это 5 * CM метров.
 //
-// Что на чертеже читается однозначно: голова 5x5, торс высотой 3 при ширине
-// 3 в плечах и 2.2 у пояса, нога из двух трапеций по 3 (3→2 и 3→3), рука —
-// полоса длиной 5 шириной 2→1.5.
+// Что на чертеже: голова 5x5, грудь трапеция 2 сверху и 3 снизу высотой 2.5,
+// таз квадрат 3x3, рука 6 длиной (2 у плеча, 3 у кисти), нога 8 длиной
+// (2 у бедра, 3 внизу). Стоп нет вовсе — нога цельная деталь. Все части
+// соединены пружинками, они же и держат зазоры между деталями.
 //
-// Что пришлось домыслить: глубина панелей — на плоской выкройке её нет
-// вовсе, взята около 1 по фотографиям склеенных кукол; и деление пятерки
-// руки на два наших звена, поделено пополам.
+// Панели расширяются К ДАЛЬНЕМУ концу, а не к суставу: 2 у плеча и 3 у кисти.
+// Это заметное отличие от прошлой выкройки, и силуэт от него меняется сильно.
 //
-// Рост выходит 14 клеток чертежа: нога 6 плюс торс 3 плюс голова 5.
-export const CM = 0.12;
+// Рост складывается снизу вверх: нога 8, таз 3, грудь 2.5, голова 5 плюс
+// зазоры на пружины — около 19.5 клеток, то есть 1.76 м.
+export const CM = 0.09;
+
+/** Зазор на пружину между деталями. */
+export const Spring = 0.35 * CM;
 
 export const HeadSize = 5 * CM;
-export const TorsoHeight = 3 * CM;
-export const TorsoTopWidth = 3 * CM;
-export const TorsoBottomWidth = 2.2 * CM;
+export const ChestHeight = 2.5 * CM;
+export const ChestTopWidth = 2 * CM;
+export const ChestBottomWidth = 3 * CM;
+export const HipsSize = 3 * CM;
 export const PanelDepth = 1 * CM;
 
-export const ThighLength = 3 * CM;
-export const ShinLength = 3 * CM;
-export const ThighTopWidth = 3 * CM;
-export const ThighBottomWidth = 2.5 * CM;
-export const ShinTopWidth = 2.5 * CM;
-export const ShinBottomWidth = 2 * CM;
-
-// Рука на чертеже одна полоса длиной 5; у нас звена два, делим пополам.
-export const UpperArmLength = 2.5 * CM;
-export const ForeArmLength = 2.5 * CM;
-export const ArmSpan = UpperArmLength + ForeArmLength;
+// Конечности: цельные, узкие у сустава и широкие на дальнем конце.
+export const LegLength = 8 * CM;
+export const LegTopWidth = 2 * CM;
+export const LegBottomWidth = 3 * CM;
+export const ArmLength = 6 * CM;
 export const ArmTopWidth = 2 * CM;
-export const ArmMidWidth = 1.75 * CM;
-export const ArmBottomWidth = 1.5 * CM;
+export const ArmBottomWidth = 3 * CM;
 
-export const FootY = 0.10;
-// Нога 0.72 при высоте бедра 0.76: почти прямая, с небольшим запасом
-// на сгиб. Из этого запаса и берётся вся длина шага.
-export const HipJointY = FootY + ThighLength + ShinLength - 0.10;
-export const HipsY = HipJointY + 0.08;
-export const ChestY = HipsY + TorsoHeight * 0.83;
-export const ShoulderY = ChestY + 0.06;
-export const NeckY = ShoulderY + 0.05;
-// Голова стоит на плечах: её центр на полголовы выше плюс зазор на шею.
-export const HeadY = ShoulderY + HeadSize * 0.5 + 0.07;
+// Ноги считаются одним звеном, но частиц в цепи по-прежнему три: колено
+// осталось серединой отрезка. Половинки нужны только решателю.
+export const ThighLength = LegLength * 0.5;
+export const ShinLength = LegLength * 0.5;
+export const UpperArmLength = ArmLength * 0.5;
+export const ForeArmLength = ArmLength * 0.5;
+export const ArmSpan = ArmLength;
+
+// Стопы на выкройке нет: нога кончается срезом у самого настила.
+export const FootY = PanelDepth * 0.6;
+export const HipJointY = FootY + LegLength;
+export const HipsY = HipJointY + Spring + HipsSize * 0.5;
+export const ChestY = HipsY + HipsSize * 0.5 + Spring + ChestHeight * 0.5;
+export const ShoulderY = ChestY + ChestHeight * 0.35;
+export const NeckY = ChestY + ChestHeight * 0.5;
+export const HeadY = NeckY + Spring + HeadSize * 0.5;
 export const HeadRadius = HeadSize * 0.5;
 
-// Конечности приклеены СНАРУЖИ торса, а не в его плоскости — как на выкройке.
-// Вынос считается от края торса плюс половина ширины панели: иначе панель
-// руки шириной 0.24 при полуширине торса 0.18 наполовину сидит внутри него,
-// и на ходу части наслаиваются друг на друга.
-// У ног вынос меньше половины панели: полный развёл бы их в стороны шире,
-// чем на выкройке, и боец встал бы враскоряку. Нога заходит под таз краем —
-// на картонной кукле она и приклеена с нахлёстом.
-export const HipHalfWidth = TorsoBottomWidth * 0.5 + ThighTopWidth * 0.22;
-export const ShoulderHalfWidth = TorsoTopWidth * 0.5 + ArmTopWidth * 0.5;
+// Ноги стоят под тазом, руки подвешены снаружи груди — как на выкройке,
+// где пружины уходят от верхних углов груди в стороны.
+export const HipHalfWidth = LegTopWidth * 0.62;
+export const ShoulderHalfWidth = ChestTopWidth * 0.5 + Spring + ArmTopWidth * 0.5;
 
 /**
  * Высота, на которой держат рукоять. Дубина считается от хвата, а не наоборот:
