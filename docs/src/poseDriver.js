@@ -68,6 +68,18 @@ export class PoseDriver {
 
     const strideNorm = clamp01(planarSpeed / Math.max(0.1, T.maxRunSpeed));
 
+    // Кинематическая походка — первая итерация тела, вернувшаяся режимом.
+    //
+    // Стопы считаются формулой от фазы, а фаза крутится тем быстрее, чем
+    // быстрее едет боец. Опоры в мире нет, проскальзывание есть — и всё же
+    // читается это ходьбой лучше, чем настоящая походка на мышцах: цикл
+    // нарисован, а не собран из десятка спорящих чисел. В покое фаза
+    // подтягивается к целому, чтобы ноги вставали ровно.
+    if (T.bodyMode <= 1) {
+      this.kinematicTick(dt, strideNorm, grounded);
+      return this.pose;
+    }
+
     // Походка живёт в мире и решает сама, когда отрывать стопу. Никаких
     // подмешиваний скорости разворота в цикл шага здесь больше нет:
     // разворот сам уводит опору вбок по дуге, и порог по расстоянию
@@ -116,6 +128,40 @@ export class PoseDriver {
 
     this.solveJoints();
     return this.pose;
+  }
+
+  /**
+   * Поза первой итерации: цикл шага от фазовых часов, без мировых опор.
+   */
+  kinematicTick(dt, strideNorm, grounded) {
+    const swing = this.f.swing;
+    if (strideNorm > 0.05 && grounded) {
+      this.stepPhase += dt * T.stepRate * strideNorm;
+      this.stepPhase -= Math.floor(this.stepPhase);
+    } else {
+      this.stepPhase = moveTowards(this.stepPhase, Math.round(this.stepPhase), dt * 2);
+    }
+
+    this.stride = moveTowards(this.stride,
+      grounded ? strideNorm * T.stepLength * Rig.LegLength : 0, dt * 3);
+    this.lift = T.stepLift * Rig.LegLength * strideNorm;
+
+    // Подскок вдвое чаще шага: две ноги — два толчка за цикл.
+    const targetBob = grounded
+      ? Math.abs(Math.sin(this.stepPhase * Math.PI * 2)) * T.stepBobKinematic
+        * Rig.LegLength * strideNorm
+      : 0;
+    this.bob = lerp(this.bob, targetBob, clamp01(12 * dt));
+
+    this.updateWobble(dt, this.f.locomotion.planarSpeed, strideNorm);
+    this.updateTwist(dt, strideNorm, grounded);
+
+    // Стопы НЕ передаются: computePose посчитает их формулой от фазы.
+    Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
+      swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
+      swing.height, swing.pitch, this.lift, this.twist);
+
+    this.solveJoints();
   }
 
   /**

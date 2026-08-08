@@ -22,15 +22,49 @@ export class Locomotion {
     /** Заказанная вводом скорость в мире. Её читает походка. */
     this.wantX = 0;
     this.wantZ = 0;
+    /** Скорость кинематического корня. */
+    this.velX = 0;
+    this.velZ = 0;
     /** Градусов в секунду. Хранится отдельно, чтобы у разворота был разгон. */
     this.yawSpeed = 0;
   }
 
   tick(dt, controlEnabled) {
     this.probeGround();
-    this.measureSpeed(dt);
-    this.applyMovement(dt, controlEnabled);
+    if (this.kinematic) this.moveRoot(dt, controlEnabled);
+    else {
+      this.measureSpeed(dt);
+      this.applyMovement(dt, controlEnabled);
+    }
     this.applyFacing(dt, controlEnabled);
+  }
+
+  /** Правда ли боец сейчас ходит кинематически. */
+  get kinematic() {
+    return T.bodyMode <= 1 && this.f.body.strength >= T.controlStrength;
+  }
+
+  /**
+   * Кинематический ход: двигается сам корень, а тело едет за ним.
+   *
+   * Разгон и торможение те же, что у физического хода, — они и отвечают
+   * за вес в управлении. Разница в том, что скорость здесь получается
+   * ровно заказанной, а не тем, что вышло у ног: на предсказуемость
+   * этот режим и меняли.
+   */
+  moveRoot(dt, controlEnabled) {
+    const f = this.f;
+    const want = this.desiredVelocity(controlEnabled);
+    const rate = this.grounded
+      ? (want.moving ? T.moveAccel : T.moveBrake)
+      : T.airControl;
+    this.velX = moveTowards(this.velX, want.x, rate * dt);
+    this.velZ = moveTowards(this.velZ, want.z, rate * dt);
+    f.position.x += this.velX * dt;
+    f.position.z += this.velZ * dt;
+    this.planarSpeed = Math.hypot(this.velX, this.velZ);
+    this.wantX = want.x;
+    this.wantZ = want.z;
   }
 
   /**
@@ -53,7 +87,8 @@ export class Locomotion {
     this.planarSpeed = Math.hypot(p.x - q.x, p.z - q.z) / Math.max(1e-5, dt);
   }
 
-  applyMovement(dt, controlEnabled) {
+  /** Куда и как быстро боец хочет ехать. Общее для обоих режимов. */
+  desiredVelocity(controlEnabled) {
     const f = this.f;
     let wx = 0;
     let wz = 0;
@@ -87,15 +122,21 @@ export class Locomotion {
     }
 
     const speed = T.maxRunSpeed * scale * dirScale;
+    return { x: wx * speed, z: wz * speed, moving };
+  }
+
+  applyMovement(dt, controlEnabled) {
+    const f = this.f;
+    const want = this.desiredVelocity(controlEnabled);
     // Заказанная скорость нужна походке отдельно от настоящей. Пока обе
     // стопы на настиле, цельные ноги держат таз намертво: настоящая
     // скорость там ноль, и по ней шаг не начнётся никогда.
-    this.wantX = wx * speed;
-    this.wantZ = wz * speed;
+    this.wantX = want.x;
+    this.wantZ = want.z;
     // В воздухе управление слабое: сбитый должен долетать до края,
     // а не выруливать обратно на арену.
     const rate = this.grounded
-      ? (moving ? T.moveAccel : T.moveBrake)
+      ? (want.moving ? T.moveAccel : T.moveBrake)
       : T.airControl;
 
     // Доводка корпусом от равновесия идёт ПОВЕРХ заказанного хода: боец
@@ -104,7 +145,7 @@ export class Locomotion {
     const bal = f.balance;
     const bx = bal ? bal.pushX : 0;
     const bz = bal ? bal.pushZ : 0;
-    f.body.drive(wx * speed + bx, wz * speed + bz, rate, dt);
+    f.body.drive(want.x + bx, want.z + bz, rate, dt);
   }
 
   /**
@@ -138,6 +179,8 @@ export class Locomotion {
     this.planarSpeed = 0;
     this.wantX = 0;
     this.wantZ = 0;
+    this.velX = 0;
+    this.velZ = 0;
     this.grounded = false;
   }
 }

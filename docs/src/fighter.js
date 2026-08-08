@@ -374,15 +374,36 @@ export class Fighter {
     const pose = this.poseDriver.tick(dt, this.locomotion.planarSpeed,
       this.locomotion.grounded);
 
-    body.setTargets(pose, this.yaw);
-    body.step(dt);
+    if (this.locomotion.kinematic) {
+      // Корень ведёт ввод, а не физика: таз ставится туда, куда его увела
+      // локомоция, поза раскладывается от него, и частицы садятся ровно
+      // в свои цели. Физика при этом никуда не девается — она подхватит
+      // тело из этой самой позы, как только мышцы отпустят.
+      const base = this.arena.isOverDeck(this.position.x, this.position.z, 0.4)
+        ? 0 : this.position.y;
+      body.placeHips(this.position.x, base + Rig.HipsY, this.position.z);
+      body.setTargets(pose, this.yaw);
+      body.snap();
+      // Заступил за кромку — опоры нет, и держаться больше не на чем.
+      if (!this.arena.isOverDeck(this.position.x, this.position.z, 0.1)) {
+        body.strength = 0;
+        this.downTime = 0;
+        this.settleTime = 0;
+      }
+    } else {
+      body.setTargets(pose, this.yaw);
+      body.step(dt);
+    }
     body.writeBones(this.bones, this.poseDriver.headTurn);
     this.updateThread();
 
-    // Позиция бойца — проекция таза на землю. Она следствие физики,
-    // а не то, что ей задают.
-    const hips = body.pos[P.Hips];
-    this.position.set(hips.x, hips.y - Rig.HipsY, hips.z);
+    // Позиция бойца — проекция таза на землю. При физическом теле она
+    // следствие физики; при кинематическом её ведёт локомоция, и обратно
+    // читать нечего.
+    if (!this.locomotion.kinematic) {
+      const hips = body.pos[P.Hips];
+      this.position.set(hips.x, hips.y - Rig.HipsY, hips.z);
+    }
 
     if (body.lowestY() < T.killY) {
       this.eliminate();

@@ -114,6 +114,8 @@ const _up = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _basis = new THREE.Matrix4();
+const _rawL = new THREE.Vector3();
+const _rawR = new THREE.Vector3();
 
 // FreeHandHalfWidth / FreeHandY больше нет: они держали кисть у бедра,
 // то есть задавали ровно ту позу «руки по швам», от которой мы уходим.
