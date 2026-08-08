@@ -14,6 +14,10 @@ export class Ui {
     // Кнопка удара исчезает вместе с оружием: живая на вид, но мёртвая
     // на нажатие кнопка сбивает с толку сильнее, чем её отсутствие.
     this.swingButton = document.getElementById('swing');
+    this.banner = document.getElementById('banner');
+    this.bannerBig = document.getElementById('bannerBig');
+    this.bannerSmall = document.getElementById('bannerSmall');
+    this.bannerText = null;
     this.panel = document.getElementById('tune');
     this.body = document.getElementById('tuneBody');
     this.rows = [];
@@ -164,6 +168,28 @@ export class Ui {
       else row.input.value = T[row.key];
       row.show();
     }
+  }
+
+  /**
+   * Крупная надпись посреди экрана: отсчёт, победа, поражение.
+   *
+   * Текст переписывается только когда он ДЕЙСТВИТЕЛЬНО изменился —
+   * иначе анимация появления перезапускается каждый кадр и надпись
+   * мигает вместо того, чтобы всплыть один раз.
+   */
+  setBanner(b) {
+    const key = b ? b.big + '|' + b.small : '';
+    if (key === this.bannerText) return;
+    this.bannerText = key;
+    if (!this.banner) return;
+    this.banner.classList.toggle('on', !!b);
+    if (!b) return;
+    this.bannerBig.textContent = b.big;
+    this.bannerSmall.textContent = b.small;
+    // Перезапуск анимации: без снятия класса второй раз она не проигрывается.
+    this.banner.classList.remove('pop');
+    void this.banner.offsetWidth;
+    this.banner.classList.add('pop');
   }
 
   setHud(text) {

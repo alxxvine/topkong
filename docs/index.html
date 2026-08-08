@@ -79,6 +79,48 @@
 
   #hud b { color: var(--text); font-weight: 600; }
 
+  /* Крупная надпись посреди экрана: отсчёт и итог раунда. Без фона —
+     на светлой сцене хватает самого текста, а карточка посреди кадра
+     закрывала бы ровно то место, куда смотришь. */
+  #banner {
+    position: absolute;
+    left: 50%;
+    top: 34%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: none;
+    pointer-events: none;
+  }
+
+  #banner.on { display: block; }
+
+  #bannerBig {
+    font-size: 64px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  #bannerSmall {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--dim);
+    letter-spacing: 0.01em;
+  }
+
+  #banner.pop #bannerBig { animation: pop 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+  #banner.pop #bannerSmall { animation: fade 0.4s ease-out; }
+
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.86); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  @media (max-width: 560px) { #bannerBig { font-size: 44px; } }
+
   #hud .k { color: var(--accent); }
 
   #hint {
@@ -331,6 +373,7 @@
 <canvas id="view"></canvas>
 
 <div id="ui">
+  <div id="banner"><div id="bannerBig"></div><div id="bannerSmall"></div></div>
   <div id="hud"></div>
   <div id="hint">WASD / стрелки — ход · мышь — прицел · ЛКМ зажать — замах, отпустить — удар · R — сброс</div>
 
@@ -364,27 +407,29 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "114";</script>
+<script>window.TK_BUILD = "121";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=114",
-    "tk/main.js":         "./src/main.js?v=114",
-    "tk/tuning.js":       "./src/tuning.js?v=114",
-    "tk/mathx.js":        "./src/mathx.js?v=114",
-    "tk/arena.js":        "./src/arena.js?v=114",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=114",
-    "tk/balance.js":      "./src/balance.js?v=114",
-    "tk/skeleton.js":     "./src/skeleton.js?v=114",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=114",
-    "tk/gait.js":         "./src/gait.js?v=114",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=114",
-    "tk/swingAction.js":  "./src/swingAction.js?v=114",
-    "tk/locomotion.js":   "./src/locomotion.js?v=114",
-    "tk/body.js":         "./src/body.js?v=114",
-    "tk/fighter.js":      "./src/fighter.js?v=114",
-    "tk/input.js":        "./src/input.js?v=114",
-    "tk/ui.js":           "./src/ui.js?v=114"
+    "three":              "./vendor/three.module.js?v=121",
+    "tk/main.js":         "./src/main.js?v=121",
+    "tk/tuning.js":       "./src/tuning.js?v=121",
+    "tk/mathx.js":        "./src/mathx.js?v=121",
+    "tk/arena.js":        "./src/arena.js?v=121",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=121",
+    "tk/balance.js":      "./src/balance.js?v=121",
+    "tk/skeleton.js":     "./src/skeleton.js?v=121",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=121",
+    "tk/gait.js":         "./src/gait.js?v=121",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=121",
+    "tk/swingAction.js":  "./src/swingAction.js?v=121",
+    "tk/locomotion.js":   "./src/locomotion.js?v=121",
+    "tk/body.js":         "./src/body.js?v=121",
+    "tk/bot.js":          "./src/bot.js?v=121",
+    "tk/match.js":        "./src/match.js?v=121",
+    "tk/fighter.js":      "./src/fighter.js?v=121",
+    "tk/input.js":        "./src/input.js?v=121",
+    "tk/ui.js":           "./src/ui.js?v=121"
   }
 }
 </script>

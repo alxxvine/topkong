@@ -5,6 +5,8 @@ import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
 import { Fighter, BodyState } from 'tk/fighter.js';
+import { Bot } from 'tk/bot.js';
+import { Match } from 'tk/match.js';
 import { P } from 'tk/body.js';
 import { Input } from 'tk/input.js';
 import { Ui } from 'tk/ui.js';
@@ -54,6 +56,9 @@ export async function start() {
   const dummies = [];
 
   syncDummies(scene, arena, dummies, fighters);
+
+  // Матч перезапускает раунд сам, поэтому расстановка отдаётся ему целиком.
+  const match = new Match(fighters, player, () => resetRound(player, dummies, arena));
 
   resize();
   addEventListener('resize', resize);
@@ -115,11 +120,10 @@ export async function start() {
 
     player.facingTarget.copy(input.aim).sub(player.position);
     player.facingTarget.y = 0;
-    player.swing.held = input.swingHeld;
+    player.swing.held = input.swingHeld && match.controlEnabled;
+    if (!match.controlEnabled) player.moveInput.set(0, 0);
 
-    if (input.consumeReset()) {
-      resetRound(player, dummies, arena);
-    }
+    if (input.consumeReset()) match.begin();
 
     // Замедление и хит-стоп — одно и то же: время идёт медленнее, ввод нет.
     let scale = input.slowMotion ? T.slowMotion : 1;
@@ -135,7 +139,15 @@ export async function start() {
       steps++;
       now += STEP;
 
-      for (const f of fighters) f.tick(STEP, f === player);
+      // Боты думают ДО физики: они пишут те же поля ввода, что и игрок,
+      // и тик бойца обязан увидеть уже свежие.
+      if (match.controlEnabled) {
+        for (const d of dummies) if (d.bot) d.bot.tick(STEP, fighters);
+      } else {
+        for (const d of dummies) { d.moveInput.set(0, 0); d.swing.held = false; }
+      }
+
+      for (const f of fighters) f.tick(STEP, match.controlEnabled);
 
       for (const f of fighters) {
         f.checkHits(fighters, STEP, now, (attacker, victim, point, strength) => {
@@ -145,7 +157,7 @@ export async function start() {
         });
       }
 
-      respawnFallen(fighters, arena);
+      match.tick(STEP);
     }
     // Хвост накопителя не копится бесконечно: после долгого залипания вкладки
     // иначе прилетает пачка шагов и всё разлетается.
@@ -159,7 +171,8 @@ export async function start() {
     if (rig.lookAhead.lengthSq() > 1) rig.lookAhead.normalize();
     rig.tick(real, player.alive ? player.position : null);
 
-    ui.setHud(hudText(player, arena, fps, input));
+    ui.setHud(hudText(player, arena, fps, input, match));
+    ui.setBanner(match.banner);
     if (ui.swingButton) ui.swingButton.style.display = T.withClub ? '' : 'none';
     renderer.render(scene, camera);
   }
@@ -167,7 +180,7 @@ export async function start() {
   requestAnimationFrame(frame);
 
   // Пригодится из консоли браузера и из автотеста.
-  const api = { scene, camera, renderer, arena, rig, player, fighters, input, tuning: T };
+  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, tuning: T };
   globalThis.TopKong = api;
   return api;
 }
@@ -191,6 +204,7 @@ function syncDummies(scene, arena, dummies, fighters) {
       // а фигуры должны отличаться друг от друга, а не спорить с фоном.
       color: [0x5b8def, 0x4fbf8b, 0xc46fb0, 0xdcb64a, 0x4bc4c4, 0x8b7ee0][index % 6],
     });
+    d.bot = new Bot(d, arena);
     dummies.push(d);
     fighters.push(d);
   }
@@ -208,19 +222,9 @@ function placeDummy(dummy, arena) {
   dummy.spawn(Math.sin(angle) * r, Math.cos(angle) * r, angle + Math.PI);
 }
 
-/**
- * Выбывшие возвращаются: раундов пока нет, а стенд без соперника
- * перестаёт быть стендом уже через минуту.
- */
-function respawnFallen(fighters, arena) {
-  for (const f of fighters) {
-    if (f.alive || f.state !== BodyState.Dead) continue;
-    if (f.deadTime < T.dummyRespawnDelay) continue;
-
-    if (f.isPlayer) f.spawn(0, -2, 0);
-    else placeDummy(f, arena);
-  }
-}
+// Функции respawnFallen больше нет. Выбывшие не возвращаются: раунд
+// кончается тем, что кто-то остался один, а возврат упавших означал бы,
+// что он не кончается никогда. Перезапуском занимается match.js.
 
 function resetRound(player, dummies, arena) {
   player.spawn(0, -2, 0);
@@ -309,7 +313,8 @@ class HitFx {
 
 // ----------------------------------------------------------------------- HUD
 
-function hudText(player, arena, fps, input) {
+
+function hudText(player, arena, fps, input, match) {
   const dist = Math.hypot(player.position.x, player.position.z);
   const edge = Math.max(0, arena.radius - dist);
   const state = {
@@ -336,6 +341,7 @@ function hudText(player, arena, fps, input) {
     // браузере, я не могу: гейтвей не пускает наружу. По этой строке
     // на любом скриншоте сразу видно, дошла правка или висит старый кэш.
     `сборка ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
+    match ? match.score : '',
     `тело      ${S.title}   ${state}   мышцы ${(player.body.strength * 100).toFixed(0)}%`,
     // Запас устойчивости — не украшение: по нему видно, что боец СТОИТ,
     // а не висит на мышцах. Единица означает, что точка перехвата ровно

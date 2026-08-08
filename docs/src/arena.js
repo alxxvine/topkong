@@ -33,11 +33,22 @@ export class Arena {
     this.group = new THREE.Group();
     scene.add(this.group);
 
-    // Диск строится радиусом 1 и масштабируется: менять радиус ползунком
-    // нужно каждую секунду, пересобирать геометрию ради этого — расточительно.
+    // Арена — не диск, а КОЛОДЕЦ: труба, уходящая вниз и растворяющаяся
+    // в пустоте. Плоский диск толщиной в метр читался столешницей, и падение
+    // с него выглядело падением со стола. У колодца дна не видно, и край
+    // становится настоящим краем.
+    //
+    // Строится радиусом 1 и масштабируется: менять радиус ползунком нужно
+    // каждую секунду, пересобирать геометрию ради этого расточительно.
+    // Материалов три — CylinderGeometry разбита на группы «бок, верх, низ»,
+    // и стенке нужен свой, с растворением.
     const deck = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 0.985, 1, 128, 1),
-      new THREE.MeshStandardMaterial({ color: DECK_COLOR, roughness: 0.78, metalness: 0 })
+      new THREE.CylinderGeometry(1, 0.86, 1, 160, 1),
+      [
+        this.wellMaterial(),
+        new THREE.MeshStandardMaterial({ color: DECK_COLOR, roughness: 0.78, metalness: 0 }),
+        new THREE.MeshBasicMaterial({ color: VOID_COLOR }),
+      ]
     );
     deck.receiveShadow = true;
     deck.castShadow = false;
@@ -60,22 +71,10 @@ export class Arena {
     this.rim = rim;
     this.group.add(rim);
 
-    // Круги на настиле: без них ощущение расстояния до края пропадает,
-    // диск выглядит бесконечным.
-    this.rings = [];
-    for (const frac of [0.33, 0.62, 0.85]) {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(frac - 0.004, frac + 0.004, 96),
-        new THREE.MeshBasicMaterial({
-          color: RING_COLOR,
-          transparent: true,
-          opacity: frac > 0.8 ? 0.13 : 0.07,
-        })
-      );
-      ring.rotation.x = -Math.PI / 2;
-      this.rings.push(ring);
-      this.group.add(ring);
-    }
+    // Кругов на настиле больше нет. Они были подпоркой: на плоском диске
+    // без них терялось ощущение расстояния до края. У колодца эту работу
+    // делает сама стенка — по тому, насколько она видна, глаз и читает,
+    // далеко ли до обрыва.
 
     // Свет ставится раньше геометрии: тень подгоняется под радиус арены,
     // а значит источник должен уже существовать.
@@ -88,6 +87,52 @@ export class Arena {
     // Дымка того же тона, что и фон: улетевший боец не проваливается
     // в чёрное ничто, а растворяется в белом.
     scene.fog = new THREE.Fog(VOID_COLOR, 22, 58);
+  }
+
+  /**
+   * Стенка колодца: сверху видна, ниже растворяется в пустоте.
+   *
+   * Делается подменой во фрагментном шейдере обычного материала, а не
+   * отдельным шейдером: так стенка остаётся освещённой и с тенями,
+   * а растворение ложится последним слоем.
+   *
+   * Растворение по МИРОВОЙ высоте, а не по расстоянию от камеры. Туман
+   * считает от камеры и на виде сверху красил бы одинаково и близкий край,
+   * и дальний, а нужно наоборот: чем глубже, тем хуже видно, откуда бы
+   * ни смотрел.
+   */
+  wellMaterial() {
+    const m = new THREE.MeshStandardMaterial({
+      color: DECK_COLOR.clone().multiplyScalar(0.97),
+      roughness: 0.85,
+      metalness: 0,
+    });
+    this.wellFade = { value: T.arenaFade };
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.wellFade = this.wellFade;
+      // Цвет пустоты подмешивается ПОСЛЕ преобразования в sRGB, значит
+      // и сам обязан быть в sRGB. Отдать сюда рабочий линейный цвет —
+      // и стенка гаснет не в фон, а в заметно более тёмный серый: в кадре
+      // остаётся клин, хотя по смыслу там уже ничего нет.
+      shader.uniforms.voidColor = {
+        value: VOID_COLOR.clone().convertLinearToSRGB(),
+      };
+      shader.vertexShader = 'varying float vWellY;\n' + shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        '#include <worldpos_vertex>\n  vWellY = (modelMatrix * vec4(transformed, 1.0)).y;'
+      );
+      shader.fragmentShader = 'uniform float wellFade;\nuniform vec3 voidColor;\nvarying float vWellY;\n'
+        + shader.fragmentShader.replace(
+          '#include <dithering_fragment>',
+          `#include <dithering_fragment>
+  // Растворение съедает стенку за несколько метров от кромки, а не за всю
+  // глубину трубы. Иначе в кадре остаётся плотный серый клин с резким
+  // нижним обрезом — видно ровно геометрию, а не обрыв.
+  float wellT = smoothstep(0.0, 1.0, clamp(-vWellY / max(0.001, wellFade), 0.0, 1.0));
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, voidColor, wellT);`
+        );
+    };
+    return m;
   }
 
   addLights(scene) {
@@ -134,14 +179,12 @@ export class Arena {
     this.deck.scale.set(radius, t, radius);
     // Верх настила — ровно y = 0: вся поза бойца считается от этой плоскости.
     this.deck.position.y = -t * 0.5;
+    // Глубина растворения — своя настройка, не высота трубы: труба уходит
+    // далеко вниз, а исчезнуть стенка должна у самой кромки.
+    if (this.wellFade) this.wellFade.value = Math.max(0.5, T.arenaFade);
 
     this.rim.scale.setScalar(radius);
     this.rim.position.y = -0.002;
-
-    for (const ring of this.rings) {
-      ring.scale.setScalar(radius);
-      ring.position.y = 0.006;
-    }
 
     const shadow = this.key.shadow.camera;
     const span = radius * 1.9;
