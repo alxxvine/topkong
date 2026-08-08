@@ -63,7 +63,7 @@ export const tuning = {
   // начинает щёлкать между двумя решениями от любой мелочи.
   guardHeight: 0.52,
   guardForward: 0.05,
-  guardWidth: 0.33,
+  guardWidth: 0.30,
   // Размах рук при ходьбе, в долях длины шага.
   armSwing: 0.55,
   stanceWidth: 0.08,

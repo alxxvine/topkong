@@ -149,11 +149,6 @@ function newPoints() {
 
 const REST = fillFromPose(newPoints(), Rig.restPose());
 
-/** Опорная стойка в мировых координатах. По ней строится оболочка тела. */
-export function restPoints() {
-  return REST.map((v) => v.clone());
-}
-
 const LINK_LENGTH = LINKS.map(([a, b]) => REST[a].distanceTo(REST[b]));
 
 export class Body {
