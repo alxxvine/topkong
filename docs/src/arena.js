@@ -95,10 +95,18 @@ export class Arena {
    * ни смотрел.
    */
   wellMaterial() {
-    const m = new THREE.MeshStandardMaterial({
-      color: DECK_COLOR.clone().multiplyScalar(0.99),
-      roughness: 0.85,
-      metalness: 0,
+    // Стенка НЕ освещается. Пока она была обычным материалом, её теневая
+    // сторона подбирала холодный отсвет неба и тёплый от заливки, а сверху
+    // на это ложилось растворение в фон — и вместо чистого градиента
+    // получался мутный серый, разный по кругу. Убрав свет, получаем ровно
+    // то, что нужно: одна вертикальная растяжка от кромки в пустоту,
+    // без единого лишнего оттенка.
+    //
+    // Форму колонны это не съедает: её задаёт светлота верхней грани
+    // против стенки, а не переливы по самой стенке.
+    const m = new THREE.MeshBasicMaterial({
+      color: DECK_COLOR.clone().multiplyScalar(0.93),
+      fog: false,
     });
     this.wellFade = { value: T.arenaFade };
     m.onBeforeCompile = (shader) => {

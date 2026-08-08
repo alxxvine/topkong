@@ -46,6 +46,9 @@ export class Input {
       this.keys.add(e.code);
       if (e.code === 'KeyR') this.resetPressed = true;
       if (e.code === 'KeyF') this.slowMotion = !this.slowMotion;
+      // Служебный слой — счётчики, подсказка, панель — по умолчанию спрятан:
+      // в кадре должна быть игра, а не приборная доска. Возвращается по H.
+      if (e.code === 'KeyH') document.body.classList.toggle('bare');
       if (e.code === 'Space') this.swingHeld = true;
     });
 

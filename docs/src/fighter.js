@@ -163,6 +163,7 @@ export class Fighter {
 
     this.buildThread();
     this.buildMarker();
+    this.marker.visible = !!T.showMarkers;
     this.buildTrail();
   }
 
@@ -302,7 +303,7 @@ export class Fighter {
     this.group.position.set(0, 0, 0);
     this.group.quaternion.identity();
     this.group.visible = true;
-    this.marker.visible = true;
+    this.marker.visible = !!T.showMarkers;
 
     // Разложить кости сразу, иначе первый кадр рисует позу с прошлой жизни.
     this.poseDriver.tick(1 / 120, 0, true);
@@ -485,7 +486,7 @@ export class Fighter {
     this.marker.position.set(this.position.x, 0.012, this.position.z);
     // Метка гаснет, когда боец не на настиле: по ней же читается «сорвался».
     const over = this.arena.isOverDeck(this.position.x, this.position.z);
-    this.marker.visible = over && this.state !== BodyState.Dead;
+    this.marker.visible = !!T.showMarkers && over && this.state !== BodyState.Dead;
   }
 
   updateTrail() {
