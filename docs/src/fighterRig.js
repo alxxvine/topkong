@@ -67,8 +67,15 @@ export const NeckY = ShoulderY + 0.05;
 export const HeadY = ShoulderY + HeadSize * 0.5 + 0.07;
 export const HeadRadius = HeadSize * 0.5;
 
-export const HipHalfWidth = TorsoBottomWidth * 0.5;
-export const ShoulderHalfWidth = TorsoTopWidth * 0.5;
+// Конечности приклеены СНАРУЖИ торса, а не в его плоскости — как на выкройке.
+// Вынос считается от края торса плюс половина ширины панели: иначе панель
+// руки шириной 0.24 при полуширине торса 0.18 наполовину сидит внутри него,
+// и на ходу части наслаиваются друг на друга.
+// У ног вынос меньше половины панели: полный развёл бы их в стороны шире,
+// чем на выкройке, и боец встал бы враскоряку. Нога заходит под таз краем —
+// на картонной кукле она и приклеена с нахлёстом.
+export const HipHalfWidth = TorsoBottomWidth * 0.5 + ThighTopWidth * 0.22;
+export const ShoulderHalfWidth = TorsoTopWidth * 0.5 + ArmTopWidth * 0.5;
 
 /**
  * Высота, на которой держат рукоять. Дубина считается от хвата, а не наоборот:
@@ -169,12 +176,14 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Плечи живут между грудью и головой и качаются вместе с ними.
   const shoulderSide = sway * 0.16;
   const shoulderFwd = lean * 0.16;
-  pose.shoulderRight.set(ShoulderHalfWidth + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
-  pose.shoulderLeft.set(-ShoulderHalfWidth + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
+  const armOut = ShoulderHalfWidth + T.limbOffset;
+  pose.shoulderRight.set(armOut + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
+  pose.shoulderLeft.set(-armOut + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
 
   // Тазобедренные суставы едут вместе с тазом — иначе подсед их оторвёт.
-  pose.hipRight.set(HipHalfWidth + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
-  pose.hipLeft.set(-HipHalfWidth + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
+  const legOut = HipHalfWidth + T.limbOffset;
+  pose.hipRight.set(legOut + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
+  pose.hipLeft.set(-legOut + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
 
   // Стопы приходят готовыми: их считает Gait, и считает В МИРЕ, потому что
   // опора обязана стоять на месте, пока тело идёт над ней. Здесь они уже

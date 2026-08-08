@@ -103,12 +103,12 @@ export class Fighter {
     // Делим его по высоте, ширины на стыке совпадают, поэтому шва не видно.
     const waist = (Rig.TorsoBottomWidth + Rig.TorsoTopWidth) * 0.5;
     this.bones.hips = this.bone('hips');
-    panel(this.bones.hips, Rig.TorsoHeight * 0.55,
+    panel(this.bones.hips, Rig.TorsoHeight * 0.55 - (T.partGap || 0),
       Rig.TorsoBottomWidth, waist, D * 1.9, card,
       new THREE.Vector3(0, Rig.TorsoHeight * 0.12, 0));
 
     this.bones.chest = this.bone('chest');
-    panel(this.bones.chest, Rig.TorsoHeight * 0.55,
+    panel(this.bones.chest, Rig.TorsoHeight * 0.55 - (T.partGap || 0),
       waist, Rig.TorsoTopWidth, D * 1.9, card,
       new THREE.Vector3(0, (Rig.ShoulderY - Rig.ChestY) * 0.5, 0));
 
@@ -160,6 +160,7 @@ export class Fighter {
       spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
     }
 
+    this.buildThread();
     this.buildMarker();
     this.buildTrail();
   }
@@ -179,8 +180,60 @@ export class Fighter {
    */
   limbPanel(name, length, wideEnd, narrowEnd, depth) {
     const g = this.bone(name);
-    panel(g, length, wideEnd, narrowEnd, depth, mat(this.color, 0.95));
+    // Панель короче своей кости на зазор с обоих концов: части тела висят
+    // НЕ впритык. Так на сгибе они не въезжают друг в друга, а в просвете
+    // видно нить, на которой всё держится.
+    panel(g, Math.max(0.02, length - (T.partGap || 0) * 2),
+      wideEnd, narrowEnd, depth, mat(this.color, 0.95));
     return g;
+  }
+
+  /**
+   * Светящаяся нить по всему скелету.
+   *
+   * Проведена по каждой кости целиком, а не кусочками в суставах: панели
+   * закрывают её почти везде, и видно нить ровно в зазорах между ними.
+   * Считать отдельно, где именно её показать, не нужно — геометрия делает
+   * это сама.
+   */
+  buildThread() {
+    const pairs = [
+      [P.Hips, P.Chest], [P.Chest, P.Head],
+      [P.Hips, P.HipL], [P.Hips, P.HipR],
+      [P.HipL, P.KneeL], [P.KneeL, P.FootL],
+      [P.HipR, P.KneeR], [P.KneeR, P.FootR],
+      [P.Chest, P.ShoulderL], [P.Chest, P.ShoulderR],
+      [P.ShoulderR, P.ElbowR], [P.ElbowR, P.HandR],
+      [P.ShoulderL, P.ElbowL], [P.ElbowL, P.HandL],
+    ];
+    this.threadPairs = pairs;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position',
+      new THREE.BufferAttribute(new Float32Array(pairs.length * 6), 3));
+    // Складывающееся свечение без записи в буфер глубины: нить светится
+    // сквозь и не спорит с панелями за то, кто ближе.
+    this.thread = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+      color: this.color.clone().lerp(new THREE.Color(0xfff6d8), 0.9),
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    this.thread.frustumCulled = false;
+    this.group.add(this.thread);
+  }
+
+  updateThread() {
+    if (!this.thread) return;
+    const attr = this.thread.geometry.getAttribute('position');
+    const arr = attr.array;
+    const p = this.body.pos;
+    for (let i = 0; i < this.threadPairs.length; i++) {
+      const [a, b] = this.threadPairs[i];
+      arr[i * 6] = p[a].x; arr[i * 6 + 1] = p[a].y; arr[i * 6 + 2] = p[a].z;
+      arr[i * 6 + 3] = p[b].x; arr[i * 6 + 4] = p[b].y; arr[i * 6 + 5] = p[b].z;
+    }
+    attr.needsUpdate = true;
   }
 
   /** Круг под ногами. Единственный способ в свалке понять, кто из них ты. */
@@ -253,6 +306,7 @@ export class Fighter {
     this.poseDriver.tick(1 / 120, 0, true);
     this.body.setTargets(this.poseDriver.pose, yaw);
     this.body.writeBones(this.bones, this.poseDriver.headTurn);
+    this.updateThread();
     this.position.set(x, 0, z);
     this.group.updateMatrixWorld(true);
     this.updateClubHead(1 / 120, true);
@@ -321,6 +375,7 @@ export class Fighter {
     body.setTargets(pose, this.yaw);
     body.step(dt);
     body.writeBones(this.bones, this.poseDriver.headTurn);
+    this.updateThread();
 
     // Позиция бойца — проекция таза на землю. Она следствие физики,
     // а не то, что ей задают.
@@ -516,6 +571,17 @@ const _sharedMaterials = new Map();
  * @param {number} depth  толщина листа; по ней панель и читается картоном
  */
 function panel(parent, length, bottom, top, depth, material, offset) {
+  // Защита от пропавшей настройки. Потерянное число приходит сюда как NaN,
+  // а NaN в геометрии — это не ошибка в консоли, а молча исчезнувшая деталь:
+  // ровно так пропали разом все панели, когда partGap не доехал до tuning.
+  if (!Number.isFinite(length) || !Number.isFinite(bottom) ||
+      !Number.isFinite(top) || !Number.isFinite(depth)) {
+    console.warn('panel: нечисловой размер', { length, bottom, top, depth });
+    length = Number.isFinite(length) ? length : 0.2;
+    bottom = Number.isFinite(bottom) ? bottom : 0.1;
+    top = Number.isFinite(top) ? top : 0.1;
+    depth = Number.isFinite(depth) ? depth : 0.1;
+  }
   const g = new THREE.CylinderGeometry(
     top * 0.5 * Math.SQRT2, bottom * 0.5 * Math.SQRT2, length, 4, 1);
   // Развернуть, чтобы грани смотрели вдоль осей, а не рёбра.
