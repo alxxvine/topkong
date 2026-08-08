@@ -152,7 +152,41 @@ export class Gait {
     this.sinceStep += dt;
     this.landed[0] = false;
     this.landed[1] = false;
-    const norm = clamp01(speed / Math.max(0.1, T.maxRunSpeed));
+
+    // Куда боец СОБИРАЕТСЯ идти — отдельно от того, куда он едет.
+    //
+    // Настоящей скорости для наводки шага не хватает, и это не мелочь.
+    // Пока на настиле обе стопы, две цельные ноги к двум прибитым точкам
+    // не оставляют тазу ни одной степени свободы по горизонтали: замерено,
+    // вбок он проезжает восемь сантиметров и упирается намертво. Порог
+    // отрыва при этом восемнадцать — и не наступает никогда. Боец
+    // застревал на месте, честно пытаясь идти.
+    //
+    // У человека тут то же самое, и решается оно так же: сперва решаешь
+    // шагнуть, и только потом падаешь в шаг. Шаг начинается от намерения.
+    const loco = this.f.locomotion;
+    const wantX = loco ? loco.wantX : 0;
+    const wantZ = loco ? loco.wantZ : 0;
+    const wanted = Math.hypot(wantX, wantZ);
+
+    // Тело едет заметно медленнее заказанного — значит оно упёрлось
+    // в собственные ноги, и ждать от опоры отставания бессмысленно.
+    const stuck = wanted > 0.05 && speed < wanted * 0.4 && this.sinceStep > T.stepTime * 1.2;
+
+    // Наводка идёт по тому из двух, что больше: застрявшее тело метит шаг
+    // по намерению, идущее — по настоящему ходу.
+    const lead = speed >= wanted ? speed : wanted;
+    const lx = speed >= wanted ? vx : wantX;
+    const lz = speed >= wanted ? vz : wantZ;
+
+    const norm = clamp01(lead / Math.max(0.1, T.maxRunSpeed));
+
+    // Длину шага по скорости НЕ подгоняем, хотя соблазн есть и он понятен.
+    // Проверено: частота шага подстраивается сама, и ход остаётся тем же.
+    // Укорачивание заднего шага втрое не изменило задний ход вовсе,
+    // а боковой при этом упал вчетверо. Разницу скоростей по направлениям
+    // задаёт локомоция, и этого достаточно — замерено, назад выходит
+    // 0.90 м/с при заказанных 0.94.
 
     // Перенос тем быстрее, чем быстрее идёт боец: иначе на бегу нога
     // не успевает вернуться под тело и он начинает загребать.
@@ -168,7 +202,7 @@ export class Gait {
         // Цель переноса подтягивается на лету: пока нога в воздухе, тело
         // успевает и ускориться, и повернуть. Пересчитывается через тот же
         // ограничитель, иначе на разгоне цель уползёт за предел досягаемости.
-        this.foothold(foot, _v, x, z, yaw, vx, vz, _t);
+        this.foothold(foot, _v, x, z, yaw, lx, lz, _t);
         foot.to.lerp(_t, clamp01(8 * dt));
 
         const k = ease(foot.t);
@@ -210,9 +244,9 @@ export class Gait {
       //
       // Позади — шагаем. Впереди — стоим и ждём, пока тело подойдёт.
       let behind = away;
-      if (speed > 0.25) {
-        const ix = vx / speed;
-        const iz = vz / speed;
+      if (lead > 0.25) {
+        const ix = lx / lead;
+        const iz = lz / lead;
         behind = -(dx * ix + dz * iz);
       }
 
@@ -227,17 +261,32 @@ export class Gait {
       // Порог у правой ноги чуть больше: иначе обе, оказавшись симметрично,
       // спорят за право шагнуть и боец мелко семенит на месте.
       const bias = i === 0 ? 1 : 1.08;
-      if (!stranded && behind < T.stepTrigger * bias) continue;
+      // Застрявшему телу шагает та нога, что отстала сильнее: иначе право
+      // на шаг достаётся просто первой в списке, и боец уходит вбок,
+      // приволакивая вторую.
+      const urge = stuck && behind >= this.behindOther(i, x, z, yaw, lx, lz, lead);
+      if (!stranded && !urge && behind < T.stepTrigger * bias) continue;
 
       foot.swinging = true;
       foot.t = 0;
       foot.from.copy(foot.plant);
-      this.foothold(foot, _v, x, z, yaw, vx, vz, foot.to);
+      this.foothold(foot, _v, x, z, yaw, lx, lz, foot.to);
       this.sinceStep = 0;
       this.steps++;
     }
 
     if (!this.feet[0].swinging && !this.feet[1].swinging) this.lift = 0;
+  }
+
+  /** Отставание ВТОРОЙ стопы. Нужно, чтобы шагала та, что отстала сильнее. */
+  behindOther(i, x, z, yaw, lx, lz, lead) {
+    const other = this.feet[1 - i];
+    if (other.swinging) return -Infinity;
+    this.ideal(other, x, z, yaw, _t);
+    const dx = other.plant.x - _t.x;
+    const dz = other.plant.z - _t.z;
+    if (lead <= 0.25) return Math.hypot(dx, dz);
+    return -(dx * lx + dz * lz) / lead;
   }
 
   /** Насколько далеко опора уехала от положенного — по ней видно, что пора шагать. */

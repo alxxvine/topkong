@@ -19,6 +19,9 @@ export class Locomotion {
     this.arena = arena;
     this.grounded = false;
     this.planarSpeed = 0;
+    /** Заказанная вводом скорость в мире. Её читает походка. */
+    this.wantX = 0;
+    this.wantZ = 0;
     /** Градусов в секунду. Хранится отдельно, чтобы у разворота был разгон. */
     this.yawSpeed = 0;
   }
@@ -84,6 +87,11 @@ export class Locomotion {
     }
 
     const speed = T.maxRunSpeed * scale * dirScale;
+    // Заказанная скорость нужна походке отдельно от настоящей. Пока обе
+    // стопы на настиле, цельные ноги держат таз намертво: настоящая
+    // скорость там ноль, и по ней шаг не начнётся никогда.
+    this.wantX = wx * speed;
+    this.wantZ = wz * speed;
     // В воздухе управление слабое: сбитый должен долетать до края,
     // а не выруливать обратно на арену.
     const rate = this.grounded
@@ -122,6 +130,8 @@ export class Locomotion {
   reset() {
     this.yawSpeed = 0;
     this.planarSpeed = 0;
+    this.wantX = 0;
+    this.wantZ = 0;
     this.grounded = false;
   }
 }

@@ -12,12 +12,15 @@ import { tuning as T } from 'tk/tuning.js';
 // Все величины — в локальных координатах бойца: ноль на настиле под ним,
 // +Z — направление взгляда, +Y — вверх.
 //
-// Руки и ноги — двухзвенные, с настоящей IK. Раньше рука была одной капсулой
-// постоянной длины, а поза уводила кисть куда угодно: в стойке плечо от кисти
-// отделяло 1.13 метра при длине руки 0.45, и капсула просто висела посередине,
-// не касаясь ни плеча, ни рукояти. Двухзвенная цепь такого не допускает
-// по построению — звенья всегда своей длины, а недостижимую цель IK
-// подтягивает к границе досягаемости.
+// Руки и ноги — ЦЕЛЬНЫЕ. Это не упрощение, а требование выкройки: и рука,
+// и нога там по одной трапеции, гнуть их негде. Отсюда правило, которому
+// подчинён весь файл: конец кости всегда ровно на её длину от корня.
+// Не «примерно», не «подтянуть к границе досягаемости» — ровно.
+//
+// Из этого правила растёт и вся походка. Высота таза не константа,
+// а следствие того, куда походка поставила опору: чем дальше вынесена
+// стопа, тем ниже таз. Перевалиться на опорную ногу приходится по той же
+// причине — маховой ноге нечем подобраться, чтобы пронестись над настилом.
 
 // Размеры сняты с выкройки и переведены в метры одним множителем. Он вынесен
 // явно, чтобы чертёж и код сверялись глазами: 5 в чертеже — это 5 * CM метров.
@@ -52,8 +55,9 @@ export const ArmLength = 6 * CM;
 export const ArmTopWidth = 2 * CM;
 export const ArmBottomWidth = 3 * CM;
 
-// Ноги считаются одним звеном, но частиц в цепи по-прежнему три: колено
-// осталось серединой отрезка. Половинки нужны только решателю.
+// Частиц в цепи по-прежнему три: «колено» осталось серединой отрезка.
+// Половинки нужны только решателю — три связи одинаковой суммарной длины
+// вырождаются в отрезок и держат кость прямой.
 export const ThighLength = LegLength * 0.5;
 export const ShinLength = LegLength * 0.5;
 export const UpperArmLength = ArmLength * 0.5;
@@ -90,17 +94,13 @@ export const ClubLength = 0.80;
 export const ClubRadius = 0.06;
 
 
-// Полюса IK: куда выгибается сустав. Локоть уходит ВНИЗ и чуть наружу,
-// колено вперёд. Раньше наружу было столько же, сколько вниз, и в стойке
-// с руками перед корпусом локти расходились в стороны крыльями.
-const ARM_POLE_RIGHT = new THREE.Vector3(0.5, -1, -0.25).normalize();
-const ARM_POLE_LEFT = new THREE.Vector3(-0.5, -1, -0.25).normalize();
-const LEG_POLE = new THREE.Vector3(0, -0.15, 1).normalize();
+// Полюсов IK здесь больше нет. Они говорили, в какую сторону выгибается
+// сустав, а у картонной куклы рука и нога — по одной трапеции, и выгибаться
+// им негде. Вместе с ними ушла и сама двухзвенная IK: пока она оставалась
+// в файле, ею продолжали пользоваться, и «цельная» кость выходила согнутой.
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _delta = new THREE.Vector3();
-const _axis = new THREE.Vector3();
-const _pole = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -158,42 +158,85 @@ export function makePose() {
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
                             lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0,
                             twistDeg = 0, footL = null, footR = null) {
-  // Подсед опускает ВЕСЬ верх тела разом. Опустить один таз нельзя:
-  // расстояния таз↔грудь↔голова держат связи, и попытка просадить
-  // что-то одно кончится дракой позы с решателем.
-  const crouch = T.stanceCrouch;
+  const legOut = HipHalfWidth + T.limbOffset;
+  const hipSide = sway * 0.02;
+  const hipFwd = lean * 0.02;
+
+  // Высоту таза задаёт ОПОРНАЯ НОГА, а не константа.
+  //
+  // Это главное, чем поза цельных костей отличается от позы на суставах.
+  // Нога — одна деталь, гнуться ей негде, значит расстояние от бедра
+  // до стопы всегда ровно LegLength. Стоит потребовать от таза высоту,
+  // которой при таком выносе стопы быть не может, и решатель начинает
+  // каждый кадр выталкивать таз по сфере вокруг прибитой к настилу стопы.
+  // У выталкивания по сфере есть боковая составляющая, и она копится:
+  // замерено, что при постоянном расхождении 7.7 см боец уезжал сам
+  // на 5.7 метра за шесть секунд и разгонялся выше заданного предела.
+  //
+  // Поэтому высота считается из геометрии: чем дальше вынесена опора,
+  // тем ниже таз. Так задаром получается вся вертикальная раскачка ходьбы —
+  // таз поднимается, когда проходит над стопой, и проседает на разножке.
+  const pelvis = solvePelvis(footL, footR, legOut, hipSide, hipFwd);
+  const roll = pelvis.roll;
+  const rs = Math.sin(roll);
+  const rc = Math.cos(roll);
+  const base = pelvis.base;
+  const drop = HipJointY - base;
 
   // Смещения намеренно разные по высоте: наклоны корпуса нигде не задаются
   // явно, PoseDriver выводит их из направлений таз→грудь и грудь→голова.
   // Поэтому «завалить тело» здесь означает просто развести эти точки вбок
   // на разную величину — и тело заваливается само, оставаясь связным.
-  pose.hips.set(sway * 0.02, HipsY + bob - crouch, lean * 0.02);
-  pose.chest.set(sway * 0.10, ChestY + bob - crouch, lean * 0.12);
-  pose.head.set(sway * 0.22, HeadY + bob - crouch, lean * 0.20);
+  pose.hips.set(sway * 0.02, HipsY + bob - drop, lean * 0.02);
+  pose.chest.set(sway * 0.10, ChestY + bob - drop, lean * 0.12);
+  pose.head.set(sway * 0.22, HeadY + bob - drop, lean * 0.20);
 
   // Плечи живут между грудью и головой и качаются вместе с ними.
   const shoulderSide = sway * 0.16;
   const shoulderFwd = lean * 0.16;
   const armOut = ShoulderHalfWidth + T.limbOffset;
-  pose.shoulderRight.set(armOut + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
-  pose.shoulderLeft.set(-armOut + shoulderSide, ShoulderY + bob - crouch, shoulderFwd);
+  pose.shoulderRight.set(armOut + shoulderSide, ShoulderY + bob - drop, shoulderFwd);
+  pose.shoulderLeft.set(-armOut + shoulderSide, ShoulderY + bob - drop, shoulderFwd);
 
   // Тазобедренные суставы едут вместе с тазом — иначе подсед их оторвёт.
-  const legOut = HipHalfWidth + T.limbOffset;
-  pose.hipRight.set(legOut + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
-  pose.hipLeft.set(-legOut + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
+  pose.hipRight.set(legOut + hipSide, HipJointY + bob - drop, hipFwd);
+  pose.hipLeft.set(-legOut + hipSide, HipJointY + bob - drop, hipFwd);
+
+  // Перекос таза. Всё, что от таза и выше, заваливается вбок как одно целое:
+  // поворот — движение жёсткое, длины связей от него не меняются, и тело
+  // остаётся связным.
+  //
+  // Без перекоса цельной ноге негде пронести стопу. Высота бедра над
+  // опорой задана длиной ноги, и маховая стопа, проходя под тазом,
+  // обязана уйти в настил: у неё нет колена, чтобы подобраться. Человек
+  // в лыжных ботинках решает это ровно так же — переваливается на опорную
+  // ногу и заносит вторую. Отсюда же и вся походка вразвалку.
+  if (roll !== 0) {
+    rollX(pose.hips, hipSide, base, rs, rc);
+    rollX(pose.chest, hipSide, base, rs, rc);
+    rollX(pose.head, hipSide, base, rs, rc);
+    rollX(pose.shoulderRight, hipSide, base, rs, rc);
+    rollX(pose.shoulderLeft, hipSide, base, rs, rc);
+    rollX(pose.hipRight, hipSide, base, rs, rc);
+    rollX(pose.hipLeft, hipSide, base, rs, rc);
+  }
 
   // Стопы приходят готовыми: их считает Gait, и считает В МИРЕ, потому что
   // опора обязана стоять на месте, пока тело идёт над ней. Здесь они уже
   // переведены в систему тела — формуле от фазы шага их отдавать нельзя,
   // иначе опора снова поедет за тазом и шаг опять станет косметикой.
   //
+  // По горизонтали стопа ставится ровно туда, куда её поставила походка,
+  // а вот высоту ей досчитывает нога: она цельная, и другой высоты у стопы
+  // при таком выносе просто нет. Дуга подъёма из походки здесь не нужна —
+  // маховая стопа поднимается сама, потому что таз перевалился на опорную.
+  //
   // Формула остаётся только для опорной стойки, из которой собирается
   // скелет: там шага нет вовсе.
   const phaseL = stepPhase * Math.PI * 2;
   if (footL) {
-    pose.footLeft.copy(footL);
-    pose.footRight.copy(footR);
+    hangFoot(pose.footLeft, footL, pose.hipLeft);
+    hangFoot(pose.footRight, footR, pose.hipRight);
   } else {
     const half = HipHalfWidth + T.stanceWidth;
     foot(pose.footLeft, -half, phaseL, stride, lift);
@@ -205,7 +248,7 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   const flatZ = Math.cos(a);
 
   // Хват выносится по горизонтали — там, где кисти действительно окажутся.
-  const anchorY = GripY + bob - crouch + clubHeight;
+  const anchorY = GripY + bob - drop + clubHeight;
   pose.grip.set(flatX * clubReach, anchorY, lean * 0.12 + flatZ * clubReach);
 
   // Руки в стойке держатся ПЕРЕД телом, а не висят по швам. Опущенные вдоль
@@ -215,10 +258,15 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Кисти качаются в противофазе своим ногам: вынесена левая нога — вперёд
   // идёт правая рука. Без этого руки едут вдоль тела досками и выдают всю
   // походку.
-  const guardY = T.guardHeight + bob - crouch;
+  const guardY = T.guardHeight + bob - drop;
   const swing = Math.cos(phaseL) * T.armSwing * stride;
   guardHand(pose.handRight, 1, guardY, lean, swing);
   guardHand(pose.handLeft, -1, guardY, lean, -swing);
+  if (roll !== 0) {
+    rollX(pose.handRight, hipSide, base, rs, rc);
+    rollX(pose.handLeft, hipSide, base, rs, rc);
+    rollX(pose.grip, hipSide, base, rs, rc);
+  }
 
   // Дубина всегда в одной и той же руке — правой. Ни перехвата между
   // ударами, ни подхвата второй рукой на тяжёлом замахе: боец правша,
@@ -227,7 +275,16 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Раньше держащая рука выбиралась по знаку grip.x, то есть менялась
   // вместе со стороной дуги, и оружие перекладывалось из руки в руку
   // после каждого удара.
-  if (T.withClub) pose.handRight.set(pose.grip.x, anchorY, pose.grip.z);
+  if (T.withClub) pose.handRight.set(pose.grip.x, pose.grip.y, pose.grip.z);
+
+  // Кисть — ровно на длину руки от плеча. Рука тоже одна деталь, и всё,
+  // что сказано про ногу, верно и здесь: цель, до которой рука не достаёт,
+  // это не «почти дотянулся», а постоянная тяга мышцы в одну сторону
+  // и связи в другую. Хват после этого берётся у кисти, а не наоборот:
+  // держит оружие рука, а не оружие руку.
+  onSphere(pose.shoulderRight, pose.handRight, ArmLength);
+  onSphere(pose.shoulderLeft, pose.handLeft, ArmLength);
+  if (T.withClub) pose.grip.copy(pose.handRight);
 
   // Наклон отдельно от разворота: без него дубина всегда горизонтальна,
   // и «волочится за спиной» выглядит как парящий на уровне колен шар.
@@ -268,6 +325,119 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   pose.club.copy(pose.grip).addScaledVector(pose.clubDir, ClubGripOffset);
 
   return pose;
+}
+
+// --------------------------------------------------------------- цельная нога
+//
+// Всё, что ниже, существует ради одного свойства: нога — ОДНА деталь.
+// Расстояние от бедра до стопы не «примерно длина ноги», а ровно она,
+// всегда. Любое место, где поза просит другого, немедленно превращается
+// в постоянную драку с решателем, а драка с решателем на прибитой к настилу
+// стопе — это самоход.
+
+/** На какой высоте обязано быть бедро, чтобы прямая нога достала до этой стопы. */
+function hipNeed(foot, hipX, hipZ) {
+  const d = Math.min(Math.hypot(foot.x - hipX, foot.z - hipZ), LegLength - 1e-3);
+  return foot.y + Math.sqrt(LegLength * LegLength - d * d);
+}
+
+/** Предел перекоса: синус угла. 0.35 — это 20 градусов. */
+const MAX_LIST = 0.35;
+
+/**
+ * Глубже этого таз не проседает, что бы ни делали ноги.
+ *
+ * Страховка, а не настройка: при исправной походке опора не успевает уехать
+ * так далеко. Нужна потому, что просадка — это положительная обратная связь.
+ * Уехала опора — цель таза ниже — мышца тянет таз вниз — прямая нога
+ * переводит падение в ход вперёд — опора уезжает ещё дальше. Замерено,
+ * во что это выливается без предела: 3.5 м/с при заданных 1.7 и подскоки
+ * корпуса на три с лишним метра.
+ */
+const MAX_DIP = 0.10;
+
+const _pelvis = { base: 0, roll: 0 };
+
+/**
+ * Высота и перекос таза. Оба — не выбор, а следствие.
+ *
+ * Каждая нога требует своей высоты бедра: чем дальше вынесена её стопа,
+ * тем ниже. Требования разные, а таз один — значит он обязан ВСТАТЬ
+ * НАКОСО, и ровно так, чтобы оба требования выполнились разом. Отсюда
+ * две строчки: высота есть среднее требований, перекос есть их разность.
+ *
+ * Из этих же двух строчек берётся вся походка. Опорная нога вынесена
+ * назад — таз просел. Маховая пошла вверх по дуге — таз перевалился
+ * на опорную, приподняв маховое бедро ровно настолько, чтобы стопе
+ * было где пронестись. Никакого подскока, никакой раскачки и никакого
+ * переваливания задавать отдельно не нужно: они и есть решение.
+ *
+ * Заметить это стоило нескольких попыток назначить перекос вручную,
+ * ползунком. Все они были хуже: назначенный перекос спорит с ногами,
+ * а спор с ногой на прибитой стопе — это самоход.
+ */
+function solvePelvis(footL, footR, legOut, hipSide, hipFwd) {
+  const out = _pelvis;
+  out.base = HipJointY - T.stanceCrouch;
+  out.roll = 0;
+  if (!footL || !footR) return out;
+
+  let sin = 0;
+  // Два прохода: на первом таз ещё стоит ровно и горизонтальный вынос
+  // бедра завышен, на втором уже с поправкой на наклон. Третий ничего
+  // не меняет — зависимость от косинуса слабая.
+  for (let pass = 0; pass < 2; pass++) {
+    const cos = Math.sqrt(Math.max(0, 1 - sin * sin));
+    const needL = hipNeed(footL, hipSide - legOut * cos, hipFwd);
+    const needR = hipNeed(footR, hipSide + legOut * cos, hipFwd);
+    out.base = Math.max((needL + needR) * 0.5, HipJointY - MAX_DIP);
+    sin = clamp((needR - needL) / (2 * legOut), -MAX_LIST, MAX_LIST);
+  }
+
+  out.roll = Math.asin(sin);
+  return out;
+}
+
+/**
+ * Стопу — на сферу вокруг бедра. По горизонтали она остаётся ровно там,
+ * куда её поставила походка; высота у неё не своя, а та единственная,
+ * которую позволяет длина ноги.
+ */
+function hangFoot(out, raw, hip) {
+  const dx = raw.x - hip.x;
+  const dz = raw.z - hip.z;
+  const flat = Math.hypot(dx, dz);
+  const d = Math.min(flat, LegLength - 1e-3);
+  const k = flat > 1e-6 ? d / flat : 0;
+  return out.set(
+    hip.x + dx * k,
+    hip.y - Math.sqrt(LegLength * LegLength - d * d),
+    hip.z + dz * k);
+}
+
+/** Завалить точку вбок вокруг оси взгляда: поворот в плоскости XY. */
+function rollX(v, cx, cy, sin, cos) {
+  const dx = v.x - cx;
+  const dy = v.y - cy;
+  v.x = cx + dx * cos - dy * sin;
+  v.y = cy + dx * sin + dy * cos;
+}
+
+/**
+ * Конец конечности — ровно на длину кости от её корня.
+ *
+ * Для цельной кости это не подгонка, а определение. Замерено, к чему
+ * приводит пренебрежение: цель кисти в стойке отстояла от плеча на 0.64
+ * при руке длиной 0.54 — десять сантиметров, которые мышца тянула
+ * в одну сторону, а связь в другую, каждый кадр. Ровно это и читалось
+ * как «руки мнутся».
+ */
+function onSphere(root, end, length) {
+  _delta.copy(end).sub(root);
+  const d = _delta.length();
+  if (d < 1e-6) _delta.set(0, -1, 0);
+  else _delta.divideScalar(d);
+  return end.copy(root).addScaledVector(_delta, length);
 }
 
 /** Поворот вокруг вертикали. Та же формула, по которой поза уходит в мир. */
@@ -311,54 +481,9 @@ export const PivotRadius = 0.40;
 // не знающий ни про наклон, ни про шаг, ни про скрут, ни про подсед.
 // Оба сустава теперь живут в позе.
 
-export const armPole = (right) => (right ? ARM_POLE_RIGHT : ARM_POLE_LEFT);
-export const legPole = () => LEG_POLE;
-
 /** Середина отрезка: «сустав» цельной кости, которому негде гнуться. */
 export function midJoint(a, b, out) {
   return out.copy(a).add(b).multiplyScalar(0.5);
-}
-
-/**
- * Двухзвенная IK: где встанет сустав, если цепь длиной l1+l2 тянется
- * от root к target.
- *
- * Классическая тригонометрия, никаких итераций: расстояние до цели даёт
- * основание треугольника, длины звеньев — его стороны, а полюс решает,
- * в какую из двух зеркальных сторон он выгнется. Локоть наружу, колено вперёд.
- *
- * Недостижимую цель функция честно подтягивает к границе досягаемости
- * и пишет фактическое положение конца в outEnd. Вызывающий обязан
- * использовать именно его: тянуться к тому, куда рука не достаёт, — это ровно
- * та ошибка, из-за которой руки раньше висели в воздухе.
- */
-export function solveTwoBone(root, target, l1, l2, pole, outJoint, outEnd) {
-  _axis.copy(target).sub(root);
-  let d = _axis.length();
-  if (d < 1e-5) {
-    _axis.set(0, -1, 0);
-    d = 1e-5;
-  } else {
-    _axis.divideScalar(d);
-  }
-
-  const dc = clamp(d, Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
-  outEnd.copy(root).addScaledVector(_axis, dc);
-
-  // Проекция полюса на плоскость, перпендикулярную оси цепи.
-  _pole.copy(pole).addScaledVector(_axis, -pole.dot(_axis));
-  if (_pole.lengthSq() < 1e-8) {
-    // Полюс совпал с осью — берём любое перпендикулярное направление,
-    // лишь бы сустав не оказался на самой оси и звенья не слиплись.
-    _pole.set(-_axis.y, _axis.x, 0);
-    if (_pole.lengthSq() < 1e-8) _pole.set(1, 0, 0);
-  }
-  _pole.normalize();
-
-  const a = (l1 * l1 - l2 * l2 + dc * dc) / (2 * dc);
-  const h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
-  outJoint.copy(root).addScaledVector(_axis, a).addScaledVector(_pole, h);
-  return outEnd;
 }
 
 /**
@@ -425,13 +550,23 @@ export function restPose(pose = makePose()) {
  * а сборщику тела и ragdoll'у хватает статичной стойки.
  */
 export function solveRestJoints(pose) {
-  solveTwoBone(pose.shoulderRight, pose.handRight, UpperArmLength, ForeArmLength,
-    ARM_POLE_RIGHT, pose.elbowRight, pose.handRight);
-  solveTwoBone(pose.shoulderLeft, pose.handLeft, UpperArmLength, ForeArmLength,
-    ARM_POLE_LEFT, pose.elbowLeft, pose.handLeft);
-  solveTwoBone(pose.hipLeft, pose.footLeft, ThighLength, ShinLength,
-    LEG_POLE, pose.kneeLeft, pose.footLeft);
-  solveTwoBone(pose.hipRight, pose.footRight, ThighLength, ShinLength,
-    LEG_POLE, pose.kneeRight, pose.footRight);
+  // Конец кости отправляется на её полную длину, и это не косметика стойки,
+  // а определение длин связей: из этой позы body.js снимает restLength.
+  //
+  // Пока здесь стояла двухзвенная IK, она честно сгибала конечность под
+  // ту цель, которую ей давали, и получалось вот что: половинки ноги
+  // по 0.360, а связь бедро↔стопа 0.672 вместо 0.720 по выкройке. Три
+  // связи такой длины — это не отрезок, а жёсткий треугольник с намертво
+  // согнутым на 13 сантиметров коленом, да ещё и с двумя зеркальными
+  // решениями, между которыми он щёлкает. Никакой «цельной кости»
+  // в теле при этом не было вовсе.
+  onSphere(pose.shoulderRight, pose.handRight, ArmLength);
+  onSphere(pose.shoulderLeft, pose.handLeft, ArmLength);
+  onSphere(pose.hipLeft, pose.footLeft, LegLength);
+  onSphere(pose.hipRight, pose.footRight, LegLength);
+  midJoint(pose.shoulderRight, pose.handRight, pose.elbowRight);
+  midJoint(pose.shoulderLeft, pose.handLeft, pose.elbowLeft);
+  midJoint(pose.hipLeft, pose.footLeft, pose.kneeLeft);
+  midJoint(pose.hipRight, pose.footRight, pose.kneeRight);
   return pose;
 }
