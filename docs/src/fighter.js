@@ -117,24 +117,35 @@ export class Fighter {
       eye.rotation.z = side * 0.1;
     }
 
-    // Нога и рука — по одной трапеции на всю длину. Узкий конец у сустава,
-    // широкий на воле: 2 у бедра и 3 внизу, 2 у плеча и 3 у кисти.
+    // Нога и рука — та же трапеция, что и была, но разрезанная ровно
+    // посередине и раздвинутая на зазор. Ширина в месте разреза — среднее
+    // концов, поэтому сложи половинки обратно, и получится прежняя цельная
+    // деталь: силуэт не изменился, а в просвете видна нить.
+    //
+    // Разрез не косметический. Пока деталь была одна, наступить на что-то
+    // выше настила боец физически не мог: расстояние от бедра до стопы
+    // держалось намертво. Теперь колено есть, и оно сгибается — но только
+    // когда прямой ноге места не осталось.
     for (const name of ['legLUpper', 'legRUpper']) {
-      this.bones[name] = this.limbPanel(name, Rig.LegLength,
-        Rig.LegTopWidth, Rig.LegBottomWidth, D * 1.4);
+      this.bones[name] = this.limbPanel(name, Rig.HalfLeg,
+        Rig.LegTopWidth, Rig.LegMidWidth, D * 1.4);
     }
-    this.bones.legLLower = this.bone('legLLower');
-    this.bones.legRLower = this.bone('legRLower');
+    for (const name of ['legLLower', 'legRLower']) {
+      this.bones[name] = this.limbPanel(name, Rig.HalfLeg,
+        Rig.LegMidWidth, Rig.LegBottomWidth, D * 1.4);
+    }
     // Стоп на выкройке нет: кости оставлены пустыми, физике они ещё нужны.
     this.bones.footL = this.bone('footL');
     this.bones.footR = this.bone('footR');
 
     for (const name of ['armRUpper', 'armLUpper']) {
-      this.bones[name] = this.limbPanel(name, Rig.ArmLength,
-        Rig.ArmTopWidth, Rig.ArmBottomWidth, D);
+      this.bones[name] = this.limbPanel(name, Rig.HalfArm,
+        Rig.ArmTopWidth, Rig.ArmMidWidth, D);
     }
-    this.bones.armRFore = this.bone('armRFore');
-    this.bones.armLFore = this.bone('armLFore');
+    for (const name of ['armRFore', 'armLFore']) {
+      this.bones[name] = this.limbPanel(name, Rig.HalfArm,
+        Rig.ArmMidWidth, Rig.ArmBottomWidth, D);
+    }
 
     this.bones.club = this.bone('club');
     capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);

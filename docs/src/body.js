@@ -67,6 +67,7 @@ const HIP_OF_LEG = [P.HipL, P.HipR];
 const CORE = [P.Hips, P.HipL, P.HipR, P.Chest];
 
 const LINKS = S.links;
+const LINK_LIMIT = S.linkLimit;
 
 const _v = new THREE.Vector3();
 const _side = new THREE.Vector3();
@@ -457,6 +458,11 @@ export class Body {
       if (dist < 1e-6) continue;
 
       const rest = this.restLength[i];
+      // Связь-предел держит только сверху: короче — не её дело. Ею и сделано
+      // колено. Стоя боец распрямлён, связь натянута и работает как цельная
+      // кость; наступил на что-то выше настила — расстояние сократилось,
+      // связь отпустила, колено согнулось. Назад оно не выгибается никогда.
+      if (LINK_LIMIT[i] && dist <= rest) continue;
       if (measure) this.maxStretch = Math.max(this.maxStretch, Math.abs(dist - rest));
 
       const wa = this.invMass[a];
@@ -640,13 +646,18 @@ export class Body {
     bones.head.position.copy(p[P.Head]);
     bones.head.quaternion.copy(_rot);
 
-    // Панель одна на всю конечность: от сустава до конца. Средние частицы
-    // никуда не делись — они держат связи и принимают удары, — но своей
-    // панели у них нет, гнуться конечности негде.
-    limbTo(bones.legLUpper, p[P.HipL], p[P.FootL]);
-    limbTo(bones.legRUpper, p[P.HipR], p[P.FootR]);
-    limbTo(bones.armRUpper, p[P.ShoulderR], p[P.HandR]);
-    limbTo(bones.armLUpper, p[P.ShoulderL], p[P.HandL]);
+    // Панелей на конечность снова две — по половинке на кость. Пока
+    // конечность прямая, они лежат на одной линии и читаются как прежняя
+    // цельная деталь с прорезью посередине; согнётся колено — разойдутся
+    // углом, а нить в прорези останется натянутой.
+    limbTo(bones.legLUpper, p[P.HipL], p[P.KneeL]);
+    limbTo(bones.legLLower, p[P.KneeL], p[P.FootL]);
+    limbTo(bones.legRUpper, p[P.HipR], p[P.KneeR]);
+    limbTo(bones.legRLower, p[P.KneeR], p[P.FootR]);
+    limbTo(bones.armRUpper, p[P.ShoulderR], p[P.ElbowR]);
+    limbTo(bones.armRFore, p[P.ElbowR], p[P.HandR]);
+    limbTo(bones.armLUpper, p[P.ShoulderL], p[P.ElbowL]);
+    limbTo(bones.armLFore, p[P.ElbowL], p[P.HandL]);
 
     // Стопы держатся горизонтально и смотрят туда же, куда таз: ботинок,
     // кувыркающийся вокруг щиколотки, читается как поломка.

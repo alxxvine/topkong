@@ -48,13 +48,14 @@ export const ArmLength = S.ArmLength;
 export const ArmTopWidth = S.ArmTopWidth;
 export const ArmBottomWidth = S.ArmBottomWidth;
 
-// Частиц в цепи по-прежнему три: «колено» осталось серединой отрезка.
-// Половинки нужны только решателю — три связи одинаковой суммарной длины
-// вырождаются в отрезок и держат кость прямой.
-export const ThighLength = LegLength * 0.5;
-export const ShinLength = LegLength * 0.5;
-export const UpperArmLength = ArmLength * 0.5;
-export const ForeArmLength = ArmLength * 0.5;
+// Конечность снова из ДВУХ половинок, но выглядит по-прежнему цельной:
+// трапеция разрезана ровно посередине и раздвинута на зазор, а в просвете
+// видна нить. Прямой её держит не форма, а связь-предел через весь размах
+// (см. skeleton.js) — и отпускает ровно тогда, когда согнуться необходимо.
+export const HalfLeg = S.HalfLeg;
+export const HalfArm = S.HalfArm;
+export const LegMidWidth = S.LegMidWidth;
+export const ArmMidWidth = S.ArmMidWidth;
 export const ArmSpan = S.ArmSpan;
 
 export const FootY = S.FootY;
@@ -86,10 +87,26 @@ export const ClubLength = CLUB.length;
 export const ClubRadius = CLUB.radius;
 
 
-// Полюсов IK здесь больше нет. Они говорили, в какую сторону выгибается
-// сустав, а у картонной куклы рука и нога — по одной трапеции, и выгибаться
-// им негде. Вместе с ними ушла и сама двухзвенная IK: пока она оставалась
-// в файле, ею продолжали пользоваться, и «цельная» кость выходила согнутой.
+// Полюса: куда сгибается сустав, когда сгибаться приходится.
+//
+// Они возвращены вместе с изломом конечности, но в другом качестве. Раньше
+// полюс работал всегда, и IK честно сгибала ногу под любую цель — оттого
+// «цельная» кость и выходила согнутой. Теперь сгиб включается ТОЛЬКО когда
+// конец ближе полной длины: стоящий боец распрямлён, и полюс на него никак
+// не влияет. Он вступает в дело, когда стопа оказалась выше настила
+// и выпрямиться уже нельзя.
+//
+// Колено вперёд, локоть вниз и чуть наружу. Наружу у локтя немного: было
+// столько же, сколько вниз, и в стойке с руками перед корпусом локти
+// расходились в стороны крыльями.
+const ARM_POLE_RIGHT = new THREE.Vector3(0.5, -1, -0.25).normalize();
+const ARM_POLE_LEFT = new THREE.Vector3(-0.5, -1, -0.25).normalize();
+const LEG_POLE = new THREE.Vector3(0, -0.1, 1).normalize();
+const _pole = new THREE.Vector3();
+const _axis = new THREE.Vector3();
+
+export const armPole = (right) => (right ? ARM_POLE_RIGHT : ARM_POLE_LEFT);
+export const legPole = () => LEG_POLE;
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _delta = new THREE.Vector3();
@@ -397,10 +414,12 @@ function hangFoot(out, raw, hip) {
   const flat = Math.hypot(dx, dz);
   const d = Math.min(flat, LegLength - 1e-3);
   const k = flat > 1e-6 ? d / flat : 0;
-  return out.set(
-    hip.x + dx * k,
-    hip.y - Math.sqrt(LegLength * LegLength - d * d),
-    hip.z + dz * k);
+  // Ниже прямой ноги стопе не достать — а ВЫШЕ сколько угодно: колено
+  // согнётся. Поэтому берётся большее из двух: куда её поставила походка
+  // и куда дотягивается прямая нога. Без этого стопа на ступеньке
+  // утыкалась бы в невидимый пол на уровне настила.
+  const straight = hip.y - Math.sqrt(LegLength * LegLength - d * d);
+  return out.set(hip.x + dx * k, Math.max(raw.y, straight), hip.z + dz * k);
 }
 
 /** Завалить точку вбок вокруг оси взгляда: поворот в плоскости XY. */
@@ -478,9 +497,35 @@ export const PivotRadius = 0.40;
 // не знающий ни про наклон, ни про шаг, ни про скрут, ни про подсед.
 // Оба сустава теперь живут в позе.
 
-/** Середина отрезка: «сустав» цельной кости, которому негде гнуться. */
-export function midJoint(a, b, out) {
-  return out.copy(a).add(b).multiplyScalar(0.5);
+/**
+ * Где встанет сустав между двумя равными половинками.
+ *
+ * Пока конец на полной длине от корня, ответ — ровно середина отрезка,
+ * и конечность прямая. Стоит концу подойти ближе (стопа встала на ступеньку,
+ * кисть уткнулась в чужой корпус), и сустав обязан отойти от прямой — иначе
+ * половинкам просто не разместиться. Насколько отойти, считает теорема
+ * Пифагора, а в какую сторону — полюс.
+ *
+ * Это та же двухзвенная IK, что была здесь раньше, но с важной разницей:
+ * она больше не тянет конец к границе досягаемости и не сгибает ничего
+ * по своей воле. Сгиб появляется ровно тогда, когда прямой конечности
+ * места не осталось.
+ */
+export function flexJoint(root, end, half, pole, out) {
+  _axis.copy(end).sub(root);
+  const d = _axis.length();
+  out.copy(root).add(end).multiplyScalar(0.5);
+  const sag = Math.sqrt(Math.max(0, half * half - d * d * 0.25));
+  if (sag < 1e-4 || d < 1e-5) return out;
+
+  _axis.divideScalar(d);
+  // Полюс — поперёк оси конечности: вдоль он ничего не значит.
+  _pole.copy(pole).addScaledVector(_axis, -pole.dot(_axis));
+  if (_pole.lengthSq() < 1e-8) {
+    _pole.set(-_axis.y, _axis.x, 0);
+    if (_pole.lengthSq() < 1e-8) _pole.set(1, 0, 0);
+  }
+  return out.addScaledVector(_pole.normalize(), sag);
 }
 
 /**
@@ -561,9 +606,9 @@ export function solveRestJoints(pose) {
   onSphere(pose.shoulderLeft, pose.handLeft, ArmLength);
   onSphere(pose.hipLeft, pose.footLeft, LegLength);
   onSphere(pose.hipRight, pose.footRight, LegLength);
-  midJoint(pose.shoulderRight, pose.handRight, pose.elbowRight);
-  midJoint(pose.shoulderLeft, pose.handLeft, pose.elbowLeft);
-  midJoint(pose.hipLeft, pose.footLeft, pose.kneeLeft);
-  midJoint(pose.hipRight, pose.footRight, pose.kneeRight);
+  flexJoint(pose.shoulderRight, pose.handRight, HalfArm, ARM_POLE_RIGHT, pose.elbowRight);
+  flexJoint(pose.shoulderLeft, pose.handLeft, HalfArm, ARM_POLE_LEFT, pose.elbowLeft);
+  flexJoint(pose.hipLeft, pose.footLeft, HalfLeg, LEG_POLE, pose.kneeLeft);
+  flexJoint(pose.hipRight, pose.footRight, HalfLeg, LEG_POLE, pose.kneeRight);
   return pose;
 }
