@@ -10,12 +10,20 @@
 <title>Top Kong — арена</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%94%A8</text></svg>">
 <style>
+  /* Светлая матовая тема под стать сцене.
+     Стекло, а не панель: полупрозрачный слой с размытием и лёгкой
+     подкраской насыщенности — так интерфейс не спорит с ареной за внимание,
+     но и не теряется на ней. Тёмная тема с оранжевым акцентом читалась
+     аркадным автоматом. */
   :root {
-    --panel: rgba(12, 15, 22, 0.86);
-    --line: rgba(255, 255, 255, 0.12);
-    --text: #dfe4ee;
-    --dim: #8b93a5;
-    --accent: #ffb347;
+    --panel: rgba(255, 255, 255, 0.72);
+    --panel-solid: rgba(255, 255, 255, 0.9);
+    --line: rgba(0, 0, 0, 0.08);
+    --text: #1d1d1f;
+    --dim: #6e6e73;
+    --accent: #0071e3;
+    --shadow: 0 6px 28px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
+    --blur: saturate(180%) blur(20px);
   }
 
   * { box-sizing: border-box; }
@@ -25,9 +33,10 @@
     padding: 0;
     height: 100%;
     overflow: hidden;
-    background: #05070c;
+    background: #dfe3ea;
     color: var(--text);
-    font: 13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text",
+      "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
@@ -45,14 +54,22 @@
     pointer-events: none;
   }
 
+  /* HUD — стеклянная карточка, а не текст поверх кадра. На светлой сцене
+     тень под буквами не спасает: нужен свой фон. Моноширинный шрифт здесь
+     не украшение — колонки чисел должны стоять ровно. */
   #hud {
     position: absolute;
-    top: env(safe-area-inset-top, 0px);
-    left: 0;
-    padding: 10px 14px;
-    font-size: 12px;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    padding: 11px 14px;
+    font: 11.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     color: var(--dim);
-    text-shadow: 0 1px 3px #000;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
     white-space: pre;
     /* Место под панель справа резервируется жёстко: иначе на узком окне
        строки HUD заезжают под заголовок «Настройки» и обрезаются. */
@@ -62,6 +79,8 @@
 
   #hud b { color: var(--text); font-weight: 600; }
 
+  #hud .k { color: var(--accent); }
+
   #hint {
     position: absolute;
     left: 50%;
@@ -70,8 +89,13 @@
     color: var(--dim);
     font-size: 12px;
     text-align: center;
-    text-shadow: 0 1px 3px #000;
-    opacity: 0.85;
+    padding: 7px 14px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
   }
 
   /* --- панель настроек --- */
@@ -86,8 +110,10 @@
     flex-direction: column;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 10px;
-    backdrop-filter: blur(8px);
+    border-radius: 18px;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
     pointer-events: auto;
   }
 
@@ -97,10 +123,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 11px;
+    padding: 12px 15px;
     cursor: pointer;
     font-weight: 600;
-    letter-spacing: 0.03em;
+    font-size: 14px;
+    letter-spacing: -0.01em;
   }
 
   #tuneHead .spacer { flex: 1; }
@@ -109,17 +136,18 @@
 
   #tuneBody {
     overflow-y: auto;
-    padding: 0 11px 11px;
+    padding: 0 15px 15px;
     -webkit-overflow-scrolling: touch;
   }
 
   .grp {
-    margin-top: 10px;
-    padding-top: 8px;
+    margin-top: 14px;
+    padding-top: 10px;
     border-top: 1px solid var(--line);
-    color: var(--accent);
-    font-size: 11px;
-    letter-spacing: 0.06em;
+    color: var(--dim);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
   }
 
@@ -133,7 +161,11 @@
     margin-bottom: 2px;
   }
 
-  .row .lbl span:last-child { color: var(--text); }
+  .row .lbl span:last-child {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
 
   .row input[type=range] {
     width: 100%;
@@ -158,17 +190,20 @@
 
   .btns button {
     flex: 1;
-    padding: 7px 4px;
+    padding: 8px 6px;
     font: inherit;
-    font-size: 11px;
-    color: var(--text);
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    background: rgba(0, 0, 0, 0.04);
+    border: none;
+    border-radius: 10px;
     cursor: pointer;
+    transition: background 0.15s;
   }
 
-  .btns button:hover { background: rgba(255, 255, 255, 0.14); }
+  .btns button:hover { background: rgba(0, 0, 0, 0.08); }
+  .btns button:active { background: rgba(0, 0, 0, 0.12); }
 
   /* --- тач-управление: появляется только на устройствах без мыши --- */
   #touch { display: none; }
@@ -190,7 +225,10 @@
     width: 118px;
     height: 118px;
     border: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
   }
 
   #stick { left: 18px; }
@@ -208,11 +246,11 @@
     height: 50px;
     margin: -25px 0 0 -25px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(0, 0, 0, 0.18);
     pointer-events: none;
   }
 
-  #aimKnob { background: rgba(255, 255, 255, 0.32); }
+  #aimKnob { background: var(--accent); opacity: 0.75; }
 
   /* Кнопка удара — над прицельным стиком, под тем же большим пальцем. */
   #swing {
@@ -220,9 +258,11 @@
     bottom: calc(158px + env(safe-area-inset-bottom, 0px));
     width: 86px;
     height: 86px;
-    border: 1px solid rgba(255, 179, 71, 0.5);
-    background: rgba(255, 179, 71, 0.14);
-    color: var(--accent);
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: var(--shadow);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -230,7 +270,7 @@
     letter-spacing: 0.05em;
   }
 
-  #swing.on { background: rgba(255, 179, 71, 0.38); }
+  #swing.on { background: #0058b0; transform: scale(0.96); }
 
   #boot {
     position: fixed;
@@ -238,7 +278,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #05070c;
+    background: #dfe3ea;
     color: var(--dim);
     z-index: 10;
   }
@@ -324,27 +364,27 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "110";</script>
+<script>window.TK_BUILD = "114";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=110",
-    "tk/main.js":         "./src/main.js?v=110",
-    "tk/tuning.js":       "./src/tuning.js?v=110",
-    "tk/mathx.js":        "./src/mathx.js?v=110",
-    "tk/arena.js":        "./src/arena.js?v=110",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=110",
-    "tk/balance.js":      "./src/balance.js?v=110",
-    "tk/skeleton.js":     "./src/skeleton.js?v=110",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=110",
-    "tk/gait.js":         "./src/gait.js?v=110",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=110",
-    "tk/swingAction.js":  "./src/swingAction.js?v=110",
-    "tk/locomotion.js":   "./src/locomotion.js?v=110",
-    "tk/body.js":         "./src/body.js?v=110",
-    "tk/fighter.js":      "./src/fighter.js?v=110",
-    "tk/input.js":        "./src/input.js?v=110",
-    "tk/ui.js":           "./src/ui.js?v=110"
+    "three":              "./vendor/three.module.js?v=114",
+    "tk/main.js":         "./src/main.js?v=114",
+    "tk/tuning.js":       "./src/tuning.js?v=114",
+    "tk/mathx.js":        "./src/mathx.js?v=114",
+    "tk/arena.js":        "./src/arena.js?v=114",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=114",
+    "tk/balance.js":      "./src/balance.js?v=114",
+    "tk/skeleton.js":     "./src/skeleton.js?v=114",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=114",
+    "tk/gait.js":         "./src/gait.js?v=114",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=114",
+    "tk/swingAction.js":  "./src/swingAction.js?v=114",
+    "tk/locomotion.js":   "./src/locomotion.js?v=114",
+    "tk/body.js":         "./src/body.js?v=114",
+    "tk/fighter.js":      "./src/fighter.js?v=114",
+    "tk/input.js":        "./src/input.js?v=114",
+    "tk/ui.js":           "./src/ui.js?v=114"
   }
 }
 </script>

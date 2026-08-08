@@ -91,9 +91,12 @@ export class Fighter {
   build() {
     const card = mat(this.color, 0.95);
     const dark = mat(this.color.clone().lerp(new THREE.Color(0x000000), 0.55), 0.95);
-    const ink = mat(new THREE.Color(0x241a12), 0.9);
-    const wood = mat(new THREE.Color(0x5c3d21), 0.85);
-    const metal = mat(new THREE.Color(0x9ea3ad), 0.32, 0.75);
+    const ink = mat(new THREE.Color(0x2b2f38), 0.85);
+    // Оружие в тон сцене: светлый ясень и матовый графит вместо тёмного
+    // дерева с чёрным набалдашником. Прежняя дубина была самым тёмным
+    // пятном в кадре и перетягивала взгляд с бойца на себя.
+    const wood = mat(new THREE.Color(0xd8c3a5), 0.72);
+    const metal = mat(new THREE.Color(0x9ba1ab), 0.38, 0.55);
 
     // Тело — картонная кукла строго по выкройке: голова 5x5, грудь трапеция
     // 2 сверху и 3 снизу, таз квадрат 3x3, рука 6, нога 8. Стоп нет вовсе,

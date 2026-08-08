@@ -30,8 +30,12 @@ export async function start() {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  // Нейтральный тонмаппинг вместо киношного ACES. ACES тянет картинку
+  // в контраст и подкрашивает света — для тёмной сцены это было кстати,
+  // для светлой матовой он съедает как раз те полутона, на которых она
+  // и держится. Если в этой сборке three его нет, откатываемся на ACES.
+  renderer.toneMapping = THREE.NeutralToneMapping || THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(T.camFov, 1, 0.3, 200);
@@ -44,7 +48,7 @@ export async function start() {
   const aim = new AimCursor(scene);
 
   const player = new Fighter(scene, arena, {
-    isPlayer: true, name: 'Игрок', color: 0xffb347, x: 0, z: -2, yaw: 0,
+    isPlayer: true, name: 'Игрок', color: 0xff8a5c, x: 0, z: -2, yaw: 0,
   });
   const fighters = [player];
   const dummies = [];
@@ -183,7 +187,9 @@ function syncDummies(scene, arena, dummies, fighters) {
     const index = dummies.length;
     const d = new Fighter(scene, arena, {
       name: 'Манекен ' + (index + 1),
-      color: [0x6f9ce8, 0x7fd48c, 0xd97ec2, 0xe0d27a, 0x8ae0d8, 0xd88a6f][index % 6],
+      // Приглушённая пастель: на светлой сцене насыщенные цвета кричат,
+      // а фигуры должны отличаться друг от друга, а не спорить с фоном.
+      color: [0x5b8def, 0x4fbf8b, 0xc46fb0, 0xdcb64a, 0x4bc4c4, 0x8b7ee0][index % 6],
     });
     dummies.push(d);
     fighters.push(d);

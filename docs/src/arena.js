@@ -10,9 +10,20 @@ import { tuning as T } from 'tk/tuning.js';
 // Радиус меняется ползунком на ходу, поэтому геометрия не строится
 // намертво: диск и кромка живут в масштабируемой группе.
 
-export const VOID_COLOR = new THREE.Color(0x05070c);
-const DECK_COLOR = new THREE.Color(0x3a3f4d);
-const RIM_COLOR = new THREE.Color(0xffb347);
+// Палитра светлая и почти бесцветная.
+//
+// Тёмная сцена с оранжевой кромкой читалась аркадным автоматом. Здесь другой
+// приём: почти белое всё, разница между поверхностями — полтона, а цветом
+// говорят только фигуры. Тогда взгляд ловит не декорацию, а силуэт бойца
+// и линию края, то есть ровно то, из чего игра и состоит.
+//
+// Пустота вокруг светлее настила, а не темнее. Это важнее, чем кажется:
+// на тёмном фоне край читался светящейся полосой, то есть подсказкой,
+// а на светлом он читается обрывом — тем, чем и является.
+export const VOID_COLOR = new THREE.Color(0xdfe3ea);
+const DECK_COLOR = new THREE.Color(0xfdfdff);
+const RIM_COLOR = new THREE.Color(0x1d2330);
+const RING_COLOR = new THREE.Color(0x2c3242);
 
 export class Arena {
   constructor(scene) {
@@ -25,20 +36,25 @@ export class Arena {
     // Диск строится радиусом 1 и масштабируется: менять радиус ползунком
     // нужно каждую секунду, пересобирать геометрию ради этого — расточительно.
     const deck = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 0.93, 1, 96, 1),
-      new THREE.MeshStandardMaterial({ color: DECK_COLOR, roughness: 0.92, metalness: 0.04 })
+      new THREE.CylinderGeometry(1, 0.985, 1, 128, 1),
+      new THREE.MeshStandardMaterial({ color: DECK_COLOR, roughness: 0.78, metalness: 0 })
     );
     deck.receiveShadow = true;
     deck.castShadow = false;
     this.deck = deck;
     this.group.add(deck);
 
-    // Светящаяся кромка. Единственная подсказка «дальше пусто» —
-    // сама пустота на тёмном фоне не читается вовсе. Тонкая намеренно:
-    // это должна быть черта, а не золотой обод во весь кадр.
+    // Кромка — тонкая тёмная черта по светлому. Раньше она светилась
+    // оранжевым и была самым ярким в кадре; на светлом настиле ярче быть
+    // незачем, достаточно контраста.
+    //
+    // Но одной черты мало. Пустота вокруг сделана заметно темнее настила
+    // не для красоты: когда они были в полтона, диск читался рисунком
+    // на столе, а не площадкой над обрывом. Вся игра — про край,
+    // и он обязан читаться первым.
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(1, 0.005, 6, 128),
-      new THREE.MeshBasicMaterial({ color: RIM_COLOR })
+      new THREE.TorusGeometry(1, 0.0035, 8, 192),
+      new THREE.MeshBasicMaterial({ color: RIM_COLOR, transparent: true, opacity: 0.7 })
     );
     rim.rotation.x = -Math.PI / 2;
     this.rim = rim;
@@ -51,9 +67,9 @@ export class Arena {
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(frac - 0.004, frac + 0.004, 96),
         new THREE.MeshBasicMaterial({
-          color: 0xffffff,
+          color: RING_COLOR,
           transparent: true,
-          opacity: frac > 0.8 ? 0.16 : 0.07,
+          opacity: frac > 0.8 ? 0.13 : 0.07,
         })
       );
       ring.rotation.x = -Math.PI / 2;
@@ -69,20 +85,33 @@ export class Arena {
     scene.background = VOID_COLOR;
     // Туман скрывает, что под ареной ничего нет: улетевший боец растворяется,
     // а не зависает над пустым чёрным ничем.
-    scene.fog = new THREE.Fog(VOID_COLOR, 26, 62);
+    // Дымка того же тона, что и фон: улетевший боец не проваливается
+    // в чёрное ничто, а растворяется в белом.
+    scene.fog = new THREE.Fog(VOID_COLOR, 22, 58);
   }
 
   addLights(scene) {
-    // Небо холодное, отражённый от настила свет тёплый — так объём тела
-    // читается даже в тени.
-    scene.add(new THREE.HemisphereLight(0x8fa6d8, 0x2b2118, 0.85));
+    // Свет мягкий и почти со всех сторон — как в световом кубе на съёмке
+    // предметки. Заливка делает почти всю работу, направленный добавляет
+    // только тень, по которой понятно, где тело относительно настила.
+    //
+    // Прежняя схема была обратной: слабая заливка и жёсткий ключ в две
+    // единицы. Контраст получался резкий, тени чёрные, и картонная кукла
+    // выглядела не игрушкой на столе, а фигурой в подворотне.
+    // Заливка сильная, но не настолько, чтобы съесть тень: она здесь
+    // единственное, что связывает фигуру с настилом. Перебор с небом —
+    // и боец начинает висеть над ареной, ни к чему не привязанный.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xdfe3ea, 1.45));
 
-    const key = new THREE.DirectionalLight(0xfff0d8, 2.1);
-    key.position.set(6, 14, 5);
+    const key = new THREE.DirectionalLight(0xffffff, 2.0);
+    key.position.set(5, 13, 7);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
-    key.shadow.bias = -0.0008;
+    key.shadow.bias = -0.0006;
     key.shadow.normalBias = 0.02;
+    // Мягкий край тени. Резкая тень от точечного солнца — главное, что
+    // выдаёт «компьютерную картинку»; в жизни тень размывается всегда.
+    key.shadow.radius = 3;
     const s = key.shadow.camera;
     s.near = 1;
     s.far = 50;
@@ -90,11 +119,11 @@ export class Arena {
     scene.add(key);
     this.key = key;
 
-    // Контровой: очерчивает силуэт со стороны камеры-фона. Сверху-сбоку
-    // фигура иначе сливается с настилом.
-    const rimLight = new THREE.DirectionalLight(0x6f8cff, 0.75);
-    rimLight.position.set(-8, 6, -9);
-    scene.add(rimLight);
+    // Заполняющий с теневой стороны — без него провал в тень всё равно
+    // остаётся, каким бы ярким ни было небо.
+    const fill = new THREE.DirectionalLight(0xeef2fb, 0.45);
+    fill.position.set(-7, 5, -8);
+    scene.add(fill);
   }
 
   /** Радиус меняется ползунком — вся геометрия подстраивается масштабом. */
