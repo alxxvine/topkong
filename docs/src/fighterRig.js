@@ -19,43 +19,62 @@ import { tuning as T } from 'tk/tuning.js';
 // по построению — звенья всегда своей длины, а недостижимую цель IK
 // подтягивает к границе досягаемости.
 
-// Пропорции намеренно НЕ человеческие: короткие ноги, длинные руки, большая
-// круглая голова. Тело от этого читается как мягкое существо, а не как
-// человечек из капсул.
+// Размеры сняты с выкройки картонной куклы и переведены в метры одним
+// множителем. Множитель вынесен явно, чтобы чертёж и код можно было сверить
+// глазами: 5 в чертеже — это 5 * CM метров, и нигде не «примерно столько же».
 //
-// Одно ограничение здесь жёсткое и его нельзя нарушать: нога обязана
-// доставать до настила с запасом. Бедро на 0.60, стопа на 0.10, при подседе
-// таз опускается ещё на 0.06 — значит по вертикали 0.44 при длине ноги 0.58,
-// и по горизонтали нога дотягивается примерно на 0.38. Из этого числа
-// выведены и длина шага, и предельная скорость.
-export const HipsY = 0.72;
-export const ChestY = 1.02;
-export const HeadY = 1.54;
-export const HeadRadius = 0.245;
-export const NeckY = 1.27;
+// Что на чертеже читается однозначно: голова 5x5, торс высотой 3 при ширине
+// 3 в плечах и 2.2 у пояса, нога из двух трапеций по 3 (3→2 и 3→3), рука —
+// полоса длиной 5 шириной 2→1.5.
+//
+// Что пришлось домыслить: глубина панелей — на плоской выкройке её нет
+// вовсе, взята около 1 по фотографиям склеенных кукол; и деление пятерки
+// руки на два наших звена, поделено пополам.
+//
+// Рост выходит 14 клеток чертежа: нога 6 плюс торс 3 плюс голова 5.
+export const CM = 0.12;
 
-export const HipHalfWidth = 0.13;
-export const HipJointY = 0.64;
-export const FootY = 0.10;
+export const HeadSize = 5 * CM;
+export const TorsoHeight = 3 * CM;
+export const TorsoTopWidth = 3 * CM;
+export const TorsoBottomWidth = 2.2 * CM;
+export const PanelDepth = 1 * CM;
 
-export const ShoulderHalfWidth = 0.24;
-export const ShoulderY = 1.20;
+export const ThighLength = 3 * CM;
+export const ShinLength = 3 * CM;
+export const ThighTopWidth = 3 * CM;
+export const ThighBottomWidth = 2.5 * CM;
+export const ShinTopWidth = 2.5 * CM;
+export const ShinBottomWidth = 2 * CM;
 
-// Руки длинные: размах 0.74 при плече на 1.22 — опущенная кисть висит
-// на высоте 0.48, то есть НИЖЕ таза, у самого колена.
-export const UpperArmLength = 0.36;
-export const ForeArmLength = 0.38;
+// Рука на чертеже одна полоса длиной 5; у нас звена два, делим пополам.
+export const UpperArmLength = 2.5 * CM;
+export const ForeArmLength = 2.5 * CM;
 export const ArmSpan = UpperArmLength + ForeArmLength;
+export const ArmTopWidth = 2 * CM;
+export const ArmMidWidth = 1.75 * CM;
+export const ArmBottomWidth = 1.5 * CM;
 
-// Ноги короткие: 0.58 при росте 1.72 — треть, тогда как у человека половина.
-export const ThighLength = 0.30;
-export const ShinLength = 0.28;
+export const FootY = 0.10;
+// Нога 0.72 при высоте бедра 0.76: почти прямая, с небольшим запасом
+// на сгиб. Из этого запаса и берётся вся длина шага.
+export const HipJointY = FootY + ThighLength + ShinLength - 0.10;
+export const HipsY = HipJointY + 0.08;
+export const ChestY = HipsY + TorsoHeight * 0.83;
+export const ShoulderY = ChestY + 0.06;
+export const NeckY = ShoulderY + 0.05;
+// Голова стоит на плечах: её центр на полголовы выше плюс зазор на шею.
+export const HeadY = ShoulderY + HeadSize * 0.5 + 0.07;
+export const HeadRadius = HeadSize * 0.5;
+
+export const HipHalfWidth = TorsoBottomWidth * 0.5;
+export const ShoulderHalfWidth = TorsoTopWidth * 0.5;
 
 /**
  * Высота, на которой держат рукоять. Дубина считается от хвата, а не наоборот:
  * хват — это место, куда должны дотянуться кисти, и он обязан быть достижимым.
  */
-export const GripY = 0.95;
+export const GripY = ShoulderY - ArmSpan * 0.55;
 export const ClubRestReach = 0.38;
 /** Насколько центр дубины вынесен от хвата вперёд по её оси. */
 export const ClubGripOffset = 0.30;
@@ -65,13 +84,6 @@ export const ClubHeadRadius = 0.17;
 export const ClubLength = 0.80;
 export const ClubRadius = 0.06;
 
-// Толщины оболочки. Конечности заметно толще человеческих: тонкие палки
-// в мягкое тело не сливаются, между ними остаётся перетяжка.
-export const LegRadius = 0.135;
-export const FootRadius = 0.115;
-export const ArmRadius = 0.105;
-export const TorsoRadius = 0.25;
-export const HipsRadius = 0.20;
 
 // Полюса IK: куда выгибается сустав. Локоть уходит ВНИЗ и чуть наружу,
 // колено вперёд. Раньше наружу было столько же, сколько вниз, и в стойке

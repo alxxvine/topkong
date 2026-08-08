@@ -92,48 +92,62 @@ export class Fighter {
     const wood = mat(new THREE.Color(0x5c3d21), 0.85);
     const metal = mat(new THREE.Color(0x9ea3ad), 0.32, 0.75);
 
-    // Тело — картонная кукла: плоские трапеции на каждую кость.
+    // Тело — картонная кукла: плоские трапеции на каждую кость, все размеры
+    // прямо из выкройки (см. fighterRig, константы через CM).
     //
-    // Ни бесшовной оболочки, ни скиннинга здесь больше нет и не нужно.
-    // У картонной куклы стык на сгибе — не изъян, а как раз то, из чего
-    // она сделана, поэтому панель просто крепится к своей кости.
-    //
-    // Каждая панель — четырёхгранный «цилиндр»: он и есть коробка
-    // с разной шириной вверху и внизу, то есть трапеция в профиль.
-    // Сплюснутая по глубине, чтобы читался лист картона, а не брусок.
+    // Ни бесшовной оболочки, ни скиннинга здесь нет и не нужно. У картонной
+    // куклы стык на сгибе — не изъян, а то, из чего она сделана.
+    const D = Rig.PanelDepth;
+
+    // Торс на чертеже один кусок высотой 3, но кость у нас две: таз и грудь.
+    // Делим его по высоте, ширины на стыке совпадают, поэтому шва не видно.
+    const waist = (Rig.TorsoBottomWidth + Rig.TorsoTopWidth) * 0.5;
     this.bones.hips = this.bone('hips');
-    panel(this.bones.hips, 0.30, 0.30, 0.26, 0.20, dark);
+    panel(this.bones.hips, Rig.TorsoHeight * 0.55,
+      Rig.TorsoBottomWidth, waist, D * 1.9, card,
+      new THREE.Vector3(0, Rig.TorsoHeight * 0.12, 0));
 
     this.bones.chest = this.bone('chest');
-    panel(this.bones.chest, 0.40, 0.28, 0.46, 0.22, card,
+    panel(this.bones.chest, Rig.TorsoHeight * 0.55,
+      waist, Rig.TorsoTopWidth, D * 1.9, card,
       new THREE.Vector3(0, (Rig.ShoulderY - Rig.ChestY) * 0.5, 0));
 
+    // Голова — куб пять на пять с лицом на передней грани. Никакой морды:
+    // просто лист картона, на котором нарисованы глаза.
     this.bones.head = this.bone('head');
-    box(this.bones.head, 0.52, 0.52, 0.34, null, card);
-    // Лицо: два глаза на переднюю грань. Морды нет — просто лист картона,
-    // на котором нарисованы глаза.
+    box(this.bones.head, Rig.HeadSize, Rig.HeadSize, Rig.HeadSize * 0.86, null, card);
     for (const side of [-1, 1]) {
-      const eye = box(this.bones.head, 0.085, 0.125, 0.02,
-        new THREE.Vector3(side * 0.115, 0.035, 0.172), ink);
-      eye.rotation.z = side * 0.12;
+      const eye = box(this.bones.head, Rig.HeadSize * 0.15, Rig.HeadSize * 0.22, 0.02,
+        new THREE.Vector3(side * Rig.HeadSize * 0.21, Rig.HeadSize * 0.06,
+          Rig.HeadSize * 0.435), ink);
+      eye.rotation.z = side * 0.1;
     }
 
-    // Руки длинные, ноги короткие — как на чертеже. Панели сужаются
-    // к дальнему концу: у картонной куклы это и создаёт силуэт.
-    this.bones.legLUpper = this.limbPanel('legLUpper', Rig.ThighLength, 0.22, 0.17, 0.10);
-    this.bones.legLLower = this.limbPanel('legLLower', Rig.ShinLength, 0.17, 0.13, 0.10);
-    this.bones.legRUpper = this.limbPanel('legRUpper', Rig.ThighLength, 0.22, 0.17, 0.10);
-    this.bones.legRLower = this.limbPanel('legRLower', Rig.ShinLength, 0.17, 0.13, 0.10);
+    this.bones.legLUpper = this.limbPanel('legLUpper', Rig.ThighLength,
+      Rig.ThighTopWidth, Rig.ThighBottomWidth, D * 1.3);
+    this.bones.legLLower = this.limbPanel('legLLower', Rig.ShinLength,
+      Rig.ShinTopWidth, Rig.ShinBottomWidth, D * 1.3);
+    this.bones.legRUpper = this.limbPanel('legRUpper', Rig.ThighLength,
+      Rig.ThighTopWidth, Rig.ThighBottomWidth, D * 1.3);
+    this.bones.legRLower = this.limbPanel('legRLower', Rig.ShinLength,
+      Rig.ShinTopWidth, Rig.ShinBottomWidth, D * 1.3);
 
-    this.bones.footL = this.bone('footL');
-    box(this.bones.footL, 0.16, 0.06, 0.22, new THREE.Vector3(0, -0.03, 0.05), dark);
-    this.bones.footR = this.bone('footR');
-    box(this.bones.footR, 0.16, 0.06, 0.22, new THREE.Vector3(0, -0.03, 0.05), dark);
+    // Стопы на выкройке отдельной деталью не идут — нога кончается срезом.
+    // Даём короткий носок, иначе боец стоит на рёбрах панелей.
+    for (const name of ['footL', 'footR']) {
+      this.bones[name] = this.bone(name);
+      box(this.bones[name], Rig.ShinBottomWidth, D * 0.6, Rig.ShinBottomWidth * 1.2,
+        new THREE.Vector3(0, -0.025, Rig.ShinBottomWidth * 0.25), dark);
+    }
 
-    this.bones.armRUpper = this.limbPanel('armRUpper', Rig.UpperArmLength, 0.16, 0.12, 0.08);
-    this.bones.armRFore = this.limbPanel('armRFore', Rig.ForeArmLength, 0.12, 0.09, 0.08);
-    this.bones.armLUpper = this.limbPanel('armLUpper', Rig.UpperArmLength, 0.16, 0.12, 0.08);
-    this.bones.armLFore = this.limbPanel('armLFore', Rig.ForeArmLength, 0.12, 0.09, 0.08);
+    this.bones.armRUpper = this.limbPanel('armRUpper', Rig.UpperArmLength,
+      Rig.ArmTopWidth, Rig.ArmMidWidth, D);
+    this.bones.armRFore = this.limbPanel('armRFore', Rig.ForeArmLength,
+      Rig.ArmMidWidth, Rig.ArmBottomWidth, D);
+    this.bones.armLUpper = this.limbPanel('armLUpper', Rig.UpperArmLength,
+      Rig.ArmTopWidth, Rig.ArmMidWidth, D);
+    this.bones.armLFore = this.limbPanel('armLFore', Rig.ForeArmLength,
+      Rig.ArmMidWidth, Rig.ArmBottomWidth, D);
 
     this.bones.club = this.bone('club');
     capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
