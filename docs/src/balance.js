@@ -109,6 +109,18 @@ export class Balance {
     const f = this.f;
     const body = f.body;
 
+    // Сбитому равновесие не помогает: держать его нечем, мышц нет.
+    // Пока эта проверка отсутствовала, доводка корпусом толкала лежащее
+    // тело в полную силу и уносила его с места падения.
+    if (body.strength < T.controlStrength) {
+      this.hasPrev = false;
+      this.outside = 0;
+      this.needStep = false;
+      this.pushX = 0;
+      this.pushZ = 0;
+      return;
+    }
+
     this.centerOfMass(_com);
     if (this.hasPrev) {
       // Скорость центра тяжести СГЛАЖИВАЕТСЯ, и без этого баланс не работает.
