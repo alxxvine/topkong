@@ -3,6 +3,7 @@ import { tuning as T } from 'tk/tuning.js';
 import { clamp01, inverseLerp, lerp, RAD } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
 import { PoseDriver } from 'tk/poseDriver.js';
+import { Gait } from 'tk/gait.js';
 import { SwingAction } from 'tk/swingAction.js';
 import { Locomotion } from 'tk/locomotion.js';
 import { Body, P } from 'tk/body.js';
@@ -56,6 +57,9 @@ export class Fighter {
     this.poseDriver = new PoseDriver(this);
     this.locomotion = new Locomotion(this, arena);
     this.body = new Body(arena);
+    // Походка держит мировые опоры стоп. Создаётся после тела не случайно:
+    // на спавне она втыкает стопы туда, где тело уже стоит.
+    this.gait = new Gait(this, arena);
 
     this.state = BodyState.Standing;
     this.alive = true;
@@ -87,8 +91,19 @@ export class Fighter {
     const wood = mat(new THREE.Color(0x5c3d21), 0.85);
     const metal = mat(new THREE.Color(0x9ea3ad), 0.32, 0.75);
 
+    // Тело собирается ЦЕЛЬНЫМ: в каждом суставе стоит шар, перекрывающий
+    // стык звеньев. Без него капсулы сходятся торцами, на сгибе между ними
+    // раскрывается щель, и фигура читается набором отдельных деталей,
+    // а не одним существом.
     this.bones.hips = this.bone('hips');
-    capsule(this.bones.hips, 0.19, 0.46, dark);
+    capsule(this.bones.hips, 0.205, 0.50, dark);
+    // Шары тазобедренных суставов — из них растут ноги.
+    for (const side of [1, -1]) {
+      sphere(this.bones.hips, 0.145, dark,
+        new THREE.Vector3(side * Rig.HipHalfWidth, Rig.HipJointY - Rig.HipsY, 0));
+    }
+    // Живот: соединяет таз с грудью, иначе между ними перехват.
+    sphere(this.bones.hips, 0.185, skin, new THREE.Vector3(0, 0.20, 0));
 
     this.bones.chest = this.bone('chest');
     capsule(this.bones.chest, 0.235, 0.50, skin);
@@ -109,9 +124,11 @@ export class Fighter {
     // Каждая конечность — две кости постоянной длины. Длина берётся из рига,
     // а не из текущей позы: IK гарантирует, что звено всегда ровно такое,
     // поэтому капсулу не нужно ни тянуть, ни пересобирать.
-    this.bones.legLUpper = this.segment('legLUpper', Rig.ThighLength, Rig.LegRadius, skin);
+    // Локальная +Y звена смотрит на дальний сустав, поэтому шар колена
+    // и локтя ставится на +половину длины.
+    this.bones.legLUpper = this.segment('legLUpper', Rig.ThighLength, Rig.LegRadius, skin, Rig.LegRadius);
     this.bones.legLLower = this.segment('legLLower', Rig.ShinLength, Rig.FootRadius, skin);
-    this.bones.legRUpper = this.segment('legRUpper', Rig.ThighLength, Rig.LegRadius, skin);
+    this.bones.legRUpper = this.segment('legRUpper', Rig.ThighLength, Rig.LegRadius, skin, Rig.LegRadius);
     this.bones.legRLower = this.segment('legRLower', Rig.ShinLength, Rig.FootRadius, skin);
 
     // Стопы — отдельные кости, и это не педантизм. Пока ботинок висел
@@ -121,13 +138,13 @@ export class Fighter {
     this.bones.footR = this.foot(dark);
 
     // Плечо чуть толще предплечья — по этому и читается, где локоть.
-    this.bones.armRUpper = this.segment('armRUpper', Rig.UpperArmLength, Rig.ArmRadius, skin);
-    this.bones.armRFore = this.segment('armRFore', Rig.ForeArmLength, Rig.ArmRadius * 0.85, skin);
-    this.bones.armLUpper = this.segment('armLUpper', Rig.UpperArmLength, Rig.ArmRadius, skin);
-    this.bones.armLFore = this.segment('armLFore', Rig.ForeArmLength, Rig.ArmRadius * 0.85, skin);
+    this.bones.armRUpper = this.segment('armRUpper', Rig.UpperArmLength, Rig.ArmRadius, skin, Rig.ArmRadius);
+    this.bones.armRFore = this.segment('armRFore', Rig.ForeArmLength, Rig.ArmRadius * 0.9, skin);
+    this.bones.armLUpper = this.segment('armLUpper', Rig.UpperArmLength, Rig.ArmRadius, skin, Rig.ArmRadius);
+    this.bones.armLFore = this.segment('armLFore', Rig.ForeArmLength, Rig.ArmRadius * 0.9, skin);
     // Кисти: без них предплечье обрывается в пустоту прямо на рукояти.
-    sphere(this.bones.armRFore, Rig.ArmRadius, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
-    sphere(this.bones.armLFore, Rig.ArmRadius, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
+    sphere(this.bones.armRFore, Rig.ArmRadius * 1.15, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
+    sphere(this.bones.armLFore, Rig.ArmRadius * 1.15, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
 
     this.bones.club = this.bone('club');
     capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
@@ -151,17 +168,32 @@ export class Fighter {
     return g;
   }
 
-  /** Звено цепи: капсула фиксированной длины, вытянутая по локальной оси Y. */
-  segment(name, length, radius, material) {
+  /**
+   * Звено цепи: капсула фиксированной длины, вытянутая по локальной оси Y.
+   *
+   * jointRadius — шар на дальнем конце, там же, где следующий сустав.
+   * Он не украшение: без него две капсулы сходятся торцами, и на согнутом
+   * колене или локте между ними раскрывается щель.
+   */
+  segment(name, length, radius, material, jointRadius = 0) {
     const g = this.bone(name);
     capsule(g, radius, Math.max(length, radius * 2), material);
+    if (jointRadius > 0) {
+      sphere(g, jointRadius * 1.12, material, new THREE.Vector3(0, length * 0.5, 0));
+    }
     return g;
   }
 
-  /** Ботинок: коробка от щиколотки вперёд и вниз, до самого настила. */
+  /**
+   * Стопа. Скруглённая, а не коробкой: жёсткий ботинок торчал из мягкого
+   * тела чужой деталью и ломал цельность сильнее всего остального.
+   */
   foot(material) {
     const g = this.bone('foot');
-    box(g, 0.16, 0.09, 0.26, new THREE.Vector3(0, -0.048, 0.05), material);
+    const shoe = capsule(g, 0.085, 0.25, material);
+    // Капсула лежит вдоль взгляда, а не стоит вертикально.
+    shoe.rotation.x = Math.PI / 2;
+    shoe.position.set(0, -0.02, 0.045);
     return g;
   }
 
@@ -221,6 +253,7 @@ export class Fighter {
     this.poseDriver.reset();
     this.locomotion.reset();
     this.body.reset(x, z, yaw);
+    this.gait.reset(x, z, yaw);
 
     // Группа бойца стоит в нуле навсегда: кости пишутся мировыми координатами
     // прямо из частиц. Именно переключение группы между двумя системами

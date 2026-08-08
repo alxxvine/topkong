@@ -124,10 +124,12 @@ export function makePose() {
  * @param {number} clubHeight смещение хвата по высоте; отрицательное — руки опущены
  * @param {number} clubPitchDeg наклон дубины к земле: 0 — горизонтально, 90 — отвесно вниз
  * @param {number} twistDeg  разворот плечевого пояса относительно таза
+ * @param {THREE.Vector3} footL,footR готовые стопы в системе тела; null —
+ *        посчитать формулой (только для опорной стойки)
  */
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
                             lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0,
-                            twistDeg = 0) {
+                            twistDeg = 0, footL = null, footR = null) {
   // Подсед опускает ВЕСЬ верх тела разом. Опустить один таз нельзя:
   // расстояния таз↔грудь↔голова держат связи, и попытка просадить
   // что-то одно кончится дракой позы с решателем.
@@ -151,13 +153,22 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   pose.hipRight.set(HipHalfWidth + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
   pose.hipLeft.set(-HipHalfWidth + sway * 0.02, HipJointY + bob - crouch, lean * 0.02);
 
-  // Ноги в противофазе: одна выносится вперёд и приподнимается, другая позади.
-  // Стойка шире таза: сведённые стопы читаются как «по стойке смирно».
+  // Стопы приходят готовыми: их считает Gait, и считает В МИРЕ, потому что
+  // опора обязана стоять на месте, пока тело идёт над ней. Здесь они уже
+  // переведены в систему тела — формуле от фазы шага их отдавать нельзя,
+  // иначе опора снова поедет за тазом и шаг опять станет косметикой.
+  //
+  // Формула остаётся только для опорной стойки, из которой собирается
+  // скелет: там шага нет вовсе.
   const phaseL = stepPhase * Math.PI * 2;
-  const phaseR = phaseL + Math.PI;
-  const half = HipHalfWidth + T.stanceWidth;
-  foot(pose.footLeft, -half, phaseL, stride, lift);
-  foot(pose.footRight, half, phaseR, stride, lift);
+  if (footL) {
+    pose.footLeft.copy(footL);
+    pose.footRight.copy(footR);
+  } else {
+    const half = HipHalfWidth + T.stanceWidth;
+    foot(pose.footLeft, -half, phaseL, stride, lift);
+    foot(pose.footRight, half, phaseL + Math.PI, stride, lift);
+  }
 
   const a = clubAngleDeg * DEG;
   const flatX = Math.sin(a);

@@ -1,0 +1,252 @@
+import * as THREE from 'three';
+import { tuning as T } from 'tk/tuning.js';
+import { clamp, clamp01, lerp } from 'tk/mathx.js';
+import * as Rig from 'tk/fighterRig.js';
+
+// Шаг с настоящей опорой.
+//
+// До этого стопы жили в системе таза: их цель считалась формулой от фазы
+// шага и вместе со всем телом уезжала за тазом. Значит опоры не было вообще —
+// таз ехал, стопы волочились следом, а цикл шага был чистой косметикой
+// поверх скольжения. Отсюда и ощущение, что бойца тянет, а не что он идёт.
+//
+// Здесь наоборот. У каждой стопы есть МИРОВАЯ точка опоры, и пока стопа
+// стоит, эта точка не двигается вообще: тело проходит над ней. Когда опора
+// уезжает слишком далеко от того места, где ей полагается быть, стопа
+// отрывается, переносится по дуге вперёд и втыкается в новую точку.
+//
+// Порог по расстоянию, а не таймер по расписанию, выбран намеренно: одним
+// правилом закрываются все случаи разом. Стоит на месте — опоры на месте,
+// шагов нет. Пошёл — шаги пошли сами, тем чаще, чем быстрее. Крутится
+// на месте — опора уезжает вбок по дуге, и боец переступает. Толкнули —
+// делает восстанавливающий шаг. Ничего из этого не пришлось описывать
+// отдельно.
+
+const _v = new THREE.Vector3();
+const _t = new THREE.Vector3();
+
+/** Плавный старт и плавная посадка: линейный перенос читается как подёргивание. */
+const ease = (t) => t * t * (3 - 2 * t);
+
+export class Gait {
+  constructor(fighter, arena) {
+    this.f = fighter;
+    this.arena = arena;
+
+    // side: −1 левая, +1 правая.
+    this.feet = [
+      { side: -1, plant: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3(), t: 1, swinging: false },
+      { side: 1, plant: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3(), t: 1, swinging: false },
+    ];
+    /** Мировые цели стоп — то, ради чего всё считается. */
+    this.world = [new THREE.Vector3(), new THREE.Vector3()];
+
+    /**
+     * Фаза шага 0..1. В отличие от прежней она не тикает по таймеру,
+     * а двигается ТОЛЬКО когда нога действительно в воздухе. Поэтому
+     * подскок корпуса и мах рук теперь привязаны к настоящим шагам,
+     * а не идут своим чередом поверх скольжения.
+     */
+    this.phase = 0;
+    /** Насколько высоко сейчас поднята маховая стопа, метры. Для отладки. */
+    this.lift = 0;
+    this.steps = 0;
+    this.sinceStep = 99;
+    /** Стопы, приземлившиеся на этом кадре: им гасят скорость. */
+    this.landed = [false, false];
+  }
+
+  /** Воткнуть обе стопы под бойца. Вызывается на спавне. */
+  reset(x, z, yaw) {
+    for (const foot of this.feet) {
+      this.ideal(foot, x, z, yaw, _v);
+      foot.plant.copy(_v);
+      foot.from.copy(_v);
+      foot.to.copy(_v);
+      foot.t = 1;
+      foot.swinging = false;
+    }
+    this.world[0].copy(this.feet[0].plant);
+    this.world[1].copy(this.feet[1].plant);
+    this.phase = 0;
+    this.steps = 0;
+    this.sinceStep = 99;
+  }
+
+  /**
+   * Куда этой стопе полагается стоять прямо сейчас.
+   *
+   * Смещение вбок разворачивается вместе с бойцом — из этого и берутся
+   * переступания на развороте. Вперёд добавляется предсказание: пока идёт
+   * перенос, тело уедет, и втыкать стопу надо туда, где тело окажется,
+   * а не туда, где оно было.
+   */
+  ideal(foot, x, z, yaw, out) {
+    const half = Rig.HipHalfWidth + T.stanceWidth;
+    const sin = Math.sin(yaw);
+    const cos = Math.cos(yaw);
+    const sx = foot.side * half;
+    return out.set(x + sx * cos, Rig.FootY, z - sx * sin);
+  }
+
+  /**
+   * Куда втыкать стопу, когда она отрывается: вперёд по ходу от того места,
+   * где ей полагается стоять.
+   *
+   * Вынос ОБЯЗАН быть ограничен радиусом досягаемости, и это не перестраховка.
+   * Первая версия просто умножала скорость на время шага и на полном ходу
+   * уносила опору на 64 сантиметра вперёд, тогда как нога по горизонтали
+   * достаёт лишь на сорок с небольшим: бедро на высоте 0.81, длина ноги 0.82.
+   * IK честно подтягивала недостижимую цель обратно к границе, стопа
+   * уезжала вместе с телом — и опоры снова не было. Замерено: 87%
+   * проскальзывания, ровно как без всякой походки.
+   */
+  foothold(foot, ideal, x, z, yaw, vx, vz, out) {
+    const sin = Math.sin(yaw);
+    const cos = Math.cos(yaw);
+
+    // Куда хочется встать — от таза, в системе бойца: forward вдоль взгляда,
+    // side вправо. Считать в мировых осях нельзя: пределы у ноги разные
+    // вперёд и вбок, а в мире они перемешаны разворотом.
+    let wantX = ideal.x + vx * T.stepTime * T.stepLead - x;
+    let wantZ = ideal.z + vz * T.stepTime * T.stepLead - z;
+    let side = wantX * cos - wantZ * sin;
+    let forward = wantX * sin + wantZ * cos;
+
+    forward = clamp(forward, -T.stepReach, T.stepReach);
+
+    // Вбок пределы свои и несимметричные. Наружу нога уходит недалеко:
+    // при боковом ходе размах опоры доходил до 108 см, то есть по 54 см
+    // от таза, боец раскорячивался и IK снова тащила стопу. Внутрь стопа
+    // не заходит за среднюю линию вовсе — иначе ноги перекрещиваются.
+    const home = foot.side * (Rig.HipHalfWidth + T.stanceWidth);
+    side = foot.side > 0
+      ? clamp(side, T.stanceCross, home + T.stepSide)
+      : clamp(side, home - T.stepSide, -T.stanceCross);
+
+    out.set(
+      x + side * cos + forward * sin,
+      Rig.FootY,
+      z - side * sin + forward * cos
+    );
+
+    // За кромкой опоры нет. Втыкать туда стопу — значит поставить бойца
+    // на воздух: шаг укорачивается, пока опора не вернётся на настил.
+    for (let i = 0; i < 4 && !this.arena.isOverDeck(out.x, out.z, 0.12); i++) {
+      side *= 0.5;
+      forward *= 0.5;
+      out.set(
+        x + side * cos + forward * sin,
+        Rig.FootY,
+        z - side * sin + forward * cos
+      );
+    }
+    return out;
+  }
+
+  /**
+   * @param {number} vx,vz  скорость тела — по ней предсказывается опора
+   * @param {number} speed  модуль горизонтальной скорости
+   */
+  tick(dt, x, z, yaw, vx, vz, speed, grounded) {
+    this.sinceStep += dt;
+    this.landed[0] = false;
+    this.landed[1] = false;
+    const norm = clamp01(speed / Math.max(0.1, T.maxRunSpeed));
+
+    // Перенос тем быстрее, чем быстрее идёт боец: иначе на бегу нога
+    // не успевает вернуться под тело и он начинает загребать.
+    const stepTime = T.stepTime * lerp(1.5, 0.65, norm);
+    const swinging = this.feet.find((f) => f.swinging);
+
+    for (let i = 0; i < 2; i++) {
+      const foot = this.feet[i];
+      this.ideal(foot, x, z, yaw, _v);
+
+      if (foot.swinging) {
+        foot.t = Math.min(1, foot.t + dt / Math.max(0.02, stepTime));
+        // Цель переноса подтягивается на лету: пока нога в воздухе, тело
+        // успевает и ускориться, и повернуть. Пересчитывается через тот же
+        // ограничитель, иначе на разгоне цель уползёт за предел досягаемости.
+        this.foothold(foot, _v, x, z, yaw, vx, vz, _t);
+        foot.to.lerp(_t, clamp01(8 * dt));
+
+        const k = ease(foot.t);
+        const up = Math.sin(Math.PI * foot.t) * T.stepLift;
+        this.world[i].set(
+          lerp(foot.from.x, foot.to.x, k),
+          Rig.FootY + up,
+          lerp(foot.from.z, foot.to.z, k)
+        );
+        this.lift = up;
+
+        // Фаза идёт вперёд ровно на половину цикла за шаг: левая нога
+        // ведёт первую половину, правая вторую.
+        this.phase = (foot.side < 0 ? 0 : 0.5) + foot.t * 0.5;
+
+        if (foot.t >= 1) {
+          foot.swinging = false;
+          foot.plant.copy(foot.to);
+          this.world[i].copy(foot.plant);
+          this.landed[i] = true;
+        }
+        continue;
+      }
+
+      // Стопа стоит: её мировая цель не меняется вообще. Это и есть опора.
+      this.world[i].copy(foot.plant);
+      if (!grounded) continue;
+
+      const dx = foot.plant.x - _v.x;
+      const dz = foot.plant.z - _v.z;
+      const away = Math.hypot(dx, dz);
+
+      // Отставание считается ВДОЛЬ ХОДА, со знаком, а не просто расстоянием.
+      // Это не тонкость: стопа втыкается на треть метра ВПЕРЁД, и для
+      // ненаправленного порога она в тот же миг оказывается «далеко» —
+      // нога просилась шагать сразу после приземления. Замерено: шесть
+      // шагов в секунду и шаг длиной в треть метра на любой скорости,
+      // хоть на полутора метрах в секунду, хоть на трёх с половиной.
+      //
+      // Позади — шагаем. Впереди — стоим и ждём, пока тело подойдёт.
+      let behind = away;
+      if (speed > 0.25) {
+        const ix = vx / speed;
+        const iz = vz / speed;
+        behind = -(dx * ix + dz * iz);
+      }
+
+      // Опора вне досягаемости — отрываемся немедленно, не считаясь ни
+      // с очередью, ни с паузой. Иначе быстрый боец не успевает переставлять
+      // ноги: пока одна в воздухе, вторая уже вне предела, IK подтягивает
+      // её цель к границе и стопа едет юзом.
+      const stranded = away > T.stepReach + T.stepTrigger;
+
+      if (!stranded && (swinging || this.sinceStep < T.stepGap)) continue;
+
+      // Порог у правой ноги чуть больше: иначе обе, оказавшись симметрично,
+      // спорят за право шагнуть и боец мелко семенит на месте.
+      const bias = i === 0 ? 1 : 1.08;
+      if (!stranded && behind < T.stepTrigger * bias) continue;
+
+      foot.swinging = true;
+      foot.t = 0;
+      foot.from.copy(foot.plant);
+      this.foothold(foot, _v, x, z, yaw, vx, vz, foot.to);
+      this.sinceStep = 0;
+      this.steps++;
+    }
+
+    if (!this.feet[0].swinging && !this.feet[1].swinging) this.lift = 0;
+  }
+
+  /** Насколько далеко опора уехала от положенного — по ней видно, что пора шагать. */
+  strain(x, z, yaw) {
+    let worst = 0;
+    for (const foot of this.feet) {
+      this.ideal(foot, x, z, yaw, _v);
+      worst = Math.max(worst, Math.hypot(foot.plant.x - _v.x, foot.plant.z - _v.z));
+    }
+    return worst;
+  }
+}

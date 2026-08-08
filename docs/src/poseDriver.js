@@ -1,6 +1,13 @@
+import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
 import { clamp, clamp01, lerp, moveTowards, deltaAngle, noiseSigned, inverseLerp, RAD, DEG } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
+import { P } from 'tk/body.js';
+
+// Стопы приходят из походки в мировых координатах, а поза считается
+// в локальных: здесь они и переводятся.
+const _footL = new THREE.Vector3();
+const _footR = new THREE.Vector3();
 
 // Считает ЦЕЛЕВУЮ позу бойца — ту, которую тело пытается принять.
 //
@@ -49,44 +56,63 @@ export class PoseDriver {
    */
   tick(dt, planarSpeed, grounded) {
     const swing = this.f.swing;
+    const body = this.f.body;
+    const gait = this.f.gait;
 
-    // Разворот считается движением наравне с ходьбой. Иначе на месте
-    // цикл шага стоит, стопы едут юзом вокруг оси, и боец проворачивается
-    // как статуя на поворотном круге — замерено, по 27 см проскальзывания
-    // на разворот в 180 градусов.
-    const yaw = this.f.yaw * RAD;
-    this.yawRate = deltaAngle(this.lastYaw, yaw) / Math.max(1e-5, dt);
-    this.lastYaw = yaw;
-    const pivotSpeed = Math.abs(this.yawRate) * DEG * Rig.PivotRadius;
+    // yaw бойца хранится в радианах; RAD переводит ИЗ них, поэтому
+    // yawDeg — градусы, а yawRate — градусы в секунду.
+    const yawDeg = this.f.yaw * RAD;
+    this.yawRate = deltaAngle(this.lastYaw, yawDeg) / Math.max(1e-5, dt);
+    this.lastYaw = yawDeg;
+    const yaw = this.f.yaw;
 
-    // Длина шага — только от перемещения: на месте боец переступает,
-    // а не вышагивает вперёд.
     const strideNorm = clamp01(planarSpeed / Math.max(0.1, T.maxRunSpeed));
-    const normalized = clamp01((planarSpeed + pivotSpeed) / Math.max(0.1, T.maxRunSpeed));
 
-    const targetStride = strideNorm * T.stepLength;
-    this.stride = moveTowards(this.stride, grounded ? targetStride : 0, dt * 3);
-    this.lift = moveTowards(this.lift, grounded ? normalized * T.stepLift : 0, dt * 0.6);
+    // Походка живёт в мире и решает сама, когда отрывать стопу. Никаких
+    // подмешиваний скорости разворота в цикл шага здесь больше нет:
+    // разворот сам уводит опору вбок по дуге, и порог по расстоянию
+    // срабатывает без единой отдельной строчки про повороты.
+    const hips = body.pos[P.Hips];
+    const prev = body.prev[P.Hips];
+    const vx = (hips.x - prev.x) / Math.max(1e-5, dt);
+    const vz = (hips.z - prev.z) / Math.max(1e-5, dt);
+    gait.tick(dt, hips.x, hips.z, yaw, vx, vz, planarSpeed, grounded);
 
-    if (normalized > 0.05 && grounded) {
-      this.stepPhase += dt * T.stepRate * normalized;
-      this.stepPhase -= Math.floor(this.stepPhase);
-    } else {
-      this.stepPhase = moveTowards(this.stepPhase, Math.round(this.stepPhase), dt * 2);
-    }
+    // Приземлившаяся стопа вцепляется в настил: гасим ей скорость, иначе
+    // она приезжает на опору с полной скоростью переноса и проскакивает
+    // дальше по инерции.
+    if (gait.landed[0]) body.grip(P.FootL);
+    if (gait.landed[1]) body.grip(P.FootR);
 
-    // Подскок вдвое чаще шага: две ноги — два толчка за цикл.
-    const targetBob = grounded
-      ? Math.abs(Math.sin(this.stepPhase * Math.PI * 2)) * T.stepBob * normalized
-      : 0;
-    this.bob = lerp(this.bob, targetBob, clamp01(12 * dt));
+    // Стоящая стопа упирается в настил: решателю она тяжёлая, и связь
+    // колена гнёт колено, а не тащит стопу.
+    body.footAnchored[0] = grounded && !gait.feet[0].swinging;
+    body.footAnchored[1] = grounded && !gait.feet[1].swinging;
 
-    this.updateWobble(dt, planarSpeed, normalized);
+    // Тот же угол, которым setTargets раскладывает позу в мир, иначе
+    // стопа воткнётся не туда, куда её поставила походка.
+    body.toLocal(gait.world[0], yaw, _footL);
+    body.toLocal(gait.world[1], yaw, _footR);
+
+    // Фаза шага теперь приходит от походки и двигается ТОЛЬКО пока нога
+    // в воздухе. Раньше она тикала по таймеру своим чередом, поэтому
+    // подскок корпуса и мах рук шли поверх скольжения и с настоящими
+    // шагами не совпадали ничем.
+    this.stepPhase = gait.phase;
+    this.stride = strideNorm * T.stepLength;
+    this.lift = gait.lift;
+
+    // Подскок привязан к переносу: корпус проседает в момент, когда вес
+    // переходит с ноги на ногу, и подбирается на середине шага.
+    const targetBob = grounded ? gait.lift * T.stepBob / Math.max(0.01, T.stepLift) : 0;
+    this.bob = lerp(this.bob, targetBob, clamp01(14 * dt));
+
+    this.updateWobble(dt, planarSpeed, strideNorm);
     this.updateTwist(dt, strideNorm, grounded);
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height, swing.pitch, this.lift, this.twist);
+      swing.height, swing.pitch, this.lift, this.twist, _footL, _footR);
 
     this.solveJoints();
     return this.pose;

@@ -1,5 +1,5 @@
 import { tuning as T } from 'tk/tuning.js';
-import { DEG, RAD, deltaAngle, moveTowards } from 'tk/mathx.js';
+import { DEG, RAD, deltaAngle, moveTowards, lerp } from 'tk/mathx.js';
 import { P } from 'tk/body.js';
 
 // Движение и разворот. Теперь это намерение, а не результат.
@@ -66,8 +66,24 @@ export class Locomotion {
     if (f.swing.striking) scale = T.swingMoveLock;
     else if (f.swing.held) scale = T.chargeMoveSlow;
 
-    const speed = T.maxRunSpeed * scale;
+    // Вбок и назад боец идёт медленнее, и это не условность жанра, а прямое
+    // следствие устройства ног. Приставным шагом стопа уходит вбок недалеко:
+    // наружу мешает досягаемость, внутрь — вторая нога. Замерено, что на
+    // полной скорости вбок обе ноги хотят оторваться разом, одна ждёт
+    // очереди, и её опору успевает утащить на 97 см — вдвое дальше,
+    // чем нога вообще достаёт.
     const moving = wx !== 0 || wz !== 0;
+    let dirScale = 1;
+    if (moving) {
+      const sin = Math.sin(f.yaw);
+      const cos = Math.cos(f.yaw);
+      const along = (wx * sin + wz * cos) / Math.max(1e-6, Math.hypot(wx, wz));
+      dirScale = along >= 0
+        ? lerp(T.strafeSpeed, 1, along)
+        : lerp(T.strafeSpeed, T.backSpeed, -along);
+    }
+
+    const speed = T.maxRunSpeed * scale * dirScale;
     // В воздухе управление слабое: сбитый должен долетать до края,
     // а не выруливать обратно на арену.
     const rate = this.grounded
