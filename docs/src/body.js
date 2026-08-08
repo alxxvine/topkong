@@ -122,6 +122,16 @@ const LINKS = [
   [P.Chest, P.HipL], [P.Chest, P.HipR],
   [P.HipL, P.KneeL], [P.KneeL, P.FootL],
   [P.HipR, P.KneeR], [P.KneeR, P.FootR],
+  // Цельная кость: связь через весь размах конечности. Вместе с двумя
+  // половинками она заставляет звенья лежать на одной прямой — сумма
+  // половинок равна целому, и треугольник вырождается в отрезок.
+  //
+  // Ни колена, ни локтя у картонной куклы нет вовсе: рука и нога это
+  // по одной трапеции. Отсюда даром получается то, чего мы добивались
+  // отдельно: жёсткая нога не гнётся, и при выносе стопы вперёд таз
+  // обязан просесть — тело само раскачивается на каждом шаге.
+  [P.HipL, P.FootL], [P.HipR, P.FootR],
+  [P.ShoulderR, P.HandR], [P.ShoulderL, P.HandL],
   [P.Chest, P.ShoulderL], [P.Chest, P.ShoulderR], [P.ShoulderL, P.ShoulderR],
   [P.Head, P.ShoulderL], [P.Head, P.ShoulderR],
   [P.ShoulderL, P.HipR], [P.ShoulderR, P.HipL],         // X-раскос корпуса
@@ -645,14 +655,13 @@ export class Body {
     bones.head.position.copy(p[P.Head]);
     bones.head.quaternion.copy(_rot);
 
-    limbTo(bones.legLUpper, p[P.HipL], p[P.KneeL]);
-    limbTo(bones.legLLower, p[P.KneeL], p[P.FootL]);
-    limbTo(bones.legRUpper, p[P.HipR], p[P.KneeR]);
-    limbTo(bones.legRLower, p[P.KneeR], p[P.FootR]);
-    limbTo(bones.armRUpper, p[P.ShoulderR], p[P.ElbowR]);
-    limbTo(bones.armRFore, p[P.ElbowR], p[P.HandR]);
-    limbTo(bones.armLUpper, p[P.ShoulderL], p[P.ElbowL]);
-    limbTo(bones.armLFore, p[P.ElbowL], p[P.HandL]);
+    // Панель одна на всю конечность: от сустава до конца. Средние частицы
+    // никуда не делись — они держат связи и принимают удары, — но своей
+    // панели у них нет, гнуться конечности негде.
+    limbTo(bones.legLUpper, p[P.HipL], p[P.FootL]);
+    limbTo(bones.legRUpper, p[P.HipR], p[P.FootR]);
+    limbTo(bones.armRUpper, p[P.ShoulderR], p[P.HandR]);
+    limbTo(bones.armLUpper, p[P.ShoulderL], p[P.HandL]);
 
     // Стопы держатся горизонтально и смотрят туда же, куда таз: ботинок,
     // кувыркающийся вокруг щиколотки, читается как поломка.

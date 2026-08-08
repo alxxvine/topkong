@@ -183,16 +183,15 @@ export class PoseDriver {
     // Корень руки — плечо из позы, а не постоянная точка рига: плечо теперь
     // ездит вместе со скрутом, и IK обязана считать от того места,
     // где оно оказалось.
-    Rig.solveTwoBone(pose.shoulderRight, pose.handRight,
-      Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(true),
-      pose.elbowRight, pose.handRight);
-    Rig.solveTwoBone(pose.shoulderLeft, pose.handLeft,
-      Rig.UpperArmLength, Rig.ForeArmLength, Rig.armPole(false),
-      pose.elbowLeft, pose.handLeft);
-    Rig.solveTwoBone(pose.hipLeft, pose.footLeft,
-      Rig.ThighLength, Rig.ShinLength, Rig.legPole(), pose.kneeLeft, pose.footLeft);
-    Rig.solveTwoBone(pose.hipRight, pose.footRight,
-      Rig.ThighLength, Rig.ShinLength, Rig.legPole(), pose.kneeRight, pose.footRight);
+    // Конечности цельные: сгибаться им негде, поэтому и досчитывать
+    // нечего — «сустав» просто лежит на середине отрезка. Цель конца при
+    // этом НЕ подтягивается к длине кости: пусть остаётся там, куда её
+    // поставила походка, а разницу разрешит жёсткая связь, приподняв
+    // или опустив таз. Из этого и берётся раскачка на шаге.
+    Rig.midJoint(pose.shoulderRight, pose.handRight, pose.elbowRight);
+    Rig.midJoint(pose.shoulderLeft, pose.handLeft, pose.elbowLeft);
+    Rig.midJoint(pose.hipLeft, pose.footLeft, pose.kneeLeft);
+    Rig.midJoint(pose.hipRight, pose.footRight, pose.kneeRight);
   }
 
   /**

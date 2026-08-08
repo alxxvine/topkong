@@ -307,6 +307,11 @@ export const PivotRadius = 0.40;
 export const armPole = (right) => (right ? ARM_POLE_RIGHT : ARM_POLE_LEFT);
 export const legPole = () => LEG_POLE;
 
+/** Середина отрезка: «сустав» цельной кости, которому негде гнуться. */
+export function midJoint(a, b, out) {
+  return out.copy(a).add(b).multiplyScalar(0.5);
+}
+
 /**
  * Двухзвенная IK: где встанет сустав, если цепь длиной l1+l2 тянется
  * от root к target.

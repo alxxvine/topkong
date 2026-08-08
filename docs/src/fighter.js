@@ -123,14 +123,16 @@ export class Fighter {
       eye.rotation.z = side * 0.1;
     }
 
-    this.bones.legLUpper = this.limbPanel('legLUpper', Rig.ThighLength,
-      Rig.ThighTopWidth, Rig.ThighBottomWidth, D * 1.3);
-    this.bones.legLLower = this.limbPanel('legLLower', Rig.ShinLength,
-      Rig.ShinTopWidth, Rig.ShinBottomWidth, D * 1.3);
-    this.bones.legRUpper = this.limbPanel('legRUpper', Rig.ThighLength,
-      Rig.ThighTopWidth, Rig.ThighBottomWidth, D * 1.3);
-    this.bones.legRLower = this.limbPanel('legRLower', Rig.ShinLength,
-      Rig.ShinTopWidth, Rig.ShinBottomWidth, D * 1.3);
+    // Конечность — ОДНА трапеция на всю длину, как на выкройке: ни колена,
+    // ни локтя у картонной куклы нет. Нижние кости остаются пустыми: они
+    // по-прежнему нужны физике и отрисовке стоп, но своей панели не имеют.
+    const legLen = Rig.ThighLength + Rig.ShinLength;
+    this.bones.legLUpper = this.limbPanel('legLUpper', legLen,
+      Rig.ThighTopWidth, Rig.ShinBottomWidth, D * 1.3);
+    this.bones.legLLower = this.bone('legLLower');
+    this.bones.legRUpper = this.limbPanel('legRUpper', legLen,
+      Rig.ThighTopWidth, Rig.ShinBottomWidth, D * 1.3);
+    this.bones.legRLower = this.bone('legRLower');
 
     // Стопы на выкройке отдельной деталью не идут — нога кончается срезом.
     // Даём короткий носок, иначе боец стоит на рёбрах панелей.
@@ -140,14 +142,12 @@ export class Fighter {
         new THREE.Vector3(0, -0.025, Rig.ShinBottomWidth * 0.25), dark);
     }
 
-    this.bones.armRUpper = this.limbPanel('armRUpper', Rig.UpperArmLength,
-      Rig.ArmTopWidth, Rig.ArmMidWidth, D);
-    this.bones.armRFore = this.limbPanel('armRFore', Rig.ForeArmLength,
-      Rig.ArmMidWidth, Rig.ArmBottomWidth, D);
-    this.bones.armLUpper = this.limbPanel('armLUpper', Rig.UpperArmLength,
-      Rig.ArmTopWidth, Rig.ArmMidWidth, D);
-    this.bones.armLFore = this.limbPanel('armLFore', Rig.ForeArmLength,
-      Rig.ArmMidWidth, Rig.ArmBottomWidth, D);
+    this.bones.armRUpper = this.limbPanel('armRUpper', Rig.ArmSpan,
+      Rig.ArmTopWidth, Rig.ArmBottomWidth, D);
+    this.bones.armRFore = this.bone('armRFore');
+    this.bones.armLUpper = this.limbPanel('armLUpper', Rig.ArmSpan,
+      Rig.ArmTopWidth, Rig.ArmBottomWidth, D);
+    this.bones.armLFore = this.bone('armLFore');
 
     this.bones.club = this.bone('club');
     capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
