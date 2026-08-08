@@ -20,10 +20,10 @@ import { tuning as T } from 'tk/tuning.js';
 // Пустота вокруг светлее настила, а не темнее. Это важнее, чем кажется:
 // на тёмном фоне край читался светящейся полосой, то есть подсказкой,
 // а на светлом он читается обрывом — тем, чем и является.
-export const VOID_COLOR = new THREE.Color(0xdfe3ea);
-const DECK_COLOR = new THREE.Color(0xfdfdff);
+export const VOID_COLOR = new THREE.Color(0xf1f2f4);
+const DECK_COLOR = new THREE.Color(0xffffff);
 const RIM_COLOR = new THREE.Color(0x1d2330);
-const RING_COLOR = new THREE.Color(0x2c3242);
+
 
 export class Arena {
   constructor(scene) {
@@ -65,7 +65,7 @@ export class Arena {
     // и он обязан читаться первым.
     const rim = new THREE.Mesh(
       new THREE.TorusGeometry(1, 0.0035, 8, 192),
-      new THREE.MeshBasicMaterial({ color: RIM_COLOR, transparent: true, opacity: 0.7 })
+      new THREE.MeshBasicMaterial({ color: RIM_COLOR, transparent: true, opacity: 0.16 })
     );
     rim.rotation.x = -Math.PI / 2;
     this.rim = rim;
@@ -103,7 +103,7 @@ export class Arena {
    */
   wellMaterial() {
     const m = new THREE.MeshStandardMaterial({
-      color: DECK_COLOR.clone().multiplyScalar(0.97),
+      color: DECK_COLOR.clone().multiplyScalar(0.99),
       roughness: 0.85,
       metalness: 0,
     });

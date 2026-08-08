@@ -2,7 +2,18 @@ import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
 import { clamp01, noiseSigned, DEG } from 'tk/mathx.js';
 
-// Камера в духе Diablo: фиксированный наклон и фиксированный разворот.
+// Камера изометрическая: ортографическая проекция под фиксированным углом.
+//
+// Перспективы здесь больше нет, и это не стилизация ради стилизации.
+// В перспективе одинаковые бойцы в разных концах арены разного размера,
+// а вертикали заваливаются тем сильнее, чем дальше от центра кадра, — и то,
+// и другое мешает читать единственное, что в этой игре решает: кто где стоит
+// относительно края. Ортография показывает всех одинаково.
+//
+// Классический изометрический угол — наклон 35.264° и разворот 45°. Первое
+// число не выдумано: это arctg(1/√2), тот самый наклон, при котором три оси
+// куба сходятся на экране под равными 120°. Отсюда и вид «колонны» из трёх
+// граней, каждая своей светлоты.
 //
 // Разворот принципиально не меняется во время игры. Позиция прицела берётся
 // лучом из камеры, так что стоит камере повернуться — и «мышь вправо»
@@ -28,10 +39,10 @@ export class CameraRig {
     this.shake = 0;
     this.shakeSeed = Math.random() * 100;
 
-    this.cam.fov = T.camFov;
-    this.cam.near = 0.3;
-    this.cam.far = 200;
-    this.cam.updateProjectionMatrix();
+    this.cam.near = -60;
+    this.cam.far = 260;
+    this.aspect = 1;
+    this.applyFrustum();
 
     this.desiredPosition(this.center, this.position);
     this.cam.position.copy(this.position);
@@ -63,26 +74,31 @@ export class CameraRig {
   }
 
   /**
-   * Отъезд камеры, при котором арена целиком влезает в кадр.
+   * Рамка кадра, в которую арена влезает целиком.
    *
-   * camDistance подбиралась на широком экране, и на телефоне в портрете
-   * арену обрезало со всех сторон — а вся игра про край, которого при этом
-   * не видно. Узкое место — горизонтальный угол обзора: он получается
-   * из вертикального через соотношение сторон и на портрете вдвое меньше.
+   * У ортографии нет отъезда: расстояние ничего не меняет, размер кадра
+   * задаётся рамкой напрямую. Поэтому вместо «куда отъехать» считается
+   * «какой ширины взять кадр».
    *
-   * camDistance остаётся минимумом: на широком экране требуемое расстояние
-   * меньше него, и там ничего не меняется.
+   * По вертикали диск сплющен наклоном, и требуется меньше — но ровно
+   * настолько, насколько наклонена камера. Плюс запас сверху под рост
+   * бойца: диск влезает, а голова торчит за кадр, если про неё забыть.
    */
-  fitDistance() {
-    const halfV = (T.camFov * 0.5) * DEG;
-    const aspect = Math.max(0.2, this.cam.aspect);
-    const halfH = Math.atan(Math.tan(halfV) * aspect);
+  applyFrustum(aspect) {
+    if (aspect) this.aspect = aspect;
+    const a = Math.max(0.2, this.aspect);
     const r = T.arenaRadius * T.camFitMargin;
+    const tall = r * Math.sin(T.camPitch * DEG) + T.camHeadroom;
 
-    const byWidth = r / Math.max(0.02, Math.sin(halfH));
-    // По вертикали диск сплющен наклоном камеры, поэтому требуется меньше.
-    const byHeight = r * Math.sin(T.camPitch * DEG) / Math.max(0.02, Math.sin(halfV));
-    return Math.max(T.camDistance, byWidth, byHeight);
+    // Кадр обязан вместить и ширину, и высоту: берём то, что больше,
+    // и растягиваем недостающую сторону по соотношению экрана.
+    const halfH = Math.max(tall, r / a);
+    const halfW = halfH * a;
+
+    const c = this.cam;
+    c.left = -halfW; c.right = halfW;
+    c.top = halfH; c.bottom = -halfH;
+    c.updateProjectionMatrix();
   }
 
   desiredPosition(focus, out) {
@@ -90,7 +106,9 @@ export class CameraRig {
     _quat.setFromEuler(_euler);
     // Камера смотрит вниз-вперёд, значит стоит она позади и выше точки внимания.
     _dir.set(0, 0, 1).applyQuaternion(_quat);
-    return out.copy(focus).addScaledVector(_dir, -this.fitDistance());
+    // Расстояние у ортографии на картинку не влияет вовсе — важно лишь,
+    // чтобы всё осталось между near и far. Берём с запасом.
+    return out.copy(focus).addScaledVector(_dir, -T.camDistance);
   }
 
   /**
@@ -98,10 +116,9 @@ export class CameraRig {
    * оставаться отзывчивой, иначе кадр «уезжает» вслед за игроком с задержкой.
    */
   tick(dt, target) {
-    if (Math.abs(this.cam.fov - T.camFov) > 1e-3) {
-      this.cam.fov = T.camFov;
-      this.cam.updateProjectionMatrix();
-    }
+    // Радиус арены и наклон крутятся ползунками на ходу, а от них зависит
+    // рамка кадра.
+    this.applyFrustum();
 
     _focus.copy(this.center);
     if (target) {

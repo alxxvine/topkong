@@ -40,7 +40,9 @@ export async function start() {
   renderer.toneMappingExposure = 1.0;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(T.camFov, 1, 0.3, 200);
+  // Ортографическая: изометрия. Рамку кадра задаёт CameraRig — здесь
+  // ставятся заглушки, они всё равно будут переписаны на первом resize.
+  const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, -60, 260);
 
   const arena = new Arena(scene);
   const rig = new CameraRig(camera);
@@ -68,8 +70,7 @@ export async function start() {
     const w = innerWidth;
     const h = innerHeight;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    rig.applyFrustum(w / h);
   }
 
   let last = performance.now();
