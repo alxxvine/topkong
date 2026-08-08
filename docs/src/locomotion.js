@@ -98,7 +98,13 @@ export class Locomotion {
       ? (moving ? T.moveAccel : T.moveBrake)
       : T.airControl;
 
-    f.body.drive(wx * speed, wz * speed, rate, dt);
+    // Доводка корпусом от равновесия идёт ПОВЕРХ заказанного хода: боец
+    // одновременно идёт куда хотел и подрабатывает под собой. Без неё
+    // стоящий на месте не подправляется вовсе — он просто висит на мышцах.
+    const bal = f.balance;
+    const bx = bal ? bal.pushX : 0;
+    const bz = bal ? bal.pushZ : 0;
+    f.body.drive(wx * speed + bx, wz * speed + bz, rate, dt);
   }
 
   /**

@@ -3,6 +3,11 @@ import { tuning as T } from 'tk/tuning.js';
 import { clamp, clamp01, lerp } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
 
+// Все расстояния походки — В ДОЛЯХ ДЛИНЫ НОГИ, а не в метрах. Метры имели
+// смысл, пока тело было одно; на каланче с ногой в метр тот же шаг в 15 см
+// превратился бы в семенение, а на коротышке с ногой в 45 см — в шпагат.
+const L = () => Rig.LegLength;
+
 // Шаг с настоящей опорой.
 //
 // До этого стопы жили в системе таза: их цель считалась формулой от фазы
@@ -82,7 +87,7 @@ export class Gait {
    * а не туда, где оно было.
    */
   ideal(foot, x, z, yaw, out) {
-    const half = Rig.HipHalfWidth + T.stanceWidth;
+    const half = Rig.HipHalfWidth + T.stanceWidth * L();
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
     const sx = foot.side * half;
@@ -113,16 +118,19 @@ export class Gait {
     let side = wantX * cos - wantZ * sin;
     let forward = wantX * sin + wantZ * cos;
 
-    forward = clamp(forward, -T.stepReach, T.stepReach);
+    const reach = T.stepReach * L();
+    forward = clamp(forward, -reach, reach);
 
     // Вбок пределы свои и несимметричные. Наружу нога уходит недалеко:
     // при боковом ходе размах опоры доходил до 108 см, то есть по 54 см
     // от таза, боец раскорячивался и IK снова тащила стопу. Внутрь стопа
     // не заходит за среднюю линию вовсе — иначе ноги перекрещиваются.
-    const home = foot.side * (Rig.HipHalfWidth + T.stanceWidth);
+    const home = foot.side * (Rig.HipHalfWidth + T.stanceWidth * L());
+    const cross = T.stanceCross * L();
+    const outward = T.stepSide * L();
     side = foot.side > 0
-      ? clamp(side, T.stanceCross, home + T.stepSide)
-      : clamp(side, home - T.stepSide, -T.stanceCross);
+      ? clamp(side, cross, home + outward)
+      : clamp(side, home - outward, -cross);
 
     out.set(
       x + side * cos + forward * sin,
@@ -132,7 +140,7 @@ export class Gait {
 
     // За кромкой опоры нет. Втыкать туда стопу — значит поставить бойца
     // на воздух: шаг укорачивается, пока опора не вернётся на настил.
-    for (let i = 0; i < 4 && !this.arena.isOverDeck(out.x, out.z, 0.12); i++) {
+    for (let i = 0; i < 4 && !this.arena.isOverDeck(out.x, out.z, L() * 0.17); i++) {
       side *= 0.5;
       forward *= 0.5;
       out.set(
@@ -175,9 +183,23 @@ export class Gait {
 
     // Наводка идёт по тому из двух, что больше: застрявшее тело метит шаг
     // по намерению, идущее — по настоящему ходу.
-    const lead = speed >= wanted ? speed : wanted;
-    const lx = speed >= wanted ? vx : wantX;
-    const lz = speed >= wanted ? vz : wantZ;
+    let lead = speed >= wanted ? speed : wanted;
+    let lx = speed >= wanted ? vx : wantX;
+    let lz = speed >= wanted ? vz : wantZ;
+
+    // Равновесие перебивает и то, и другое.
+    //
+    // Когда точка перехвата вышла за опору, устоять уже нельзя — можно
+    // только успеть подставить ногу, и подставить именно ТУДА, куда валит.
+    // Направление падения тут важнее и намерения игрока, и текущего хода:
+    // шагнуть «куда шёл» в этот момент значит просто лечь.
+    const bal = this.f.balance;
+    const catching = !!(bal && bal.needStep && grounded);
+    if (catching) {
+      lx = bal.fallX;
+      lz = bal.fallZ;
+      lead = Math.max(lead, T.maxRunSpeed * 0.5);
+    }
 
     const norm = clamp01(lead / Math.max(0.1, T.maxRunSpeed));
 
@@ -206,7 +228,7 @@ export class Gait {
         foot.to.lerp(_t, clamp01(8 * dt));
 
         const k = ease(foot.t);
-        const up = Math.sin(Math.PI * foot.t) * T.stepLift;
+        const up = Math.sin(Math.PI * foot.t) * T.stepLift * L();
         this.world[i].set(
           lerp(foot.from.x, foot.to.x, k),
           Rig.FootY + up,
@@ -254,7 +276,7 @@ export class Gait {
       // с очередью, ни с паузой. Иначе быстрый боец не успевает переставлять
       // ноги: пока одна в воздухе, вторая уже вне предела, IK подтягивает
       // её цель к границе и стопа едет юзом.
-      const stranded = away > T.stepReach + T.stepTrigger;
+      const stranded = away > (T.stepReach + T.stepTrigger) * L();
 
       if (!stranded && (swinging || this.sinceStep < T.stepGap)) continue;
 
@@ -264,8 +286,9 @@ export class Gait {
       // Застрявшему телу шагает та нога, что отстала сильнее: иначе право
       // на шаг достаётся просто первой в списке, и боец уходит вбок,
       // приволакивая вторую.
-      const urge = stuck && behind >= this.behindOther(i, x, z, yaw, lx, lz, lead);
-      if (!stranded && !urge && behind < T.stepTrigger * bias) continue;
+      const urge = (stuck || catching)
+        && behind >= this.behindOther(i, x, z, yaw, lx, lz, lead);
+      if (!stranded && !urge && behind < T.stepTrigger * L() * bias) continue;
 
       foot.swinging = true;
       foot.t = 0;

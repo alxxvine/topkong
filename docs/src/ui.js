@@ -1,4 +1,5 @@
 import { tuning as T, tuneGroups, saveTuning, resetTuning } from 'tk/tuning.js';
+import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 
 // Интерфейс: строка состояния и панель ползунков.
 //
@@ -31,6 +32,7 @@ export class Ui {
   }
 
   buildPanel() {
+    this.addBodyPicker();
     for (const group of tuneGroups) {
       const title = document.createElement('div');
       title.className = 'grp';
@@ -71,6 +73,34 @@ export class Ui {
 
     btns.append(reset, copy);
     this.body.appendChild(btns);
+  }
+
+  /**
+   * Выбор телосложения.
+   *
+   * Кнопками, а не ползунком: тело меняет длины связей, массы и панели,
+   * и подменять их посреди кадра значило бы пересобирать бойца на ходу
+   * ради того, чтобы не нажимать перезагрузку. Перезагрузка честнее.
+   */
+  addBodyPicker() {
+    const title = document.createElement('div');
+    title.className = 'grp';
+    title.textContent = 'Телосложение';
+    this.body.appendChild(title);
+
+    const row = document.createElement('div');
+    row.className = 'btns';
+    for (const name of bodyNames) {
+      const b = document.createElement('button');
+      b.textContent = BODIES[name].title || name;
+      if (name === currentBody) {
+        b.style.borderColor = 'var(--accent)';
+        b.style.color = 'var(--accent)';
+      }
+      b.addEventListener('click', () => chooseBody(name));
+      row.appendChild(b);
+    }
+    this.body.appendChild(row);
   }
 
   addSlider(key, min, max, step) {

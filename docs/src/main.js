@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { S } from 'tk/skeleton.js';
 import { tuning as T, loadTuning } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
@@ -329,7 +330,11 @@ function hudText(player, arena, fps, input) {
     // браузере, я не могу: гейтвей не пускает наружу. По этой строке
     // на любом скриншоте сразу видно, дошла правка или висит старый кэш.
     `сборка ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
-    `тело      ${state}   мышцы ${(player.body.strength * 100).toFixed(0)}%`,
+    `тело      ${S.title}   ${state}   мышцы ${(player.body.strength * 100).toFixed(0)}%`,
+    // Запас устойчивости — не украшение: по нему видно, что боец СТОИТ,
+    // а не висит на мышцах. Единица означает, что точка перехвата ровно
+    // над опорой, ноль — что устоять уже нельзя и нужен шаг.
+    `равновесие ${(player.balance.margin * 100).toFixed(0)}%   завал ${player.balance.tilt.toFixed(0)}°`,
     // Без дубины строки про неё нет вовсе: пустое «несёт» на экране
     // сбивает с толку сильнее, чем отсутствие строки.
     T.withClub ? `дубина    ${swing}` : 'дубина    снята (настройки)',

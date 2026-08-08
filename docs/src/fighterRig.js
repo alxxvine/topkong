@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DEG, clamp } from 'tk/mathx.js';
 import { tuning as T } from 'tk/tuning.js';
+import { S, CLUB } from 'tk/skeleton.js';
 
 // Геометрия тела и вычисление позы. Порт FighterRig.cs.
 //
@@ -22,38 +23,30 @@ import { tuning as T } from 'tk/tuning.js';
 // стопа, тем ниже таз. Перевалиться на опорную ногу приходится по той же
 // причине — маховой ноге нечем подобраться, чтобы пронестись над настилом.
 
-// Размеры сняты с выкройки и переведены в метры одним множителем. Он вынесен
-// явно, чтобы чертёж и код сверялись глазами: 5 в чертеже — это 5 * CM метров.
+// Размеры больше не живут здесь. Они приходят из скелета (skeleton.js),
+// который собирает их из таблицы пропорций — клеток выкройки. Этот файл
+// оставляет их себе под прежними именами, чтобы остальные модули не знали
+// о перемене и продолжали читать Rig.LegLength.
 //
-// Что на чертеже: голова 5x5, грудь трапеция 2 сверху и 3 снизу высотой 2.5,
-// таз квадрат 3x3, рука 6 длиной (2 у плеча, 3 у кисти), нога 8 длиной
-// (2 у бедра, 3 внизу). Стоп нет вовсе — нога цельная деталь. Все части
-// соединены пружинками, они же и держат зазоры между деталями.
-//
-// Панели расширяются К ДАЛЬНЕМУ концу, а не к суставу: 2 у плеча и 3 у кисти.
-// Это заметное отличие от прошлой выкройки, и силуэт от него меняется сильно.
-//
-// Рост складывается снизу вверх: нога 8, таз 3, грудь 2.5, голова 5 плюс
-// зазоры на пружины — около 19.5 клеток, то есть 1.76 м.
-export const CM = 0.09;
+// Почему вообще понадобилось разделять. Пропорции были рассыпаны по четырём
+// файлам: панели здесь, массы и радиусы в физике, ширина шага в походке.
+// Наложить на скелет другое тело значило пройтись по всем четырём — а теперь
+// достаточно дописать строчку в BODIES.
+export const CM = S.prop.cm;
+export const Spring = S.Spring;
+export const HeadSize = S.HeadSize;
+export const ChestHeight = S.ChestHeight;
+export const ChestTopWidth = S.ChestTopWidth;
+export const ChestBottomWidth = S.ChestBottomWidth;
+export const HipsSize = S.HipsSize;
+export const PanelDepth = S.PanelDepth;
 
-/** Зазор на пружину между деталями. */
-export const Spring = 0.35 * CM;
-
-export const HeadSize = 5 * CM;
-export const ChestHeight = 2.5 * CM;
-export const ChestTopWidth = 2 * CM;
-export const ChestBottomWidth = 3 * CM;
-export const HipsSize = 3 * CM;
-export const PanelDepth = 1 * CM;
-
-// Конечности: цельные, узкие у сустава и широкие на дальнем конце.
-export const LegLength = 8 * CM;
-export const LegTopWidth = 2 * CM;
-export const LegBottomWidth = 3 * CM;
-export const ArmLength = 6 * CM;
-export const ArmTopWidth = 2 * CM;
-export const ArmBottomWidth = 3 * CM;
+export const LegLength = S.LegLength;
+export const LegTopWidth = S.LegTopWidth;
+export const LegBottomWidth = S.LegBottomWidth;
+export const ArmLength = S.ArmLength;
+export const ArmTopWidth = S.ArmTopWidth;
+export const ArmBottomWidth = S.ArmBottomWidth;
 
 // Частиц в цепи по-прежнему три: «колено» осталось серединой отрезка.
 // Половинки нужны только решателю — три связи одинаковой суммарной длины
@@ -62,36 +55,35 @@ export const ThighLength = LegLength * 0.5;
 export const ShinLength = LegLength * 0.5;
 export const UpperArmLength = ArmLength * 0.5;
 export const ForeArmLength = ArmLength * 0.5;
-export const ArmSpan = ArmLength;
+export const ArmSpan = S.ArmSpan;
 
-// Стопы на выкройке нет: нога кончается срезом у самого настила.
-export const FootY = PanelDepth * 0.6;
-export const HipJointY = FootY + LegLength;
-export const HipsY = HipJointY + Spring + HipsSize * 0.5;
-export const ChestY = HipsY + HipsSize * 0.5 + Spring + ChestHeight * 0.5;
-export const ShoulderY = ChestY + ChestHeight * 0.35;
-export const NeckY = ChestY + ChestHeight * 0.5;
-export const HeadY = NeckY + Spring + HeadSize * 0.5;
-export const HeadRadius = HeadSize * 0.5;
+export const FootY = S.FootY;
+export const HipJointY = S.HipJointY;
+export const HipsY = S.HipsY;
+export const ChestY = S.ChestY;
+export const ShoulderY = S.ShoulderY;
+export const NeckY = S.NeckY;
+export const HeadY = S.HeadY;
+export const HeadRadius = S.HeadRadius;
+export const Height = S.Height;
 
-// Ноги стоят под тазом, руки подвешены снаружи груди — как на выкройке,
-// где пружины уходят от верхних углов груди в стороны.
-export const HipHalfWidth = LegTopWidth * 0.62;
-export const ShoulderHalfWidth = ChestTopWidth * 0.5 + Spring + ArmTopWidth * 0.5;
+export const HipHalfWidth = S.HipHalfWidth;
+export const ShoulderHalfWidth = S.ShoulderHalfWidth;
 
 /**
  * Высота, на которой держат рукоять. Дубина считается от хвата, а не наоборот:
  * хват — это место, куда должны дотянуться кисти, и он обязан быть достижимым.
  */
-export const GripY = ShoulderY - ArmSpan * 0.55;
-export const ClubRestReach = 0.38;
+export const GripY = S.GripY;
+// Оружие — не часть тела: одна дубина на любую куклу, размеры её в CLUB.
+export const ClubRestReach = CLUB.restReach;
 /** Насколько центр дубины вынесен от хвата вперёд по её оси. */
-export const ClubGripOffset = 0.30;
+export const ClubGripOffset = CLUB.gripOffset;
 /** Набалдашник — вдоль локальной оси Y дубины. Им и бьют. */
-export const ClubHeadLocal = new THREE.Vector3(0, 0.36, 0);
-export const ClubHeadRadius = 0.17;
-export const ClubLength = 0.80;
-export const ClubRadius = 0.06;
+export const ClubHeadLocal = CLUB.headLocal;
+export const ClubHeadRadius = CLUB.headRadius;
+export const ClubLength = CLUB.length;
+export const ClubRadius = CLUB.radius;
 
 
 // Полюсов IK здесь больше нет. Они говорили, в какую сторону выгибается
@@ -108,7 +100,8 @@ const _basis = new THREE.Matrix4();
 
 // FreeHandHalfWidth / FreeHandY больше нет: они держали кисть у бедра,
 // то есть задавали ровно ту позу «руки по швам», от которой мы уходим.
-// Положение кистей в стойке теперь в настройках — guardWidth и guardHeight.
+// Положение кистей в стойке теперь в настройках — guardOut и guardForward,
+// и оба безразмерные: это направление от плеча, а не точка в метрах.
 
 /** Полный набор локальных позиций тела. */
 export function makePose() {
@@ -258,15 +251,10 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Кисти качаются в противофазе своим ногам: вынесена левая нога — вперёд
   // идёт правая рука. Без этого руки едут вдоль тела досками и выдают всю
   // походку.
-  const guardY = T.guardHeight + bob - drop;
-  const swing = Math.cos(phaseL) * T.armSwing * stride;
-  guardHand(pose.handRight, 1, guardY, lean, swing);
-  guardHand(pose.handLeft, -1, guardY, lean, -swing);
-  if (roll !== 0) {
-    rollX(pose.handRight, hipSide, base, rs, rc);
-    rollX(pose.handLeft, hipSide, base, rs, rc);
-    rollX(pose.grip, hipSide, base, rs, rc);
-  }
+  const swing = Math.cos(phaseL) * T.armSwing * stride / Math.max(1e-4, ArmLength);
+  guardHand(pose.handRight, pose.shoulderRight, 1, lean, swing);
+  guardHand(pose.handLeft, pose.shoulderLeft, -1, lean, -swing);
+  if (roll !== 0) rollX(pose.grip, hipSide, base, rs, rc);
 
   // Дубина всегда в одной и той же руке — правой. Ни перехвата между
   // ударами, ни подхвата второй рукой на тяжёлом замахе: боец правша,
@@ -354,7 +342,7 @@ const MAX_LIST = 0.35;
  * во что это выливается без предела: 3.5 м/с при заданных 1.7 и подскоки
  * корпуса на три с лишним метра.
  */
-const MAX_DIP = 0.10;
+const MAX_DIP = () => LegLength * 0.14;
 
 const _pelvis = { base: 0, roll: 0 };
 
@@ -390,7 +378,7 @@ function solvePelvis(footL, footR, legOut, hipSide, hipFwd) {
     const cos = Math.sqrt(Math.max(0, 1 - sin * sin));
     const needL = hipNeed(footL, hipSide - legOut * cos, hipFwd);
     const needR = hipNeed(footR, hipSide + legOut * cos, hipFwd);
-    out.base = Math.max((needL + needR) * 0.5, HipJointY - MAX_DIP);
+    out.base = Math.max((needL + needR) * 0.5, HipJointY - MAX_DIP());
     sin = clamp((needR - needL) / (2 * legOut), -MAX_LIST, MAX_LIST);
   }
 
@@ -449,16 +437,25 @@ function twistY(v, sin, cos) {
 }
 
 /**
- * Кисть в стойке: вынесена вперёд, разведена в сторону и приподнята.
+ * Кисть в стойке — НАПРАВЛЕНИЕМ от плеча, а не точкой в метрах.
+ *
+ * Длину всё равно задаёт кость: рука цельная, и кисть окажется ровно
+ * на ArmLength от плеча, куда её ни целься. Значит осмысленно только
+ * направление, и настройки здесь безразмерные — на другом теле метры
+ * не значили бы ничего, а доля размаха значит то же самое.
  *
  * @param {number} side  +1 правая, -1 левая
  * @param {number} swing вклад шага: вперёд-назад в противофазе своей ноге
  */
-function guardHand(out, side, y, lean, swing) {
+function guardHand(out, shoulder, side, lean, swing) {
+  const outward = side * T.guardOut;
+  const forward = T.guardForward + lean * 0.08 + swing;
+  const flat = outward * outward + forward * forward;
+  const down = Math.sqrt(Math.max(0.04, 1 - flat));
   return out.set(
-    side * T.guardWidth,
-    y,
-    T.guardForward + lean * 0.08 + swing);
+    shoulder.x + outward * ArmLength,
+    shoulder.y - down * ArmLength,
+    shoulder.z + forward * ArmLength);
 }
 
 function foot(out, x, phase, stride, lift) {

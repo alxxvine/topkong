@@ -99,7 +99,7 @@ export class PoseDriver {
     // подскок корпуса и мах рук шли поверх скольжения и с настоящими
     // шагами не совпадали ничем.
     this.stepPhase = gait.phase;
-    this.stride = strideNorm * T.stepLength;
+    this.stride = strideNorm * T.stepLength * Rig.LegLength;
     this.lift = gait.lift;
 
     // Подскок привязан к переносу: корпус проседает в момент, когда вес

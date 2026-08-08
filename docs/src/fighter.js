@@ -6,6 +6,7 @@ import { PoseDriver } from 'tk/poseDriver.js';
 import { Gait } from 'tk/gait.js';
 import { SwingAction } from 'tk/swingAction.js';
 import { Locomotion } from 'tk/locomotion.js';
+import { Balance } from 'tk/balance.js';
 import { Body, P } from 'tk/body.js';
 
 // Боец целиком: кости, состояние тела и переходы между управлением и тряпкой.
@@ -60,6 +61,8 @@ export class Fighter {
     // Походка держит мировые опоры стоп. Создаётся после тела не случайно:
     // на спавне она втыкает стопы туда, где тело уже стоит.
     this.gait = new Gait(this, arena);
+    // Равновесие читает тело и походку, поэтому создаётся последним.
+    this.balance = new Balance(this);
 
     this.state = BodyState.Standing;
     this.alive = true;
@@ -167,7 +170,7 @@ export class Fighter {
     // Панель короче своей кости на зазор с обоих концов: части тела висят
     // НЕ впритык. Так на сгибе они не въезжают друг в друга, а в просвете
     // видно нить, на которой всё держится.
-    panel(g, Math.max(0.02, length - (T.partGap || 0) * 2),
+    panel(g, Math.max(0.02, length - (T.partGap || 0) * Rig.CM * 2),
       nearWidth, farWidth, depth, mat(this.color, 0.95));
     return g;
   }
@@ -275,6 +278,7 @@ export class Fighter {
     this.swing.reset();
     this.poseDriver.reset();
     this.locomotion.reset();
+    this.balance.reset();
     this.body.reset(x, z, yaw);
     this.gait.reset(x, z, yaw);
 
@@ -351,6 +355,9 @@ export class Fighter {
     if (T.withClub) this.swing.tick(dt);
     else this.swing.reset();
     this.bones.club.visible = T.withClub;
+    // Равновесие считается ДО локомоции: она подмешивает его поправку
+    // в скорость ядра, а походка — его направление падения в шаг.
+    this.balance.tick(dt, this.locomotion.grounded);
     this.locomotion.tick(dt, inControl);
 
     const pose = this.poseDriver.tick(dt, this.locomotion.planarSpeed,
