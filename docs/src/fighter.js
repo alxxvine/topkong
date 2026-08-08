@@ -4,9 +4,10 @@ import { clamp01, inverseLerp, lerp, RAD } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
 import { PoseDriver } from 'tk/poseDriver.js';
 import { Gait } from 'tk/gait.js';
+import { buildSkin } from 'tk/skin.js';
 import { SwingAction } from 'tk/swingAction.js';
 import { Locomotion } from 'tk/locomotion.js';
-import { Body, P } from 'tk/body.js';
+import { Body, P, restPoints } from 'tk/body.js';
 
 // Боец целиком: кости, состояние тела и переходы между управлением и тряпкой.
 //
@@ -32,6 +33,87 @@ const _impulse = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0);
 
 let nextId = 1;
+
+// Кости оболочки. Порядок фиксирован: по нему считаются skinIndex вершин
+// и опорные матрицы, так что менять его нельзя, не пересобрав и то и другое.
+const BONE_ORDER = [
+  'hips', 'chest', 'head',
+  'legLUpper', 'legLLower', 'legRUpper', 'legRLower',
+  'footL', 'footR',
+  'armRUpper', 'armRFore', 'armLUpper', 'armLFore',
+];
+const BONE = {};
+BONE_ORDER.forEach((n, i) => { BONE[n] = i; });
+
+let _skin = null;
+let _inverses = null;
+
+/**
+ * Собрать оболочку и опорные матрицы. Делается ОДИН раз на всю игру:
+ * геометрия у всех бойцов общая, разная только краска.
+ *
+ * Опорная поза берётся не из формул повторно, а из настоящего тела,
+ * поставленного в стойку, и кости раскладываются тем же writeBones,
+ * что работает в игре. Иначе привязка вершин и работа кости считались бы
+ * по двум разным представлениям одной позы, и оболочку бы перекосило.
+ */
+function prepareSkin() {
+  const body = new Body({ isOverDeck: () => true });
+  body.reset(0, 0, 0);
+
+  const root = new THREE.Object3D();
+  const bones = {};
+  for (const name of BONE_ORDER) {
+    bones[name] = new THREE.Bone();
+    root.add(bones[name]);
+  }
+  bones.club = new THREE.Bone();
+  root.add(bones.club);
+  body.writeBones(bones, 0);
+  root.updateMatrixWorld(true);
+
+  _inverses = BONE_ORDER.map((n) => bones[n].matrixWorld.clone().invert());
+
+  const p = body.pos;
+  const mid = p[P.Hips].clone().lerp(p[P.Chest], 0.5);
+  const toeL = p[P.FootL].clone().add(new THREE.Vector3(0, -0.02, 0.11));
+  const toeR = p[P.FootR].clone().add(new THREE.Vector3(0, -0.02, 0.11));
+
+  _skin = buildSkin([
+    // Таз и корпус. Разбиты на две части не для красоты: будь торс одной
+    // капсулой, он был бы привязан к одной кости и не гнулся бы в поясе.
+    { a: p[P.HipL], b: p[P.HipR], r: Rig.HipsRadius, bone: BONE.hips },
+    { a: p[P.Hips], b: mid, r: Rig.TorsoRadius * 0.86, bone: BONE.hips },
+    { a: mid, b: p[P.Chest], r: Rig.TorsoRadius, bone: BONE.chest },
+    { a: p[P.ShoulderL], b: p[P.ShoulderR], r: Rig.TorsoRadius * 0.68, bone: BONE.chest },
+    // Шея принадлежит груди, голова — своей кости: иначе она мотается
+    // отдельным шаром или, наоборот, не поворачивается вовсе.
+    { a: p[P.Chest], b: p[P.Head], r: 0.085, bone: BONE.chest },
+    { a: p[P.Head], b: p[P.Head], r: Rig.HeadRadius, bone: BONE.head },
+
+    { a: p[P.HipL], b: p[P.KneeL], r: Rig.LegRadius, bone: BONE.legLUpper },
+    { a: p[P.KneeL], b: p[P.FootL], r: Rig.LegRadius * 0.86, bone: BONE.legLLower },
+    { a: p[P.HipR], b: p[P.KneeR], r: Rig.LegRadius, bone: BONE.legRUpper },
+    { a: p[P.KneeR], b: p[P.FootR], r: Rig.LegRadius * 0.86, bone: BONE.legRLower },
+    { a: p[P.FootL], b: toeL, r: Rig.FootRadius, bone: BONE.footL },
+    { a: p[P.FootR], b: toeR, r: Rig.FootRadius, bone: BONE.footR },
+
+    { a: p[P.ShoulderR], b: p[P.ElbowR], r: Rig.ArmRadius, bone: BONE.armRUpper },
+    { a: p[P.ElbowR], b: p[P.HandR], r: Rig.ArmRadius * 0.92, bone: BONE.armRFore },
+    { a: p[P.ShoulderL], b: p[P.ElbowL], r: Rig.ArmRadius, bone: BONE.armLUpper },
+    { a: p[P.ElbowL], b: p[P.HandL], r: Rig.ArmRadius * 0.92, bone: BONE.armLFore },
+  ]);
+}
+
+function sharedSkin() {
+  if (!_skin) prepareSkin();
+  return _skin;
+}
+
+function restInverses() {
+  if (!_inverses) prepareSkin();
+  return _inverses;
+}
 
 export class Fighter {
   constructor(scene, arena, options = {}) {
@@ -87,65 +169,36 @@ export class Fighter {
 
   build() {
     const skin = mat(this.color, 0.62);
-    const dark = mat(this.color.clone().lerp(new THREE.Color(0x000000), 0.62), 0.5);
     const wood = mat(new THREE.Color(0x5c3d21), 0.85);
     const metal = mat(new THREE.Color(0x9ea3ad), 0.32, 0.75);
 
-    // Тело собирается ЦЕЛЬНЫМ: в каждом суставе стоит шар, перекрывающий
-    // стык звеньев. Без него капсулы сходятся торцами, на сгибе между ними
-    // раскрывается щель, и фигура читается набором отдельных деталей,
-    // а не одним существом.
-    this.bones.hips = this.bone('hips');
-    capsule(this.bones.hips, 0.205, 0.50, dark);
-    // Шары тазобедренных суставов — из них растут ноги.
-    for (const side of [1, -1]) {
-      sphere(this.bones.hips, 0.145, dark,
-        new THREE.Vector3(side * Rig.HipHalfWidth, Rig.HipJointY - Rig.HipsY, 0));
-    }
-    // Живот: соединяет таз с грудью, иначе между ними перехват.
-    sphere(this.bones.hips, 0.185, skin, new THREE.Vector3(0, 0.20, 0));
+    // Тело — ОДНА бесшовная оболочка, натянутая на кости скиннингом.
+    //
+    // Из капсул бесшовное тело не собирается в принципе: на пересечении двух
+    // выпуклых форм всегда остаётся складка, и чем сильнее согнут сустав, тем
+    // она заметнее. Шар в суставе прячет щель, но стык всё равно читается.
+    // Поэтому поверхность строится из общего поля расстояний со сглаженным
+    // объединением и вытаскивается один раз на всю игру — см. skin.js.
+    for (const name of BONE_ORDER) this.bones[name] = this.bone(name);
 
-    this.bones.chest = this.bone('chest');
-    capsule(this.bones.chest, 0.235, 0.50, skin);
-    // Шея и плечи — дети груди, а не отдельные кости: они не двигаются
-    // относительно корпуса, а нужны только чтобы голова и руки к чему-то
-    // крепились. Без них они висели рядом с торсом сами по себе.
-    capsule(this.bones.chest, 0.085, 0.24,
-      skin, new THREE.Vector3(0, Rig.NeckY - Rig.ChestY, 0));
-    sphere(this.bones.chest, 0.115, skin,
-      new THREE.Vector3(Rig.ShoulderHalfWidth, Rig.ShoulderY - Rig.ChestY, 0));
-    sphere(this.bones.chest, 0.115, skin,
-      new THREE.Vector3(-Rig.ShoulderHalfWidth, Rig.ShoulderY - Rig.ChestY, 0));
+    const mesh = new THREE.SkinnedMesh(sharedSkin(), skin);
+    mesh.castShadow = true;
+    // Геометрия лежит в опорной позе, а рисуется согнутой: считать по ней
+    // видимость нельзя, боец пропадал бы с экрана в самых интересных позах.
+    mesh.frustumCulled = false;
+    this.group.add(mesh);
+    // Матрица привязки передаётся ЯВНО, и это не формальность. Без второго
+    // аргумента three.js вызывает skeleton.calculateInverses() и пересчитывает
+    // опорные матрицы по текущему положению костей — а на сборке они ещё
+    // стоят в нуле. Наши, снятые в настоящей опорной стойке, затирались
+    // единичными, и оболочку рвало в клочья.
+    mesh.bind(
+      new THREE.Skeleton(BONE_ORDER.map((n) => this.bones[n]), restInverses()),
+      new THREE.Matrix4());
+    this.skinMesh = mesh;
 
-    this.bones.head = this.bone('head');
-    sphere(this.bones.head, Rig.HeadRadius, skin);
-    box(this.bones.head, 0.12, 0.08, 0.14, new THREE.Vector3(0, 0.02, 0.165), dark);
-
-    // Каждая конечность — две кости постоянной длины. Длина берётся из рига,
-    // а не из текущей позы: IK гарантирует, что звено всегда ровно такое,
-    // поэтому капсулу не нужно ни тянуть, ни пересобирать.
-    // Локальная +Y звена смотрит на дальний сустав, поэтому шар колена
-    // и локтя ставится на +половину длины.
-    this.bones.legLUpper = this.segment('legLUpper', Rig.ThighLength, Rig.LegRadius, skin, Rig.LegRadius);
-    this.bones.legLLower = this.segment('legLLower', Rig.ShinLength, Rig.FootRadius, skin);
-    this.bones.legRUpper = this.segment('legRUpper', Rig.ThighLength, Rig.LegRadius, skin, Rig.LegRadius);
-    this.bones.legRLower = this.segment('legRLower', Rig.ShinLength, Rig.FootRadius, skin);
-
-    // Стопы — отдельные кости, и это не педантизм. Пока ботинок висел
-    // на голени, он заваливался вместе с ней и на каждом шаге торчал
-    // из-под ноги под случайным углом.
-    this.bones.footL = this.foot(dark);
-    this.bones.footR = this.foot(dark);
-
-    // Плечо чуть толще предплечья — по этому и читается, где локоть.
-    this.bones.armRUpper = this.segment('armRUpper', Rig.UpperArmLength, Rig.ArmRadius, skin, Rig.ArmRadius);
-    this.bones.armRFore = this.segment('armRFore', Rig.ForeArmLength, Rig.ArmRadius * 0.9, skin);
-    this.bones.armLUpper = this.segment('armLUpper', Rig.UpperArmLength, Rig.ArmRadius, skin, Rig.ArmRadius);
-    this.bones.armLFore = this.segment('armLFore', Rig.ForeArmLength, Rig.ArmRadius * 0.9, skin);
-    // Кисти: без них предплечье обрывается в пустоту прямо на рукояти.
-    sphere(this.bones.armRFore, Rig.ArmRadius * 1.15, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
-    sphere(this.bones.armLFore, Rig.ArmRadius * 1.15, skin, new THREE.Vector3(0, Rig.ForeArmLength * 0.5, 0));
-
+    // Кости-пустышки: у них нет собственных мешей, они только гнут оболочку.
+    // Исключение — дубина, она отдельный предмет, а не часть тела.
     this.bones.club = this.bone('club');
     capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
     sphere(this.bones.club, Rig.ClubHeadRadius, metal, Rig.ClubHeadLocal);
@@ -162,38 +215,9 @@ export class Fighter {
   }
 
   bone(name) {
-    const g = new THREE.Group();
+    const g = new THREE.Bone();
     g.name = name;
     this.group.add(g);
-    return g;
-  }
-
-  /**
-   * Звено цепи: капсула фиксированной длины, вытянутая по локальной оси Y.
-   *
-   * jointRadius — шар на дальнем конце, там же, где следующий сустав.
-   * Он не украшение: без него две капсулы сходятся торцами, и на согнутом
-   * колене или локте между ними раскрывается щель.
-   */
-  segment(name, length, radius, material, jointRadius = 0) {
-    const g = this.bone(name);
-    capsule(g, radius, Math.max(length, radius * 2), material);
-    if (jointRadius > 0) {
-      sphere(g, jointRadius * 1.12, material, new THREE.Vector3(0, length * 0.5, 0));
-    }
-    return g;
-  }
-
-  /**
-   * Стопа. Скруглённая, а не коробкой: жёсткий ботинок торчал из мягкого
-   * тела чужой деталью и ломал цельность сильнее всего остального.
-   */
-  foot(material) {
-    const g = this.bone('foot');
-    const shoe = capsule(g, 0.085, 0.25, material);
-    // Капсула лежит вдоль взгляда, а не стоит вертикально.
-    shoe.rotation.x = Math.PI / 2;
-    shoe.position.set(0, -0.02, 0.045);
     return g;
   }
 

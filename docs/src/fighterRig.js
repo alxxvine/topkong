@@ -19,36 +19,43 @@ import { tuning as T } from 'tk/tuning.js';
 // по построению — звенья всегда своей длины, а недостижимую цель IK
 // подтягивает к границе досягаемости.
 
-export const HipsY = 0.95;
-export const ChestY = 1.40;
-// Голова поднята ровно настолько, чтобы под ней помещалась шея. Без зазора
-// шар головы врастал в капсулу груди, и фигура читалась снеговиком.
-export const HeadY = 1.85;
-export const HeadRadius = 0.185;
-export const NeckY = 1.62;
+// Пропорции намеренно НЕ человеческие: короткие ноги, длинные руки, большая
+// круглая голова. Тело от этого читается как мягкое существо, а не как
+// человечек из капсул.
+//
+// Одно ограничение здесь жёсткое и его нельзя нарушать: нога обязана
+// доставать до настила с запасом. Бедро на 0.60, стопа на 0.10, при подседе
+// таз опускается ещё на 0.06 — значит по вертикали 0.44 при длине ноги 0.58,
+// и по горизонтали нога дотягивается примерно на 0.38. Из этого числа
+// выведены и длина шага, и предельная скорость.
+export const HipsY = 0.72;
+export const ChestY = 1.02;
+export const HeadY = 1.54;
+export const HeadRadius = 0.245;
+export const NeckY = 1.27;
 
 export const HipHalfWidth = 0.13;
-export const HipJointY = 0.88;
+export const HipJointY = 0.64;
 export const FootY = 0.10;
 
-export const ShoulderHalfWidth = 0.28;
-export const ShoulderY = 1.58;
+export const ShoulderHalfWidth = 0.24;
+export const ShoulderY = 1.20;
 
-// Длины звеньев. Размах руки 0.68 — это плечо на высоте 1.58 и кисть,
-// свисающая до 0.90, то есть до середины бедра. Ровно те пропорции,
-// по которым тело и читается человеческим.
-export const UpperArmLength = 0.33;
-export const ForeArmLength = 0.35;
+// Руки длинные: размах 0.74 при плече на 1.22 — опущенная кисть висит
+// на высоте 0.48, то есть НИЖЕ таза, у самого колена.
+export const UpperArmLength = 0.36;
+export const ForeArmLength = 0.38;
 export const ArmSpan = UpperArmLength + ForeArmLength;
 
-export const ThighLength = 0.42;
-export const ShinLength = 0.40;
+// Ноги короткие: 0.58 при росте 1.72 — треть, тогда как у человека половина.
+export const ThighLength = 0.30;
+export const ShinLength = 0.28;
 
 /**
  * Высота, на которой держат рукоять. Дубина считается от хвата, а не наоборот:
  * хват — это место, куда должны дотянуться кисти, и он обязан быть достижимым.
  */
-export const GripY = 1.30;
+export const GripY = 0.95;
 export const ClubRestReach = 0.38;
 /** Насколько центр дубины вынесен от хвата вперёд по её оси. */
 export const ClubGripOffset = 0.30;
@@ -58,9 +65,13 @@ export const ClubHeadRadius = 0.17;
 export const ClubLength = 0.80;
 export const ClubRadius = 0.06;
 
-export const LegRadius = 0.11;
-export const FootRadius = 0.10;
-export const ArmRadius = 0.075;
+// Толщины оболочки. Конечности заметно толще человеческих: тонкие палки
+// в мягкое тело не сливаются, между ними остаётся перетяжка.
+export const LegRadius = 0.135;
+export const FootRadius = 0.115;
+export const ArmRadius = 0.105;
+export const TorsoRadius = 0.265;
+export const HipsRadius = 0.20;
 
 // Полюса IK: куда выгибается сустав. Локоть уходит ВНИЗ и чуть наружу,
 // колено вперёд. Раньше наружу было столько же, сколько вниз, и в стойке
