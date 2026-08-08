@@ -106,15 +106,15 @@ export class Gait {
    * уезжала вместе с телом — и опоры снова не было. Замерено: 87%
    * проскальзывания, ровно как без всякой походки.
    */
-  foothold(foot, ideal, x, z, yaw, vx, vz, out) {
+  foothold(foot, ideal, x, z, yaw, vx, vz, lead, out) {
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
 
     // Куда хочется встать — от таза, в системе бойца: forward вдоль взгляда,
     // side вправо. Считать в мировых осях нельзя: пределы у ноги разные
     // вперёд и вбок, а в мире они перемешаны разворотом.
-    let wantX = ideal.x + vx * T.stepTime * T.stepLead - x;
-    let wantZ = ideal.z + vz * T.stepTime * T.stepLead - z;
+    let wantX = ideal.x + vx * T.stepTime * lead - x;
+    let wantZ = ideal.z + vz * T.stepTime * lead - z;
     let side = wantX * cos - wantZ * sin;
     let forward = wantX * sin + wantZ * cos;
 
@@ -202,6 +202,13 @@ export class Gait {
       lead = Math.max(lead, T.maxRunSpeed * 0.5);
     }
 
+    // Заброс стопы вперёд по скорости нужен и на развороте тоже. Пробовал
+    // отключать его без ввода движения — рассуждение было, что остаточная
+    // скорость забрасывает стопу в сторону и тело идёт за ней. Стало хуже:
+    // стопа приземляется под тело, дуга разворота не предугадана, боец
+    // добирает переступаниями, и уносит его сильнее — 2.1 м против 0.7.
+    const predict = T.stepLead;
+
     const norm = clamp01(lead / Math.max(0.1, T.maxRunSpeed));
 
     // Длину шага по скорости НЕ подгоняем, хотя соблазн есть и он понятен.
@@ -225,7 +232,7 @@ export class Gait {
         // Цель переноса подтягивается на лету: пока нога в воздухе, тело
         // успевает и ускориться, и повернуть. Пересчитывается через тот же
         // ограничитель, иначе на разгоне цель уползёт за предел досягаемости.
-        this.foothold(foot, _v, x, z, yaw, lx, lz, _t);
+        this.foothold(foot, _v, x, z, yaw, lx, lz, predict, _t);
         foot.to.lerp(_t, clamp01(8 * dt));
 
         const k = ease(foot.t);
@@ -306,7 +313,7 @@ export class Gait {
       foot.swinging = true;
       foot.t = 0;
       foot.from.copy(foot.plant);
-      this.foothold(foot, _v, x, z, yaw, lx, lz, foot.to);
+      this.foothold(foot, _v, x, z, yaw, lx, lz, predict, foot.to);
       this.sinceStep = 0;
       this.steps++;
     }

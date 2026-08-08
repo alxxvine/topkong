@@ -460,17 +460,24 @@ function solvePelvis(footL, footR, legOut, hipSide, hipFwd, sink) {
  * которую позволяет длина ноги.
  */
 function hangFoot(out, raw, hip) {
+  // Высота у стопы своя — та, что задала походка. Недостижимую цель нога
+  // укорачивает ПО ГОРИЗОНТАЛИ, подтягивая стопу ближе к себе.
+  //
+  // Раньше было наоборот: горизонталь оставалась, а стопа задиралась вверх
+  // по сфере вокруг бедра. Выглядело это ровно как болтанка на верёвке —
+  // при перевыносе нога вскидывалась чуть не до пояса. Замерено: стопа
+  // взлетала на 13 см на развороте и на 36 на ходу при заказанных 6.5.
+  //
+  // Глубже прямой ноги не достать: если походка просит опору ниже, чем нога
+  // дотягивается, поднимается уже сама стопа — но только тогда.
+  const drop = Math.min(hip.y - raw.y, LegLength - 1e-3);
+  const reach = Math.sqrt(Math.max(0, LegLength * LegLength - drop * drop));
+
   const dx = raw.x - hip.x;
   const dz = raw.z - hip.z;
   const flat = Math.hypot(dx, dz);
-  const d = Math.min(flat, LegLength - 1e-3);
-  const k = flat > 1e-6 ? d / flat : 0;
-  // Ниже прямой ноги стопе не достать — а ВЫШЕ сколько угодно: колено
-  // согнётся. Поэтому берётся большее из двух: куда её поставила походка
-  // и куда дотягивается прямая нога. Без этого стопа на ступеньке
-  // утыкалась бы в невидимый пол на уровне настила.
-  const straight = hip.y - Math.sqrt(LegLength * LegLength - d * d);
-  return out.set(hip.x + dx * k, Math.max(raw.y, straight), hip.z + dz * k);
+  const k = flat > reach ? reach / flat : 1;
+  return out.set(hip.x + dx * k, hip.y - drop, hip.z + dz * k);
 }
 
 /** Завалить точку вбок вокруг оси взгляда: поворот в плоскости XY. */
