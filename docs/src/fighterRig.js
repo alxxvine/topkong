@@ -186,7 +186,7 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Поэтому высота считается из геометрии: чем дальше вынесена опора,
   // тем ниже таз. Так задаром получается вся вертикальная раскачка ходьбы —
   // таз поднимается, когда проходит над стопой, и проседает на разножке.
-  const pelvis = solvePelvis(footL, footR, legOut, hipSide, hipFwd);
+  const pelvis = solvePelvis(footL, footR, legOut, hipSide, hipFwd, ride(stride));
   const roll = pelvis.roll;
   const rs = Math.sin(roll);
   const rc = Math.cos(roll);
@@ -361,6 +361,28 @@ const MAX_LIST = 0.35;
  */
 const MAX_DIP = () => LegLength * 0.14;
 
+/**
+ * Насколько таз НЕ доходит до полного выпрямления ноги.
+ *
+ * Без этого он на середине опоры въезжает на самый верх дуги, а на разножке
+ * падает на её низ, и получается подпрыгивание в 11 сантиметров на каждом
+ * шаге. Человек гасит его тем же способом — на середине опоры колено чуть
+ * согнуто, — и нам он стал доступен ровно тогда, когда у ноги появился излом.
+ */
+const RIDE = () => LegLength * 0.05;
+
+/**
+ * Подсед включается только на ходу.
+ *
+ * Стоящему он не нужен и вреден: цель таза уходит ниже, чем даёт прямая
+ * нога, и получается ровно то постоянное расхождение, из-за которого боец
+ * когда-то уезжал сам. Замерено: 3.2 см расхождения стоя и уезд с 2 до 12 см.
+ */
+function ride(stride) {
+  const full = Math.max(1e-4, T.stepLength * LegLength);
+  return RIDE() * clamp(stride / full, 0, 1);
+}
+
 const _pelvis = { base: 0, roll: 0 };
 
 /**
@@ -381,7 +403,7 @@ const _pelvis = { base: 0, roll: 0 };
  * ползунком. Все они были хуже: назначенный перекос спорит с ногами,
  * а спор с ногой на прибитой стопе — это самоход.
  */
-function solvePelvis(footL, footR, legOut, hipSide, hipFwd) {
+function solvePelvis(footL, footR, legOut, hipSide, hipFwd, sink) {
   const out = _pelvis;
   out.base = HipJointY - T.stanceCrouch;
   out.roll = 0;
@@ -424,7 +446,7 @@ function solvePelvis(footL, footR, legOut, hipSide, hipFwd) {
     // Поднятая нога тем меньше настаивает на своём, чем выше поднята.
     const nL = needL + (needR - needL) * liftL;
     const nR = needR + (needL - needR) * liftR;
-    out.base = Math.max((nL + nR) * 0.5, HipJointY - MAX_DIP());
+    out.base = clamp((nL + nR) * 0.5, HipJointY - MAX_DIP(), HipJointY - sink);
     sin = clamp((nR - nL) / (2 * legOut), -MAX_LIST, MAX_LIST);
   }
 

@@ -173,6 +173,7 @@ export class Gait {
     // У человека тут то же самое, и решается оно так же: сперва решаешь
     // шагнуть, и только потом падаешь в шаг. Шаг начинается от намерения.
     const loco = this.f.locomotion;
+    const spin = loco ? Math.abs(loco.yawSpeed) : 0;
     const wantX = loco ? loco.wantX : 0;
     const wantZ = loco ? loco.wantZ : 0;
     const wanted = Math.hypot(wantX, wantZ);
@@ -278,6 +279,18 @@ export class Gait {
       // её цель к границе и стопа едет юзом.
       const stranded = away > (T.stepReach + T.stepTrigger) * L();
 
+      // У разворота порог свой и меньший. Основной считается ВДОЛЬ ХОДА,
+      // а на месте хода нет — опора уезжает вбок по дуге, и ждать от неё
+      // отставания по направлению движения бессмысленно. С длинным шагом
+      // это стало заметно: боец доворачивался юзом, пока опора не уедет
+      // на 28 сантиметров, и только потом переставлял ногу рывком.
+      // Только когда боец ДЕЙСТВИТЕЛЬНО ВЕРТИТСЯ. Одного «хода нет» мало:
+      // стоящий боец качается сам по себе, и опора уезжает от положенного
+      // места без всякого разворота — замерено, он принимался переступать
+      // на ровном месте. А на ходу этот порог сработал бы раньше основного
+      // и съел бы всю длину шага: частота подскакивала с 2.7 до 6.5.
+      const pivot = spin > T.stepPivotRate && away > T.stepPivot * L();
+
       if (!stranded && (swinging || this.sinceStep < T.stepGap)) continue;
 
       // Порог у правой ноги чуть больше: иначе обе, оказавшись симметрично,
@@ -288,7 +301,7 @@ export class Gait {
       // приволакивая вторую.
       const urge = (stuck || catching)
         && behind >= this.behindOther(i, x, z, yaw, lx, lz, lead);
-      if (!stranded && !urge && behind < T.stepTrigger * L() * bias) continue;
+      if (!stranded && !pivot && !urge && behind < T.stepTrigger * L() * bias) continue;
 
       foot.swinging = true;
       foot.t = 0;
