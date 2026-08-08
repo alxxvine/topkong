@@ -70,7 +70,7 @@ export const ClubRadius = 0.06;
 export const LegRadius = 0.135;
 export const FootRadius = 0.115;
 export const ArmRadius = 0.105;
-export const TorsoRadius = 0.265;
+export const TorsoRadius = 0.25;
 export const HipsRadius = 0.20;
 
 // Полюса IK: куда выгибается сустав. Локоть уходит ВНИЗ и чуть наружу,
