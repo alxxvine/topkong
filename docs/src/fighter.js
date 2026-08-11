@@ -433,7 +433,15 @@ export class Fighter {
 
     // Сорвался с настила — держать позу нечем. Без этого боец уезжал
     // за кромку стоя по стойке смирно и так же, не сгибаясь, падал вниз.
-    this.airTime = this.locomotion.grounded ? 0 : this.airTime + dt;
+    //
+    // Опора здесь — ЛЮБАЯ, а не только под ногами. Стоящему хватает стоп,
+    // а лежачий опирается спиной и плечом, и у кромки ноги у него свешены
+    // за край. По одним стопам такое тело считалось висящим в воздухе,
+    // мышцы отпускались насовсем, а таймеры подъёма сбрасывались каждый
+    // кадр — боец лежал на арене и не вставал никогда. Это и есть
+    // «забаговался и не встал».
+    const supported = this.locomotion.grounded || body.touchesDeck();
+    this.airTime = supported ? 0 : this.airTime + dt;
     if (this.airTime > T.airReleaseTime) {
       body.strength = Math.max(0, body.strength - dt / 0.25);
       this.downTime = 0;
@@ -448,7 +456,11 @@ export class Fighter {
 
     this.downTime += dt;
     const hips = body.pos[P.Hips];
-    const onDeck = this.arena.isOverDeck(hips.x, hips.z, -0.2);
+    // Встать можно там, где под телом есть настил и таз ещё над ареной.
+    // Прежняя проверка требовала от таза двадцати сантиметров ЗАПАСА
+    // внутрь — и внешнее кольцо арены становилось полосой, в которой
+    // упавший не поднимался вовсе. Ровно там боец обычно и падает.
+    const onDeck = supported && this.arena.isOverDeck(hips.x, hips.z);
     const calm = onDeck && body.speed(dt) < T.settleSpeed;
     this.settleTime = calm ? this.settleTime + dt : 0;
 

@@ -6,6 +6,7 @@ import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
 import { Fighter, BodyState } from 'tk/fighter.js';
 import { Bot } from 'tk/bot.js';
+import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
 import { P } from 'tk/body.js';
 import { Input } from 'tk/input.js';
@@ -147,6 +148,10 @@ export async function start() {
       } else {
         for (const d of dummies) { d.moveInput.set(0, 0); d.swing.held = false; }
       }
+
+      // Тела занимают место — ДО тика: тик ставит таз туда, куда указывает
+      // корень, и правку положения должен увидеть он, а не следующий кадр.
+      resolveContacts(fighters, STEP);
 
       for (const f of fighters) f.tick(STEP, match.controlEnabled);
 
