@@ -33,6 +33,8 @@ export class PoseDriver {
     this.lift = 0;
     this.lean = 0;
     this.sway = 0;
+    this.leanVel = 0;
+    this.swayVel = 0;
     this.clubLag = 0;
     this.lastYaw = 0;
     this.yawRate = 0;
@@ -243,6 +245,34 @@ export class PoseDriver {
   }
 
   /**
+   * Довести наклон до цели ПРУЖИНОЙ, а не сглаживанием.
+   *
+   * Сглаживание (lerp к цели) инерции не даёт вовсе: у него нет своей
+   * скорости, поэтому тело не отстаёт на старте и не проскакивает
+   * на остановке — оно просто быстро оказывается там, где велено.
+   * Отсюда и ощущение робота даже при верно посчитанном наклоне.
+   *
+   * У пружины скорость есть. Демпфер задан ДОЛЕЙ от критического: единица —
+   * приход к цели без перелёта, меньше — тело проскакивает вертикаль
+   * и качается обратно. Ровно это и читается весом: встал — корпус
+   * догоняет остановку и отыгрывает назад в отвес.
+   *
+   * Цель при нулевой скорости равна нулю, поэтому отвес получается сам:
+   * специального «выпрямиться, когда стоишь» не нужно.
+   */
+  springTo(key, target, dt) {
+    const soft = this.softness();
+    const stiff = T.leanStiffness * soft * soft;
+    const damp = 2 * Math.sqrt(Math.max(0, stiff)) * T.leanDamping;
+    const vKey = key + 'Vel';
+    let v = this[vKey] || 0;
+    const x = this[key];
+    v += ((target - x) * stiff - v * damp) * dt;
+    this[vKey] = v;
+    return x + v * dt;
+  }
+
+  /**
    * Во сколько раз медленнее тело доводит позу до цели.
    *
    * Одно число на все доводки разом. Порознь их крутить нельзя: корпус,
@@ -282,11 +312,14 @@ export class PoseDriver {
     // 1б. Инерция: разгоняешься — корпус отстаёт назад, тормозишь — валится
     // вперёд. Складывается с наклоном от скорости, а не заменяет его:
     // на старте боец сперва отваливается назад, потом входит в наклон.
+    //
+    // Множитель тот же, что и у наклона от скорости: ручка обязана усиливать
+    // ОБА, иначе на большом наклоне инерция теряется на его фоне.
     const acceleration = (planarSpeed - this.lastSpeed) / Math.max(1e-5, dt);
     this.lastSpeed = planarSpeed;
     const leanTarget = clamp(
-      leanSpeed - acceleration * T.leanFromAccel, -1.6, 1.6);
-    this.lean = lerp(this.lean, leanTarget, clamp01(8 * dt * this.softness()));
+      leanSpeed - acceleration * T.leanFromAccel * T.leanAmount, -1.6, 1.6);
+    this.lean = this.springTo('lean', leanTarget, dt);
 
     // 2. Покачивание, усиленное у края.
     const dist = Math.hypot(this.f.position.x, this.f.position.z);
@@ -307,9 +340,8 @@ export class PoseDriver {
     const drunkSway = T.drunk
       * (drunkNoise * T.drunkSway * 2.2 - vSide * T.drunkList * 0.9);
 
-    this.sway = lerp(this.sway,
-      (n + stepSway) * amount + listSpeed + drunkSway,
-      clamp01(6 * dt * this.softness()));
+    this.sway = this.springTo('sway',
+      (n + stepSway) * amount + listSpeed + drunkSway, dt);
 
     // 3. Дубина отстаёт от разворота. Физически она отстаёт и сама, но здесь
     // отставание задаётся в цели — так им можно управлять, а не только
@@ -328,6 +360,8 @@ export class PoseDriver {
     this.lift = 0;
     this.lean = 0;
     this.sway = 0;
+    this.leanVel = 0;
+    this.swayVel = 0;
     this.clubLag = 0;
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
