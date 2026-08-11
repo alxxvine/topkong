@@ -4,7 +4,7 @@ import { tuning as T, loadTuning } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
-import { Fighter, BodyState } from 'tk/fighter.js';
+import { Fighter, BodyState, applyGlow } from 'tk/fighter.js';
 import { Bot } from 'tk/bot.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
@@ -105,6 +105,7 @@ export async function start() {
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
 
     arena.tick();
+    applyGlow();
     if (dummies.length !== Math.round(T.dummyCount)) {
       syncDummies(scene, arena, dummies, fighters);
     }
@@ -277,9 +278,25 @@ function placeRound(fighters, arena) {
  */
 class AimCursor {
   constructor(scene) {
+    // Прицел лежит НА НАСТИЛЕ и честно закрывается бойцами.
+    //
+    // Раньше он рисовался поверх всего (depthTest выключен) и наезжал
+    // кружком на фигуры, оказываясь то на груди, то на голове. Метка
+    // на полу, за которую заходят ногами, читается местом; метка поверх
+    // всех — наклейкой на экране.
+    //
+    // Сдвиг полигонов вместо подъёма повыше: поднимать метку над настилом
+    // нельзя, иначе на косом ракурсе она уползает от точки, которую метит.
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.16, 0.23, 28),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthTest: false })
+      new THREE.MeshBasicMaterial({
+        // Белое кольцо на почти белом настиле не видно вовсе — проверено
+        // снимком: на пустом полу его просто нет. Акцентный синий тот же,
+        // что у интерфейса, и метка читается как прицел, а не как блик.
+        color: 0x0071e3, transparent: true, opacity: 0.8,
+        depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+      })
     );
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.renderOrder = 5;
@@ -288,7 +305,7 @@ class AimCursor {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
     this.link = new THREE.Line(geometry, new THREE.LineBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.22, depthTest: false,
+      color: 0x0071e3, transparent: true, opacity: 0.3, depthWrite: false,
     }));
     this.link.frustumCulled = false;
     this.link.renderOrder = 5;

@@ -163,6 +163,7 @@ export class Fighter {
 
     this.buildThread();
     this.buildMarker();
+    this.buildHalo();
     this.marker.visible = !!T.showMarkers;
     this.buildTrail();
   }
@@ -258,6 +259,61 @@ export class Fighter {
     this.scene.add(ring);
   }
 
+  /**
+   * Мягкий ореол своего цвета за фигурой.
+   *
+   * Одного собственного света материала на свечение не хватило: сцена и так
+   * ярко освещена, тонмаппинг сжимает верха, и разница между нулём и четвертью
+   * на глаз не читается вовсе — снял оба кадра и сравнил, они одинаковые.
+   *
+   * Настоящий bloom тут недоступен: постпроцессинга в сборке нет, а тянуть
+   * его файлы неоткуда. Аддитивный ореол тоже не годится — он ОСВЕТЛЯЕТ,
+   * а осветлять почти белый фон нечем. Работает обратное: мягкое цветное
+   * пятно ЗА фигурой, обычным смешиванием. На светлом фоне оно читается
+   * ровно как свечение и стоит один прямоугольник на бойца.
+   */
+  buildHalo() {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: haloTexture(),
+        color: this.color,
+        transparent: true,
+        depthWrite: false,
+        // Позади тела: иначе пятно ложится поверх панелей и мутит их.
+        depthTest: true,
+      })
+    );
+    mesh.renderOrder = -1;
+    mesh.frustumCulled = false;
+    this.halo = mesh;
+    this.scene.add(mesh);
+  }
+
+  /** Развернуть ореол к камере и подогнать под рост и силу свечения. */
+  updateHalo() {
+    const halo = this.halo;
+    if (!halo) return;
+    const on = T.glow > 0.001 && this.alive && this.group.visible;
+    halo.visible = on;
+    if (!on) return;
+
+    const hips = this.body.pos[P.Hips];
+    const head = this.body.pos[P.Head];
+    halo.position.set(
+      (hips.x + head.x) * 0.5,
+      (hips.y + head.y) * 0.5,
+      (hips.z + head.z) * 0.5
+    );
+    const q = this.scene.userData.camQuat;
+    if (q) halo.quaternion.copy(q);
+    // Размер от роста тела, а не константой: на каланче и коротышке ореол
+    // должен обнимать фигуру одинаково.
+    const size = (Rig.HeadY + 0.5) * (1.5 + T.glow * 0.7);
+    halo.scale.set(size, size, 1);
+    halo.material.opacity = Math.min(0.55, T.glow * 0.6);
+  }
+
   /** Лента за набалдашником: по её форме сразу видно, какой получилась дуга. */
   buildTrail() {
     const positions = new Float32Array(TRAIL_POINTS * 3);
@@ -346,6 +402,7 @@ export class Fighter {
     this.deadTime = 0;
     this.group.visible = false;
     this.marker.visible = false;
+    this.halo.visible = false;
     this.trailPoints.length = 0;
   }
 
@@ -417,6 +474,7 @@ export class Fighter {
     this.group.updateMatrixWorld(true);
     this.updateClubHead(dt, false);
     this.updateMarker();
+    this.updateHalo();
     this.updateTrail();
   }
 
@@ -589,6 +647,7 @@ export class Fighter {
   dispose() {
     this.scene.remove(this.group);
     this.scene.remove(this.marker);
+    this.scene.remove(this.halo);
     this.scene.remove(this.trail);
   }
 }
@@ -596,6 +655,33 @@ export class Fighter {
 // ------------------------------------------------------------- вспомогательное
 
 const _sharedMaterials = new Map();
+
+let _haloTexture = null;
+
+/**
+ * Круглый градиент от центра к прозрачным краям. Рисуется один раз
+ * на всю игру: у всех бойцов пятно одно и то же, разный только цвет,
+ * а его даёт материал.
+ */
+function haloTexture() {
+  if (_haloTexture) return _haloTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  // Плотное ядро и длинный мягкий спад: резкая граница читается кругом
+  // под персонажем, а нам нужно свечение без края.
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.7, 'rgba(255,255,255,0.14)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  _haloTexture = new THREE.CanvasTexture(canvas);
+  _haloTexture.colorSpace = THREE.SRGBColorSpace;
+  return _haloTexture;
+}
 
 /**
  * Картонная панель: трапеция, вытянутая по локальной оси Y.
@@ -634,10 +720,36 @@ function mat(color, roughness, metalness = 0.05) {
   let m = _sharedMaterials.get(key);
   if (!m) {
     // Плоские грани без сглаживания: картон не бликует округло.
-    m = new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: true });
+    m = new THREE.MeshStandardMaterial({
+      color, roughness, metalness, flatShading: true,
+      // Свечение — СОБСТВЕННЫМ цветом фигуры, а не белым.
+      //
+      // Настоящий bloom тут не годится дважды: постпроцессинга в сборке
+      // нет вовсе, а на почти белом фоне размытый ореол всё равно тонет.
+      // Собственный свет материала работает иначе — он не даёт панели
+      // уйти в тень целиком, и фигура держит свой цвет на теневой стороне
+      // вместо того, чтобы сереть. Читается это ровно как лёгкое свечение,
+      // и стоит ноль: тот же проход, ни одной лишней грани.
+      emissive: color,
+      emissiveIntensity: T.glow,
+    });
     _sharedMaterials.set(key, m);
   }
   return m;
+}
+
+/**
+ * Разослать силу свечения по общим материалам.
+ *
+ * Материалы общие на всех бойцов, поэтому ручка живая: подвинул ползунок —
+ * поменялись сразу все. Вызывается из кадра, стоит проход по горстке
+ * материалов и сравнение чисел.
+ */
+export function applyGlow() {
+  const v = Math.max(0, T.glow);
+  for (const m of _sharedMaterials.values()) {
+    if (m.emissiveIntensity !== v) m.emissiveIntensity = v;
+  }
 }
 
 function addMesh(parent, geometry, material, offset) {
