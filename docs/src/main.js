@@ -4,7 +4,7 @@ import { tuning as T, loadTuning } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
-import { Fighter, BodyState, applyGlow } from 'tk/fighter.js';
+import { Fighter, BodyState } from 'tk/fighter.js';
 import { Bot } from 'tk/bot.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
@@ -105,7 +105,6 @@ export async function start() {
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
 
     arena.tick();
-    applyGlow();
     if (dummies.length !== Math.round(T.dummyCount)) {
       syncDummies(scene, arena, dummies, fighters);
     }
@@ -287,20 +286,39 @@ class AimCursor {
     //
     // Сдвиг полигонов вместо подъёма повыше: поднимать метку над настилом
     // нельзя, иначе на косом ракурсе она уползает от точки, которую метит.
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.16, 0.23, 28),
-      new THREE.MeshBasicMaterial({
-        // Белое кольцо на почти белом настиле не видно вовсе — проверено
-        // снимком: на пустом полу его просто нет. Акцентный синий тот же,
-        // что у интерфейса, и метка читается как прицел, а не как блик.
-        color: 0x0071e3, transparent: true, opacity: 0.8,
-        depthWrite: false,
-        polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-      })
-    );
+    const geo = new THREE.RingGeometry(0.16, 0.23, 28);
+    // Белое кольцо на почти белом настиле не видно вовсе — проверено
+    // снимком: на пустом полу его просто нет. Акцентный синий тот же,
+    // что у интерфейса, и метка читается как прицел, а не как блик.
+    this.ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0x0071e3, transparent: true, opacity: 0.8,
+      depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+    }));
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.renderOrder = 5;
     scene.add(this.ring);
+
+    // Точка в центре — единственное, что рисуется СКВОЗЬ всё.
+    //
+    // Системного курсора над ареной больше нет, и прицел остался
+    // единственным указателем — потерять его нельзя. А потерялся бы он
+    // ровно тогда, когда целишься в соперника: кольцо лежит на полу
+    // и честно уходит бойцу за ноги.
+    //
+    // Пробовал держать сквозным само кольцо в четверть силы: на снимке
+    // его на фигуре не разглядеть вовсе, а подними прозрачность — и это
+    // снова наклейка на груди, из-за которой всё и затевалось. Точка
+    // работает лучше обоих: на полу она центр прицела, на фигуре —
+    // курсор, и ни в одном из случаев не круг поверх персонажа.
+    this.ghost = new THREE.Mesh(new THREE.CircleGeometry(0.055, 16),
+      new THREE.MeshBasicMaterial({
+        color: 0x0071e3, transparent: true, opacity: 0.9,
+        depthTest: false, depthWrite: false,
+      }));
+    this.ghost.rotation.x = -Math.PI / 2;
+    this.ghost.renderOrder = 6;
+    scene.add(this.ghost);
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
@@ -314,6 +332,7 @@ class AimCursor {
 
   update(point, player) {
     this.ring.position.set(point.x, 0.02, point.z);
+    this.ghost.position.copy(this.ring.position);
 
     this.link.visible = T.showAimLink && player.state === BodyState.Standing;
     if (!this.link.visible) return;

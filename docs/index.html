@@ -44,16 +44,15 @@
     touch-action: none;
   }
 
-  /* Курсор — прицел, а не стрелка.
-     Своя картинка, а не системный crosshair: тот у каждой ОС свой,
-     чаще всего тонкий чёрный крест, который на почти белой арене
-     теряется начисто. Белая подложка под тёмным контуром читается
-     и на настиле, и на фигуре, и на фоне. Точка привязки — центр. */
+  /* Системного курсора над ареной нет вовсе: прицел рисуется В МИРЕ,
+     на настиле, и второй указатель поверх него — это два курсора сразу,
+     всегда чуть разъехавшихся (мировой лежит на полу, экранный висит
+     над ним). Над панелями курсор возвращается сам: у них свой. */
   #view {
     display: block;
     width: 100%;
     height: 100%;
-    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cg fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' opacity='.9'%3E%3Ccircle cx='16' cy='16' r='7'/%3E%3Cpath d='M16 2.5v4M16 25.5v4M2.5 16h4M25.5 16h4'/%3E%3C/g%3E%3Cg fill='none' stroke='%231d1d1f' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='16' cy='16' r='7'/%3E%3Cpath d='M16 2.5v4M16 25.5v4M2.5 16h4M25.5 16h4'/%3E%3C/g%3E%3Ccircle cx='16' cy='16' r='1.4' fill='%230071e3'/%3E%3C/svg%3E") 16 16, crosshair;
+    cursor: none;
   }
 
   /* Слой интерфейса не ловит указатель: игра должна получать мышь везде,
@@ -542,30 +541,30 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "138";</script>
+<script>window.TK_BUILD = "140";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=138",
-    "tk/main.js":         "./src/main.js?v=138",
-    "tk/tuning.js":       "./src/tuning.js?v=138",
-    "tk/mathx.js":        "./src/mathx.js?v=138",
-    "tk/arena.js":        "./src/arena.js?v=138",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=138",
-    "tk/balance.js":      "./src/balance.js?v=138",
-    "tk/skeleton.js":     "./src/skeleton.js?v=138",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=138",
-    "tk/gait.js":         "./src/gait.js?v=138",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=138",
-    "tk/swingAction.js":  "./src/swingAction.js?v=138",
-    "tk/locomotion.js":   "./src/locomotion.js?v=138",
-    "tk/body.js":         "./src/body.js?v=138",
-    "tk/bot.js":          "./src/bot.js?v=138",
-    "tk/contact.js":      "./src/contact.js?v=138",
-    "tk/match.js":        "./src/match.js?v=138",
-    "tk/fighter.js":      "./src/fighter.js?v=138",
-    "tk/input.js":        "./src/input.js?v=138",
-    "tk/ui.js":           "./src/ui.js?v=138"
+    "three":              "./vendor/three.module.js?v=140",
+    "tk/main.js":         "./src/main.js?v=140",
+    "tk/tuning.js":       "./src/tuning.js?v=140",
+    "tk/mathx.js":        "./src/mathx.js?v=140",
+    "tk/arena.js":        "./src/arena.js?v=140",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=140",
+    "tk/balance.js":      "./src/balance.js?v=140",
+    "tk/skeleton.js":     "./src/skeleton.js?v=140",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=140",
+    "tk/gait.js":         "./src/gait.js?v=140",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=140",
+    "tk/swingAction.js":  "./src/swingAction.js?v=140",
+    "tk/locomotion.js":   "./src/locomotion.js?v=140",
+    "tk/body.js":         "./src/body.js?v=140",
+    "tk/bot.js":          "./src/bot.js?v=140",
+    "tk/contact.js":      "./src/contact.js?v=140",
+    "tk/match.js":        "./src/match.js?v=140",
+    "tk/fighter.js":      "./src/fighter.js?v=140",
+    "tk/input.js":        "./src/input.js?v=140",
+    "tk/ui.js":           "./src/ui.js?v=140"
   }
 }
 </script>
