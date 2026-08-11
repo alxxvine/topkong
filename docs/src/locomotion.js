@@ -80,12 +80,24 @@ export class Locomotion {
    * как раньше, больше нельзя: таз живёт своей жизнью и на шаге подпрыгивает.
    */
   probeGround() {
-    const p = this.f.body.pos;
-    this.grounded = this.footDown(p[P.FootL]) || this.footDown(p[P.FootR]);
+    const b = this.f.body;
+    const p = b.pos;
+    // Ушедшая под диск стопа опорой не является, где бы она ни оказалась
+    // по горизонтали: под ней пустота.
+    this.grounded =
+      (!b.underDeck[P.FootL] && this.footDown(p[P.FootL])) ||
+      (!b.underDeck[P.FootR] && this.footDown(p[P.FootR]));
   }
 
   footDown(foot) {
-    return foot.y < 0.22 && this.arena.isOverDeck(foot.x, foot.z, -0.05);
+    // «Ниже 22 сантиметров» — это про стопу НА НАСТИЛЕ, а не про любую
+    // стопу ниже него. Без нижней границы условию отвечала и стопа,
+    // улетевшая под арену: замерено, тело на 2.29 м ниже настила
+    // считалось стоящим, доходило до полной силы мышц и вставало,
+    // подпрыгнув тазом на 58 сантиметров. Это и есть «провалилось
+    // за край и резко встало».
+    return foot.y < 0.22 && foot.y > -0.25
+      && this.arena.isOverDeck(foot.x, foot.z, -0.05);
   }
 
   /** Скорость меряется по тазу: это честная скорость тела, а не заказанная. */
