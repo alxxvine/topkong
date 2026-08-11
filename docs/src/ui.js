@@ -116,6 +116,13 @@ export class Ui {
     for (const item of QUICK) this.addQuickRow(item);
 
     const head = document.getElementById('quickHead');
+    // На телефоне панель начинается свёрнутой: девять строк занимают
+    // половину экрана, и арену за ними не видно. Заголовок при этом
+    // на месте, разворачивается одним касанием.
+    if (matchMedia('(max-width: 560px)').matches) {
+      this.quick.classList.add('folded');
+      head.querySelector('.chev').textContent = '▾';
+    }
     head.addEventListener('click', () => {
       this.quick.classList.toggle('folded');
       head.querySelector('.chev').textContent =
@@ -202,6 +209,10 @@ export class Ui {
 
   setPaused(on) {
     document.body.classList.toggle('paused', on);
+    // Номер сборки показывается только на паузе: в бою он не нужен,
+    // а свериться, доехало ли обновление, надо уметь всегда.
+    const tag = document.getElementById('buildTag');
+    if (tag && on) tag.textContent = 'сборка ' + (window.TK_BUILD || '?');
     if (this.pauseButton) {
       this.pauseButton.textContent = on ? '▶' : '❙❙';
       this.pauseButton.setAttribute('aria-label', on ? 'Продолжить' : 'Пауза');

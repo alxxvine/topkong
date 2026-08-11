@@ -7,6 +7,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Страницу НЕ КЭШИРОВАТЬ.
+     Адреса модулей версионированы (?v=NNN) и обновляются сами, а вот сам
+     index.html — нет, и именно он держит карту импортов. Safari на телефоне
+     отдавал его из кэша, и игра оставалась на сборке 136, когда в репозитории
+     лежала 151: ползунков четыре вместо девяти, прицел старого цвета.
+     Обойти это можно было только хвостом в адресе. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Top Kong — арена</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%94%A8</text></svg>">
 <style>
@@ -443,6 +452,18 @@
   body.paused #paused .big { transform: scale(1); }
   #paused .small { font-size: 13px; color: var(--dim); }
 
+  /* Метка сборки прижата к низу завесы, а не стоит под надписью: панель
+     ползунков раскрыта в правом верхнем углу и накрывала её собой. */
+  #paused .build {
+    position: absolute;
+    left: 50%;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    font: 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--dim);
+    opacity: 0.7;
+  }
+
   #boot {
     position: fixed;
     inset: 0;
@@ -523,7 +544,13 @@
     <div id="quickBody"></div>
   </div>
 
-  <div id="paused"><div class="big">Пауза</div><div class="small">Нажмите, чтобы продолжить</div></div>
+  <div id="paused">
+    <div class="big">Пауза</div>
+    <div class="small">Нажмите, чтобы продолжить</div>
+    <!-- Номер сборки живёт ЗДЕСЬ, а не в HUD: в бою он не нужен и мешает,
+         а свериться, доехало ли обновление, надо уметь всегда. -->
+    <div class="build" id="buildTag"></div>
+  </div>
 
   <div id="touch">
     <div id="stick"><div id="stickKnob"></div></div>
@@ -550,30 +577,30 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "151";</script>
+<script>window.TK_BUILD = "153";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=151",
-    "tk/main.js":         "./src/main.js?v=151",
-    "tk/tuning.js":       "./src/tuning.js?v=151",
-    "tk/mathx.js":        "./src/mathx.js?v=151",
-    "tk/arena.js":        "./src/arena.js?v=151",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=151",
-    "tk/balance.js":      "./src/balance.js?v=151",
-    "tk/skeleton.js":     "./src/skeleton.js?v=151",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=151",
-    "tk/gait.js":         "./src/gait.js?v=151",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=151",
-    "tk/swingAction.js":  "./src/swingAction.js?v=151",
-    "tk/locomotion.js":   "./src/locomotion.js?v=151",
-    "tk/body.js":         "./src/body.js?v=151",
-    "tk/bot.js":          "./src/bot.js?v=151",
-    "tk/contact.js":      "./src/contact.js?v=151",
-    "tk/match.js":        "./src/match.js?v=151",
-    "tk/fighter.js":      "./src/fighter.js?v=151",
-    "tk/input.js":        "./src/input.js?v=151",
-    "tk/ui.js":           "./src/ui.js?v=151"
+    "three":              "./vendor/three.module.js?v=153",
+    "tk/main.js":         "./src/main.js?v=153",
+    "tk/tuning.js":       "./src/tuning.js?v=153",
+    "tk/mathx.js":        "./src/mathx.js?v=153",
+    "tk/arena.js":        "./src/arena.js?v=153",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=153",
+    "tk/balance.js":      "./src/balance.js?v=153",
+    "tk/skeleton.js":     "./src/skeleton.js?v=153",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=153",
+    "tk/gait.js":         "./src/gait.js?v=153",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=153",
+    "tk/swingAction.js":  "./src/swingAction.js?v=153",
+    "tk/locomotion.js":   "./src/locomotion.js?v=153",
+    "tk/body.js":         "./src/body.js?v=153",
+    "tk/bot.js":          "./src/bot.js?v=153",
+    "tk/contact.js":      "./src/contact.js?v=153",
+    "tk/match.js":        "./src/match.js?v=153",
+    "tk/fighter.js":      "./src/fighter.js?v=153",
+    "tk/input.js":        "./src/input.js?v=153",
+    "tk/ui.js":           "./src/ui.js?v=153"
   }
 }
 </script>
