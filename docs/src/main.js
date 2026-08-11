@@ -81,6 +81,7 @@ export async function start() {
   let hitStop = 0;
   let fps = 60;
   let paused = false;
+  let lastOverField = null;
 
   ui.onPauseToggle = () => {
     paused = !paused;
@@ -187,6 +188,15 @@ export async function start() {
     // иначе прилетает пачка шагов и всё разлетается.
     if (accumulator > STEP * MAX_STEPS) accumulator = 0;
 
+    // Метка живёт только над настилом: за кромкой ей лежать не на чем,
+    // она упирается в предел и перестаёт следовать за мышью. Там её
+    // подменяет системный курсор — см. body.offfield в стилях.
+    const overField = arena.isOverDeck(input.aim.x, input.aim.z);
+    if (overField !== lastOverField) {
+      lastOverField = overField;
+      document.body.classList.toggle('offfield', !overField);
+    }
+    aim.setVisible(overField);
     aim.update(input.aim, player);
     scene.userData.camQuat = camera.quaternion;
     fx.tick(real);
@@ -337,7 +347,15 @@ class AimCursor {
     scene.add(this.link);
   }
 
+  /** Показывать ли мировую метку вообще: за кромкой её место занимает курсор. */
+  setVisible(on) {
+    this.ring.visible = on;
+    this.ghost.visible = on;
+    if (!on) this.link.visible = false;
+  }
+
   update(point, player) {
+    if (!this.ring.visible) return;
     this.ring.position.set(point.x, 0.02, point.z);
     this.ghost.position.copy(this.ring.position);
 

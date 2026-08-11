@@ -8,11 +8,11 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // в том числе с телефона, без Unity и без пересборки. Значения сохраняются
 // в localStorage, поэтому подобранное не теряется при перезагрузке.
 
-// Четыре ручки, которые крутят прямо по ходу боя.
+// Ручки, которые крутят прямо по ходу боя.
 //
 // Отдельно от большой панели не ради красоты: та скрыта в игре целиком
 // и показывает полсотни служебных чисел под их же именами из кода. Здесь
-// имена человеческие, ручек ровно четыре, и каждая едет ВПРАВО = БЫСТРЕЕ.
+// имена человеческие, и каждая ручка едет ВПРАВО = БЫСТРЕЕ (сильнее).
 // Последнее пришлось делать руками: вставание и удар хранятся временем,
 // то есть ползунок «скорость», сползающий влево при ускорении, читался бы
 // сломанным. Поэтому у каждой строки своё чтение и своя запись.
@@ -22,6 +22,17 @@ const QUICK = [
     min: 0.3, max: 3.5, step: 0.05, unit: ' м/с',
     get: () => T.maxRunSpeed,
     set: (v) => { T.maxRunSpeed = v; },
+  },
+  {
+    // Ход вбок и назад — ДОЛЯ от ходьбы, и ползунок выше её уже
+    // масштабирует: замерено, при потолке 0.9 выходит 0.87 вперёд,
+    // 0.48 назад и 0.45 вбок, при 2.4 — 2.32 / 1.27 / 1.18. Но доли эти
+    // зажаты в половину, и потому кажется, что потолок на них не влияет.
+    // Здесь они правятся напрямую. Назад чуть свободнее вбок, как и было.
+    label: 'Вбок и назад',
+    min: 0.15, max: 1, step: 0.05, unit: '×',
+    get: () => T.strafeSpeed,
+    set: (v) => { T.strafeSpeed = v; T.backSpeed = Math.min(1, v * 1.1); },
   },
   {
     label: 'Поворот',
@@ -36,11 +47,40 @@ const QUICK = [
     set: (v) => { T.swingSpeed = v; },
   },
   {
+    label: 'Возврат удара',
+    min: 1, max: 12, step: 0.2, unit: '×',
+    get: () => 1 / Math.max(0.02, T.swingRecoverTime),
+    set: (v) => { T.swingRecoverTime = 1 / Math.max(0.02, v); },
+  },
+  {
+    // Темп, а не откат: ползунок обязан ехать вправо = быстрее, как все
+    // остальные. Чтобы удары нельзя было спамить, эту ручку тянут ВЛЕВО.
+    label: 'Темп ударов',
+    min: 0.5, max: 14, step: 0.2, unit: '/с',
+    get: () => 1 / Math.max(0.02, T.swingCooldown),
+    set: (v) => { T.swingCooldown = 1 / Math.max(0.02, v); },
+  },
+  {
     label: 'Вставание',
     min: 0.3, max: 6, step: 0.1, unit: '×',
     // Хранится время подъёма, показывается скорость.
     get: () => 1 / Math.max(0.05, T.standUpTime),
     set: (v) => { T.standUpTime = 1 / Math.max(0.05, v); },
+  },
+  {
+    label: 'Шаткость',
+    min: 0, max: 1, step: 0.02, unit: '',
+    get: () => T.drunk,
+    set: (v) => { T.drunk = v; },
+  },
+  {
+    // Единственный выключатель среди ручек. Оружие меняет игру целиком —
+    // с ним бой про удар, без него про толчок телом, — и переключать это
+    // надо на ходу, а не искать в отладочной панели.
+    label: 'Оружие',
+    bool: true,
+    get: () => !!T.withClub,
+    set: (v) => { T.withClub = v; },
   },
 ];
 
@@ -84,6 +124,8 @@ export class Ui {
   }
 
   addQuickRow(item) {
+    if (item.bool) return this.addQuickCheck(item);
+
     const row = document.createElement('div');
     row.className = 'row';
 
@@ -116,6 +158,30 @@ export class Ui {
     row.append(label, input);
     this.quickBody.appendChild(row);
     // В общий список тоже: после «Сбросить» эти обязаны перечитаться.
+    this.rows.push({ key: item.label, input, show, quick: true });
+    show();
+  }
+
+  addQuickCheck(item) {
+    const row = document.createElement('div');
+    row.className = 'row check';
+
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    const span = document.createElement('span');
+    span.textContent = item.label;
+    label.append(input, span);
+
+    const show = () => { input.checked = !!item.get(); };
+    input.addEventListener('change', () => {
+      item.set(input.checked);
+      show();
+      saveTuning();
+    });
+
+    row.appendChild(label);
+    this.quickBody.appendChild(row);
     this.rows.push({ key: item.label, input, show, quick: true });
     show();
   }

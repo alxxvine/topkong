@@ -1,5 +1,5 @@
 import { tuning as T } from 'tk/tuning.js';
-import { DEG, RAD, deltaAngle, moveTowards, lerp } from 'tk/mathx.js';
+import { DEG, RAD, deltaAngle, moveTowards, lerp, noiseSigned } from 'tk/mathx.js';
 import { P } from 'tk/body.js';
 
 // Движение и разворот. Теперь это намерение, а не результат.
@@ -27,9 +27,13 @@ export class Locomotion {
     this.velZ = 0;
     /** Градусов в секунду. Хранится отдельно, чтобы у разворота был разгон. */
     this.yawSpeed = 0;
+    /** Своя фаза увода с прямой: одинаковые бойцы шатались бы в такт. */
+    this.wanderPhase = Math.random() * 100;
+    this.wanderSeed = Math.random() * 100;
   }
 
   tick(dt, controlEnabled) {
+    this.wanderPhase += dt * T.drunkRate * 0.6;
     this.probeGround();
     if (this.kinematic) this.moveRoot(dt, controlEnabled);
     else {
@@ -126,6 +130,22 @@ export class Locomotion {
     }
 
     const speed = T.maxRunSpeed * scale * dirScale;
+
+    // Увод с прямой у пьяного. Поворачивается ЗАКАЗАННЫЙ ход, а не сам
+    // боец: направление взгляда и управление остаются целиком за игроком,
+    // просто ноги несут не совсем туда, куда он попросил. Медленно —
+    // вырулить всегда можно, и это не отбирает контроль, а мешает ему.
+    if (moving && T.drunk > 0) {
+      const a = noiseSigned(this.wanderSeed, this.wanderPhase)
+        * T.drunk * T.drunkWander * 0.7;
+      const s = Math.sin(a);
+      const c = Math.cos(a);
+      const rx = wx * c - wz * s;
+      const rz = wx * s + wz * c;
+      wx = rx;
+      wz = rz;
+    }
+
     return { x: wx * speed, z: wz * speed, moving };
   }
 
@@ -197,5 +217,6 @@ export class Locomotion {
     this.velX = 0;
     this.velZ = 0;
     this.grounded = false;
+    this.wanderPhase = Math.random() * 100;
   }
 }

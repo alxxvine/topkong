@@ -38,6 +38,8 @@ export class PoseDriver {
     this.yawRate = 0;
     this.lastSpeed = 0;
     this.noiseSeed = Math.random() * 100;
+    /** Своя медленная фаза пьяного качания. */
+    this.drunkPhase = Math.random() * 100;
 
     /** Разворот плечевого пояса относительно таза, градусы. */
     this.twist = 0;
@@ -151,7 +153,7 @@ export class PoseDriver {
       ? Math.abs(Math.sin(this.stepPhase * Math.PI * 2)) * T.stepBobKinematic
         * Rig.LegLength * strideNorm
       : 0;
-    this.bob = lerp(this.bob, targetBob, clamp01(12 * dt));
+    this.bob = lerp(this.bob, targetBob, clamp01(12 * dt * this.softness()));
 
     this.updateWobble(dt, this.f.locomotion.planarSpeed, strideNorm);
     this.updateTwist(dt, strideNorm, grounded);
@@ -207,14 +209,14 @@ export class PoseDriver {
 
     const target = fromTurn + fromStep + fromSwing + fromBreath;
     // Плечи набирают скрут не мгновенно: масса корпуса своё берёт.
-    this.twist = lerp(this.twist, target, clamp01(11 * dt));
+    this.twist = lerp(this.twist, target, clamp01(11 * dt * this.softness()));
 
     // Голова доворачивается ОТ ПЛЕЧ, поэтому из её угла вычитается скрут:
     // плечи и так уже уехали. Ограничение накладывается на итог, а не
     // на слагаемое — иначе на быстром развороте отставание плеч и вынос
     // головы складывались бы и шея выворачивалась.
     const headOffset = clamp(headLead - this.twist, -T.headTurnMax, T.headTurnMax);
-    this.headTurn = lerp(this.headTurn, headOffset * DEG, clamp01(9 * dt));
+    this.headTurn = lerp(this.headTurn, headOffset * DEG, clamp01(9 * dt * this.softness()));
   }
 
   /**
@@ -241,6 +243,17 @@ export class PoseDriver {
   }
 
   /**
+   * Во сколько раз медленнее тело доводит позу до цели.
+   *
+   * Одно число на все доводки разом. Порознь их крутить нельзя: корпус,
+   * плечи, голова и подскок обязаны отставать СОГЛАСОВАННО, иначе выходит
+   * не вялость, а рассинхрон — часть тела уже приехала, часть ещё едет.
+   */
+  softness() {
+    return 1 / (1 + T.drunk * T.drunkSoft * 2.2);
+  }
+
+  /**
    * Вторичная неровность цели: завал корпуса, покачивание и отставание дубины.
    *
    * Часть этого тело теперь делает само — ядро едет, конечности отстают.
@@ -253,7 +266,7 @@ export class PoseDriver {
     const acceleration = (planarSpeed - this.lastSpeed) / Math.max(1e-5, dt);
     this.lastSpeed = planarSpeed;
     const leanTarget = clamp(-acceleration * T.leanFromAccel, -1.2, 1.2);
-    this.lean = lerp(this.lean, leanTarget, clamp01(8 * dt));
+    this.lean = lerp(this.lean, leanTarget, clamp01(8 * dt * this.softness()));
 
     // 2. Покачивание, усиленное у края.
     const dist = Math.hypot(this.f.position.x, this.f.position.z);
@@ -261,7 +274,26 @@ export class PoseDriver {
     const amount = T.wobbleAmount * (0.4 + normalized) * (1 + edge * 2);
     const n = noiseSigned(this.noiseSeed, performance.now() * 0.001 * T.wobbleRate);
     const stepSway = Math.sin(this.stepPhase * Math.PI * 2) * 0.5 * normalized;
-    this.sway = lerp(this.sway, (n + stepSway) * amount, clamp01(6 * dt));
+
+    // Пьяная добавка идёт в ТОТ ЖЕ sway, которым сделана штатная шаткость:
+    // он сдвигает корпус вбок тем сильнее, чем выше точка (таз 0.02,
+    // грудь 0.10, голова 0.22), то есть это и есть завал, а не съезд.
+    // Своя частота и вдвое медленнее — медленное читается опьянением,
+    // быстрое дрожью.
+    this.drunkPhase += dt * T.drunkRate;
+    const drunkNoise = noiseSigned(this.noiseSeed + 91.3, this.drunkPhase);
+    // Завал вбок ОТ ХОДА: корпус отстаёт от собственных ног. Скорость
+    // раскладывается на «вбок» через разворот бойца — иначе завал зависел
+    // бы от осей мира, а не от того, куда боец повёрнут.
+    const loco = this.f.locomotion;
+    const sin = Math.sin(this.f.yaw);
+    const cos = Math.cos(this.f.yaw);
+    const side = loco.velX * cos - loco.velZ * sin;
+    const list = -side * T.drunkList * 0.9;
+    const drunkSway = T.drunk * (drunkNoise * T.drunkSway * 2.2 + list);
+
+    this.sway = lerp(this.sway, (n + stepSway) * amount + drunkSway,
+      clamp01(6 * dt * this.softness()));
 
     // 3. Дубина отстаёт от разворота. Физически она отстаёт и сама, но здесь
     // отставание задаётся в цели — так им можно управлять, а не только
