@@ -50,11 +50,12 @@ export async function start() {
   const input = new Input(canvas);
   const ui = new Ui();
   const fx = new HitFx(scene);
-  const aim = new AimCursor(scene);
 
   const player = new Fighter(scene, arena, {
     isPlayer: true, name: 'Игрок', color: 0xff8a5c, x: 0, z: -2, yaw: 0,
   });
+  // Прицел собирается ПОСЛЕ игрока: он красится его цветом.
+  const aim = new AimCursor(scene, player.color);
   const fighters = [player];
   const dummies = [];
 
@@ -276,7 +277,7 @@ function placeRound(fighters, arena) {
  * именно этого не хватало в Unity-версии, пока курсора не было.
  */
 class AimCursor {
-  constructor(scene) {
+  constructor(scene, color) {
     // Прицел лежит НА НАСТИЛЕ и честно закрывается бойцами.
     //
     // Раньше он рисовался поверх всего (depthTest выключен) и наезжал
@@ -286,12 +287,18 @@ class AimCursor {
     //
     // Сдвиг полигонов вместо подъёма повыше: поднимать метку над настилом
     // нельзя, иначе на косом ракурсе она уползает от точки, которую метит.
-    const geo = new THREE.RingGeometry(0.16, 0.23, 28);
-    // Белое кольцо на почти белом настиле не видно вовсе — проверено
-    // снимком: на пустом полу его просто нет. Акцентный синий тот же,
-    // что у интерфейса, и метка читается как прицел, а не как блик.
+    //
+    // Цвет — СВОЙ У ИГРОКА, а не фирменный синий интерфейса. Метка
+    // принадлежит бойцу, а не панели, и общий с ним цвет связывает их
+    // без единой подписи. Синий вдобавок совпадал с цветом манекена,
+    // и в свалке прицел путался с чужой фигурой.
+    //
+    // Тонкая и полупрозрачная намеренно. Жирное кольцо в полную силу
+    // тянуло взгляд на себя сильнее, чем соперник, за которым и надо
+    // следить: прицел обязан подсказывать, а не солировать.
+    const geo = new THREE.RingGeometry(0.185, 0.215, 40);
     this.ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      color: 0x0071e3, transparent: true, opacity: 0.8,
+      color, transparent: true, opacity: 0.5,
       depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
     }));
@@ -301,19 +308,19 @@ class AimCursor {
 
     // Точка в центре — единственное, что рисуется СКВОЗЬ всё.
     //
-    // Системного курсора над ареной больше нет, и прицел остался
-    // единственным указателем — потерять его нельзя. А потерялся бы он
-    // ровно тогда, когда целишься в соперника: кольцо лежит на полу
-    // и честно уходит бойцу за ноги.
+    // Системного курсора над ареной нет, и прицел остался единственным
+    // указателем — потерять его нельзя. А потерялся бы он ровно тогда,
+    // когда целишься в соперника: кольцо лежит на полу и честно уходит
+    // бойцу за ноги.
     //
     // Пробовал держать сквозным само кольцо в четверть силы: на снимке
     // его на фигуре не разглядеть вовсе, а подними прозрачность — и это
     // снова наклейка на груди, из-за которой всё и затевалось. Точка
     // работает лучше обоих: на полу она центр прицела, на фигуре —
     // курсор, и ни в одном из случаев не круг поверх персонажа.
-    this.ghost = new THREE.Mesh(new THREE.CircleGeometry(0.055, 16),
+    this.ghost = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16),
       new THREE.MeshBasicMaterial({
-        color: 0x0071e3, transparent: true, opacity: 0.9,
+        color, transparent: true, opacity: 0.7,
         depthTest: false, depthWrite: false,
       }));
     this.ghost.rotation.x = -Math.PI / 2;
@@ -323,7 +330,7 @@ class AimCursor {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
     this.link = new THREE.Line(geometry, new THREE.LineBasicMaterial({
-      color: 0x0071e3, transparent: true, opacity: 0.3, depthWrite: false,
+      color, transparent: true, opacity: 0.16, depthWrite: false,
     }));
     this.link.frustumCulled = false;
     this.link.renderOrder = 5;
