@@ -68,6 +68,15 @@ const QUICK = [
     set: (v) => { T.standUpTime = 1 / Math.max(0.05, v); },
   },
   {
+    // Наклон в сторону хода. Он и делает походку походкой: без него
+    // боец едет стоймя, и это читается роботом, сколько ни качай его
+    // случайным шумом.
+    label: 'Наклон',
+    min: 0, max: 3, step: 0.05, unit: '×',
+    get: () => T.leanAmount,
+    set: (v) => { T.leanAmount = v; },
+  },
+  {
     label: 'Шаткость',
     min: 0, max: 1, step: 0.02, unit: '',
     get: () => T.drunk,

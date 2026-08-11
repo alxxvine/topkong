@@ -262,10 +262,30 @@ export class PoseDriver {
    * прежних — физика уже добавляет своё.
    */
   updateWobble(dt, planarSpeed, normalized) {
-    // 1. Инерция: разгоняешься — корпус отстаёт назад, тормозишь — валится вперёд.
+    // Скорость В СИСТЕМЕ БОЙЦА: вдоль взгляда и вбок от него. Мировые оси
+    // тут не годятся — наклон должен зависеть от того, куда боец повёрнут,
+    // а не от того, куда смотрит камера.
+    const loco = this.f.locomotion;
+    const sinY = Math.sin(this.f.yaw);
+    const cosY = Math.cos(this.f.yaw);
+    const vForward = loco.velX * sinY + loco.velZ * cosY;
+    const vSide = loco.velX * cosY - loco.velZ * sinY;
+
+    // 1а. НАКЛОН В СТОРОНУ ХОДА — от самой скорости, а не от её изменения.
+    //
+    // Раньше наклон брался только от ускорения, и это и был весь «робот»:
+    // качнуло на старте, качнуло на остановке, а между ними боец ехал
+    // стоймя, как деталь на конвейере. Человек же весь путь идёт наклонённым
+    // туда, куда идёт, — иначе он бы не шёл, а падал назад.
+    const leanSpeed = vForward * T.leanFromSpeed * T.leanAmount;
+
+    // 1б. Инерция: разгоняешься — корпус отстаёт назад, тормозишь — валится
+    // вперёд. Складывается с наклоном от скорости, а не заменяет его:
+    // на старте боец сперва отваливается назад, потом входит в наклон.
     const acceleration = (planarSpeed - this.lastSpeed) / Math.max(1e-5, dt);
     this.lastSpeed = planarSpeed;
-    const leanTarget = clamp(-acceleration * T.leanFromAccel, -1.2, 1.2);
+    const leanTarget = clamp(
+      leanSpeed - acceleration * T.leanFromAccel, -1.6, 1.6);
     this.lean = lerp(this.lean, leanTarget, clamp01(8 * dt * this.softness()));
 
     // 2. Покачивание, усиленное у края.
@@ -275,24 +295,20 @@ export class PoseDriver {
     const n = noiseSigned(this.noiseSeed, performance.now() * 0.001 * T.wobbleRate);
     const stepSway = Math.sin(this.stepPhase * Math.PI * 2) * 0.5 * normalized;
 
-    // Пьяная добавка идёт в ТОТ ЖЕ sway, которым сделана штатная шаткость:
-    // он сдвигает корпус вбок тем сильнее, чем выше точка (таз 0.02,
-    // грудь 0.10, голова 0.22), то есть это и есть завал, а не съезд.
-    // Своя частота и вдвое медленнее — медленное читается опьянением,
-    // быстрое дрожью.
+    // Наклон ВБОК — тот же закон, что и вперёд: идёшь боком, валишься боком.
+    // sway разносит тело тем сильнее, чем выше точка (таз 0.02, грудь 0.10,
+    // голова 0.22), то есть это именно завал, а не съезд вбок целиком.
+    const listSpeed = vSide * T.listFromSpeed * T.leanAmount;
+
+    // Пьяная добавка живёт в том же канале: своя медленная частота
+    // и завал ОТ ХОДА, когда корпус отстаёт от собственных ног.
     this.drunkPhase += dt * T.drunkRate;
     const drunkNoise = noiseSigned(this.noiseSeed + 91.3, this.drunkPhase);
-    // Завал вбок ОТ ХОДА: корпус отстаёт от собственных ног. Скорость
-    // раскладывается на «вбок» через разворот бойца — иначе завал зависел
-    // бы от осей мира, а не от того, куда боец повёрнут.
-    const loco = this.f.locomotion;
-    const sin = Math.sin(this.f.yaw);
-    const cos = Math.cos(this.f.yaw);
-    const side = loco.velX * cos - loco.velZ * sin;
-    const list = -side * T.drunkList * 0.9;
-    const drunkSway = T.drunk * (drunkNoise * T.drunkSway * 2.2 + list);
+    const drunkSway = T.drunk
+      * (drunkNoise * T.drunkSway * 2.2 - vSide * T.drunkList * 0.9);
 
-    this.sway = lerp(this.sway, (n + stepSway) * amount + drunkSway,
+    this.sway = lerp(this.sway,
+      (n + stepSway) * amount + listSpeed + drunkSway,
       clamp01(6 * dt * this.softness()));
 
     // 3. Дубина отстаёт от разворота. Физически она отстаёт и сама, но здесь
