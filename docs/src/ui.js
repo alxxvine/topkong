@@ -8,6 +8,42 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // в том числе с телефона, без Unity и без пересборки. Значения сохраняются
 // в localStorage, поэтому подобранное не теряется при перезагрузке.
 
+// Четыре ручки, которые крутят прямо по ходу боя.
+//
+// Отдельно от большой панели не ради красоты: та скрыта в игре целиком
+// и показывает полсотни служебных чисел под их же именами из кода. Здесь
+// имена человеческие, ручек ровно четыре, и каждая едет ВПРАВО = БЫСТРЕЕ.
+// Последнее пришлось делать руками: вставание и удар хранятся временем,
+// то есть ползунок «скорость», сползающий влево при ускорении, читался бы
+// сломанным. Поэтому у каждой строки своё чтение и своя запись.
+const QUICK = [
+  {
+    label: 'Ходьба',
+    min: 0.3, max: 3.5, step: 0.05, unit: ' м/с',
+    get: () => T.maxRunSpeed,
+    set: (v) => { T.maxRunSpeed = v; },
+  },
+  {
+    label: 'Поворот',
+    min: 60, max: 700, step: 10, unit: '°/с',
+    get: () => T.turnSpeed,
+    set: (v) => { T.turnSpeed = v; },
+  },
+  {
+    label: 'Удар',
+    min: 0.3, max: 3, step: 0.05, unit: '×',
+    get: () => T.swingSpeed,
+    set: (v) => { T.swingSpeed = v; },
+  },
+  {
+    label: 'Вставание',
+    min: 0.3, max: 6, step: 0.1, unit: '×',
+    // Хранится время подъёма, показывается скорость.
+    get: () => 1 / Math.max(0.05, T.standUpTime),
+    set: (v) => { T.standUpTime = 1 / Math.max(0.05, v); },
+  },
+];
+
 export class Ui {
   constructor() {
     this.hud = document.getElementById('hud');
@@ -22,8 +58,88 @@ export class Ui {
     this.body = document.getElementById('tuneBody');
     this.rows = [];
 
+    this.quick = document.getElementById('quick');
+    this.quickBody = document.getElementById('quickBody');
+    this.pauseButton = document.getElementById('pause');
+    this.pauseVeil = document.getElementById('paused');
+    /** Ставит main: ему принадлежит сам флаг паузы. */
+    this.onPauseToggle = null;
+
     this.buildPanel();
+    this.buildQuick();
     this.bindFold();
+    this.bindPause();
+  }
+
+  buildQuick() {
+    if (!this.quickBody) return;
+    for (const item of QUICK) this.addQuickRow(item);
+
+    const head = document.getElementById('quickHead');
+    head.addEventListener('click', () => {
+      this.quick.classList.toggle('folded');
+      head.querySelector('.chev').textContent =
+        this.quick.classList.contains('folded') ? '▾' : '▴';
+    });
+  }
+
+  addQuickRow(item) {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const label = document.createElement('div');
+    label.className = 'lbl';
+    const name = document.createElement('span');
+    name.textContent = item.label;
+    const value = document.createElement('span');
+    label.append(name, value);
+
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = item.min;
+    input.max = item.max;
+    input.step = item.step;
+
+    const show = () => {
+      const v = item.get();
+      value.textContent = format(v, item.step) + (item.unit || '');
+      // Ползунок не трогаем, пока его тянут: иначе палец спорит с обновлением.
+      if (document.activeElement !== input) input.value = v;
+    };
+
+    input.addEventListener('input', () => {
+      item.set(parseFloat(input.value));
+      show();
+      saveTuning();
+    });
+
+    row.append(label, input);
+    this.quickBody.appendChild(row);
+    // В общий список тоже: после «Сбросить» эти обязаны перечитаться.
+    this.rows.push({ key: item.label, input, show, quick: true });
+    show();
+  }
+
+  /**
+   * Пауза. Кнопка в углу, щелчок по затемнению и клавиши Esc и P —
+   * три входа в одно и то же, потому что искать один-единственный
+   * способ остановить игру никто не будет.
+   */
+  bindPause() {
+    const toggle = () => { if (this.onPauseToggle) this.onPauseToggle(); };
+    if (this.pauseButton) this.pauseButton.addEventListener('click', toggle);
+    if (this.pauseVeil) this.pauseVeil.addEventListener('click', toggle);
+    addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' || e.code === 'KeyP') { e.preventDefault(); toggle(); }
+    });
+  }
+
+  setPaused(on) {
+    document.body.classList.toggle('paused', on);
+    if (this.pauseButton) {
+      this.pauseButton.textContent = on ? '▶' : '❙❙';
+      this.pauseButton.setAttribute('aria-label', on ? 'Продолжить' : 'Пауза');
+    }
   }
 
   bindFold() {
@@ -164,6 +280,8 @@ export class Ui {
   /** Перечитать значения в виджеты — после сброса. */
   refresh() {
     for (const row of this.rows) {
+      // Быстрые ручки читают и пишут своё, по имени настройки их не найти.
+      if (row.quick) { row.show(); continue; }
       if (row.input.type === 'checkbox') row.input.checked = !!T[row.key];
       else row.input.value = T[row.key];
       row.show();

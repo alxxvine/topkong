@@ -61,7 +61,7 @@ export async function start() {
   syncDummies(scene, arena, dummies, fighters);
 
   // Матч перезапускает раунд сам, поэтому расстановка отдаётся ему целиком.
-  const match = new Match(fighters, player, () => resetRound(player, dummies, arena));
+  const match = new Match(fighters, player, () => placeRound(fighters, arena));
 
   resize();
   addEventListener('resize', resize);
@@ -79,12 +79,29 @@ export async function start() {
   let now = 0;
   let hitStop = 0;
   let fps = 60;
+  let paused = false;
+
+  ui.onPauseToggle = () => {
+    paused = !paused;
+    ui.setPaused(paused);
+    // Накопитель обнуляется на выходе: за время паузы кадры шли, а шаги
+    // физики нет, и без сброса игра доганяла бы пропущенное пачкой шагов.
+    if (!paused) { accumulator = 0; last = performance.now(); }
+  };
 
   function frame(time) {
     requestAnimationFrame(frame);
 
     const real = Math.min(0.1, (time - last) / 1000);
     last = time;
+
+    // Пауза останавливает ВСЁ: физику, ботов, матч, эффекты и камеру.
+    // Кадр при этом продолжает рисоваться — иначе окно замирает мёртвой
+    // картинкой и непонятно, игра встала или вкладка.
+    if (paused) {
+      renderer.render(scene, camera);
+      return;
+    }
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
 
     arena.tick();
@@ -215,26 +232,41 @@ function syncDummies(scene, arena, dummies, fighters) {
     fighters.push(d);
   }
 
-  for (let i = 0; i < dummies.length; i++) {
-    dummies[i].spawnIndex = i;
-    dummies[i].spawnTotal = dummies.length;
-    placeDummy(dummies[i], arena);
-  }
-}
-
-function placeDummy(dummy, arena) {
-  const angle = (dummy.spawnIndex / Math.max(1, dummy.spawnTotal)) * Math.PI * 2 + 0.4;
-  const r = arena.radius * 0.5;
-  dummy.spawn(Math.sin(angle) * r, Math.cos(angle) * r, angle + Math.PI);
+  placeRound(fighters, arena);
 }
 
 // Функции respawnFallen больше нет. Выбывшие не возвращаются: раунд
 // кончается тем, что кто-то остался один, а возврат упавших означал бы,
 // что он не кончается никогда. Перезапуском занимается match.js.
 
-function resetRound(player, dummies, arena) {
-  player.spawn(0, -2, 0);
-  for (const d of dummies) placeDummy(d, arena);
+/**
+ * Расстановка на раунд — случайная, но не как попало.
+ *
+ * Фиксированная расстановка приедалась за десяток раундов: игрок всегда
+ * внизу, соперники всегда по тем же точкам, и бой начинался одинаково.
+ * Чистый случай, однако, тоже не годится — он регулярно ставит двоих
+ * вплотную, и раунд открывается толкотнёй вместо схватки.
+ *
+ * Поэтому сектора равные, а случайны поворот всего круга, дрожание
+ * внутри сектора и удаление от центра. Минимальный разъезд при этом
+ * гарантирован самой геометрией, а не проверками и переброcами.
+ */
+function placeRound(fighters, arena) {
+  const n = Math.max(1, fighters.length);
+  const base = Math.random() * Math.PI * 2;
+  const sector = (Math.PI * 2) / n;
+  // Дрожание — доля сектора, а не абсолютный угол: на двоих сектор в 180°,
+  // на шестерых в 60°, и одна и та же добавка означала бы разное.
+  const jitter = sector * 0.28;
+
+  for (let i = 0; i < n; i++) {
+    const angle = base + sector * i + (Math.random() * 2 - 1) * jitter;
+    const r = arena.radius * (0.42 + Math.random() * 0.24);
+    // Лицом к центру, с разбросом: строй, глядящий строго в середину,
+    // читается расстановкой, а не случайностью.
+    const yaw = angle + Math.PI + (Math.random() * 2 - 1) * 0.5;
+    fighters[i].spawn(Math.sin(angle) * r, Math.cos(angle) * r, yaw);
+  }
 }
 
 // -------------------------------------------------------------------- прицел

@@ -316,6 +316,115 @@
 
   #swing.on { background: #0058b0; transform: scale(0.96); }
 
+  /* --- пауза и быстрые ручки ---
+     Оба виджета живут В ВЕРХНИХ УГЛАХ и не прячутся вместе с отладочной
+     панелью: пауза нужна всегда, а ползунки нужны именно во время боя.
+     Низ экрана занят стиками, поэтому туда их ставить нельзя. */
+  #pause {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    font: 600 13px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    pointer-events: auto;
+    /* Выше завесы паузы: она размывает всё, что под ней, а кнопка выхода
+       из паузы и ручки скоростей обязаны оставаться чёткими и живыми —
+       крутить настройки на паузе как раз и удобнее всего. */
+    z-index: 2;
+  }
+
+  #pause:active { transform: scale(0.94); }
+
+  /* HUD стоит в том же углу — сдвигаем его вправо от кнопки. */
+  #hud { left: 62px; }
+
+  #quick {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: 10px;
+    width: 208px;
+    max-width: calc(100vw - 20px);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    pointer-events: auto;
+    overflow: hidden;
+    z-index: 2;
+  }
+
+  #quickHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: -0.01em;
+  }
+
+  #quickHead .spacer { flex: 1; }
+  #quickHead .chev { color: var(--dim); }
+  #quickBody { padding: 0 12px 10px; }
+  #quick.folded #quickBody { display: none; }
+
+  /* Панель настроек — тоже справа сверху; уступает место быстрой. */
+  #tune { top: calc(62px + env(safe-area-inset-top, 0px)); }
+
+  /* Пауза размывает кадр, а не закрашивает его. Сцена остаётся видимой
+     и узнаваемой — понятно, что игра стоит, а не свернулась.
+     Появление через opacity, а не display: display не анимируется,
+     и стекло возникало бы рывком. */
+  #paused {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(228, 231, 236, 0.32);
+    backdrop-filter: saturate(140%) blur(18px);
+    -webkit-backdrop-filter: saturate(140%) blur(18px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.22s ease, visibility 0.22s;
+    pointer-events: none;
+    cursor: pointer;
+    z-index: 1;
+  }
+
+  body.paused #paused {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  #paused .big {
+    font-size: 46px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    transform: scale(0.94);
+    transition: transform 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  }
+
+  body.paused #paused .big { transform: scale(1); }
+  #paused .small { font-size: 13px; color: var(--dim); }
+
   #boot {
     position: fixed;
     inset: 0;
@@ -386,6 +495,18 @@
     <div id="tuneBody"></div>
   </div>
 
+  <!-- Пауза и четыре ручки, которые крутят прямо по ходу боя. Живут отдельно
+       от большой панели настроек: та скрыта в игре целиком, а эти обязаны
+       быть под рукой всегда. -->
+  <button id="pause" type="button" aria-label="Пауза">❙❙</button>
+
+  <div id="quick">
+    <div id="quickHead"><span>Скорости</span><span class="spacer"></span><span class="chev">▴</span></div>
+    <div id="quickBody"></div>
+  </div>
+
+  <div id="paused"><div class="big">Пауза</div><div class="small">Нажмите, чтобы продолжить</div></div>
+
   <div id="touch">
     <div id="stick"><div id="stickKnob"></div></div>
     <div id="aim"><div id="aimKnob"></div></div>
@@ -411,30 +532,30 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "133";</script>
+<script>window.TK_BUILD = "136";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=133",
-    "tk/main.js":         "./src/main.js?v=133",
-    "tk/tuning.js":       "./src/tuning.js?v=133",
-    "tk/mathx.js":        "./src/mathx.js?v=133",
-    "tk/arena.js":        "./src/arena.js?v=133",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=133",
-    "tk/balance.js":      "./src/balance.js?v=133",
-    "tk/skeleton.js":     "./src/skeleton.js?v=133",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=133",
-    "tk/gait.js":         "./src/gait.js?v=133",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=133",
-    "tk/swingAction.js":  "./src/swingAction.js?v=133",
-    "tk/locomotion.js":   "./src/locomotion.js?v=133",
-    "tk/body.js":         "./src/body.js?v=133",
-    "tk/bot.js":          "./src/bot.js?v=133",
-    "tk/contact.js":      "./src/contact.js?v=133",
-    "tk/match.js":        "./src/match.js?v=133",
-    "tk/fighter.js":      "./src/fighter.js?v=133",
-    "tk/input.js":        "./src/input.js?v=133",
-    "tk/ui.js":           "./src/ui.js?v=133"
+    "three":              "./vendor/three.module.js?v=136",
+    "tk/main.js":         "./src/main.js?v=136",
+    "tk/tuning.js":       "./src/tuning.js?v=136",
+    "tk/mathx.js":        "./src/mathx.js?v=136",
+    "tk/arena.js":        "./src/arena.js?v=136",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=136",
+    "tk/balance.js":      "./src/balance.js?v=136",
+    "tk/skeleton.js":     "./src/skeleton.js?v=136",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=136",
+    "tk/gait.js":         "./src/gait.js?v=136",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=136",
+    "tk/swingAction.js":  "./src/swingAction.js?v=136",
+    "tk/locomotion.js":   "./src/locomotion.js?v=136",
+    "tk/body.js":         "./src/body.js?v=136",
+    "tk/bot.js":          "./src/bot.js?v=136",
+    "tk/contact.js":      "./src/contact.js?v=136",
+    "tk/match.js":        "./src/match.js?v=136",
+    "tk/fighter.js":      "./src/fighter.js?v=136",
+    "tk/input.js":        "./src/input.js?v=136",
+    "tk/ui.js":           "./src/ui.js?v=136"
   }
 }
 </script>
