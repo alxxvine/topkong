@@ -29,12 +29,20 @@ export class Bot {
     this.wantSwing = false;
     /** После своего удара выжидает — иначе долбит без остановки. */
     this.rest = 0;
+    /** Сколько времени упираемся в соперника без хода. */
+    this.clinch = 0;
+    /** Сколько ещё отходить после клинча и в какую сторону заходить. */
+    this.backoff = 0;
+    this.side = 1;
+    this.clinchLimit = 0.5 + Math.random() * 0.8;
   }
 
   reset() {
     this.target = null;
     this.wantSwing = false;
     this.rest = 0;
+    this.clinch = 0;
+    this.backoff = 0;
   }
 
   tick(dt, fighters) {
@@ -52,12 +60,25 @@ export class Bot {
       this.target = this.pickTarget(fighters);
     }
 
-    const edge = Math.hypot(f.position.x, f.position.z) / Math.max(0.1, this.arena.radius);
+    const myEdge = Math.hypot(f.position.x, f.position.z) / Math.max(0.1, this.arena.radius);
+    const victim = this.target;
+    const victimEdge = victim
+      ? Math.hypot(victim.position.x, victim.position.z) / Math.max(0.1, this.arena.radius)
+      : 0;
+    const victimDown = victim && victim.body.strength < T.controlStrength;
 
     // 1. Спасаться. У самого края всё остальное не имеет значения: боец,
     // который упорно идёт бить, стоя пяткой над обрывом, просто уходит вниз
     // и никакого боя не показывает.
-    if (edge > T.botEdgeFear) {
+    //
+    // НО страх отступает, когда бот сам толкает: жертва лежит или стоит
+    // ДАЛЬШЕ от центра, чем он, — значит между ним и обрывом её тело,
+    // и довести её до кромки безопаснее, чем кажется. Без этой поправки
+    // бот бросал добычу на подходе к краю, и та спокойно вставала:
+    // замерено, докатывал до радиуса 5.6 из 7.5 и разворачивался.
+    const pushingOut = victim && (victimDown || !T.withClub) && victimEdge > myEdge + 0.03;
+    const fearAt = pushingOut ? 0.93 : T.botEdgeFear;
+    if (myEdge > fearAt) {
       _away.set(-f.position.x, 0, -f.position.z).normalize();
       f.moveInput.set(_away.x, _away.z);
       f.facingTarget.copy(_away);
@@ -65,7 +86,6 @@ export class Bot {
       return;
     }
 
-    const victim = this.target;
     if (!victim) {
       f.moveInput.set(0, 0);
       f.swing.held = false;
@@ -89,9 +109,54 @@ export class Bot {
     // там — снаружи это выглядело упором в невидимую стену, тем более
     // что тела тогда вообще не сталкивались и стены не было никакой.
     const hit = T.botStrikeRange;
-    const victimDown = victim.body.strength < T.controlStrength;
+
+    // Лежачего КАТЯТ К КРАЮ, а не идут «к нему». Курс на самого лежачего
+    // кончался топтанием у тела: дошёл — цель под ногами — стоит. Цель
+    // ставится ЗА жертвой, наружу от центра арены, и бот проходит сквозь,
+    // толкая тело перед собой. У кромки его развернёт страх края выше.
+    if (victimDown) {
+      const vlen = Math.hypot(victim.position.x, victim.position.z);
+      const ox = vlen > 0.3 ? victim.position.x / vlen : _to.x;
+      const oz = vlen > 0.3 ? victim.position.z / vlen : _to.z;
+      _away.set(victim.position.x + ox * 1.6 - f.position.x, 0,
+                victim.position.z + oz * 1.6 - f.position.z).normalize();
+      f.moveInput.set(_away.x, _away.z);
+      f.facingTarget.copy(_away);
+      f.swing.held = false;
+      return;
+    }
+
+    // Клинч. Встречный таран — сумо: обоих никуда не везёт, расшатка
+    // не копится, и это физически честно. Поэтому лоб в лоб не решает —
+    // бот, простояв в упоре секунду, отходит и заходит СБОКУ: жертву,
+    // которую везут вбок, её собственный ход не спасает.
+    if (!T.withClub) {
+      const gap = dist - T.bodyRadius * 2;
+      if (gap < 0.15 && f.locomotion.planarSpeed < 0.35) this.clinch += dt;
+      else this.clinch = Math.max(0, this.clinch - dt * 2);
+      // Порог у каждого клинча свой. Два одинаковых бота с одинаковым
+      // порогом отходили СИНХРОННО и танцевали так вечно: симметрию
+      // некому было разбить.
+      if (this.clinch > this.clinchLimit) {
+        this.clinch = 0;
+        this.clinchLimit = 0.5 + Math.random() * 0.8;
+        this.backoff = 0.8 + Math.random() * 0.5;
+        this.side = Math.random() < 0.5 ? -1 : 1;
+      }
+      if (this.backoff > 0) {
+        this.backoff -= dt;
+        // Назад и вбок разом: выход из клинча по дуге, а не отскок.
+        f.moveInput.set(
+          -_to.x * 0.7 + _to.z * this.side * 0.7,
+          -_to.z * 0.7 - _to.x * this.side * 0.7);
+        f.swing.held = false;
+        return;
+      }
+    }
+
     let drive = 0;
-    if (victimDown) drive = 1;
+    // Без оружия дистанция бессмысленна: бить нечем, и весь бой — таран.
+    if (!T.withClub) drive = 1;
     else if (dist > hit) drive = 1;
     else if (dist < hit * 0.72) drive = -1;
 

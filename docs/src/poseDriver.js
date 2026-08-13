@@ -340,8 +340,16 @@ export class PoseDriver {
     const drunkSway = T.drunk
       * (drunkNoise * T.drunkSway * 2.2 - vSide * T.drunkList * 0.9);
 
+    // Расшатка от тарана — то же качание, но быстрое: пьяного мотает
+    // медленно и размашисто, а таранимого трясёт. По ней видно, что боец
+    // вот-вот упадёт, и видно ДО падения — в этом весь смысл.
+    const stag = this.f.stagger || 0;
+    const staggerSway = stag > 0.02
+      ? noiseSigned(this.noiseSeed + 47.7, performance.now() * 0.0028) * stag * 1.7
+      : 0;
+
     this.sway = this.springTo('sway',
-      (n + stepSway) * amount + listSpeed + drunkSway, dt);
+      (n + stepSway) * amount + listSpeed + drunkSway + staggerSway, dt);
 
     // 3. Дубина отстаёт от разворота. Физически она отстаёт и сама, но здесь
     // отставание задаётся в цели — так им можно управлять, а не только

@@ -59,6 +59,32 @@ function pair(a, b, dt) {
  * и соперник едет перед ним ровно пока тот идёт. Ручка shoveTransfer —
  * доля этого обмена: на нуле тела просто не проходят сквозь друг друга.
  */
+/**
+ * Напор: жертву ВЕЗУТ быстрее, чем она сама хочет ехать.
+ *
+ * Именно так отличается таран от совместного бега. Скорость бойца вдоль
+ * линии от соперника сравнивается с его же ЗАКАЗАННОЙ скоростью в ту же
+ * сторону: кто бежит сам — тому ничего, кого везут против воли — тот
+ * расшатывается. Ниже порога скорости напор не считается вовсе, поэтому
+ * подпереть соперника плечом можно, а уронить шагом — нет.
+ *
+ * Дошедшая до предела расшатка отпускает мышцы: боец падает ПО ХОДУ
+ * тарана. Это и есть «таранить до конца».
+ */
+function ramPressure(f, nx, nz, dt) {
+  const l = f.locomotion;
+  const v = l.velX * nx + l.velZ * nz;
+  const want = Math.max(0, l.wantX * nx + l.wantZ * nz);
+  const press = v - want - T.shoveStaggerAt;
+  if (press <= 0) return;
+  f.stagger = Math.min(1, f.stagger + press * T.shoveStaggerRate * dt);
+  if (f.stagger >= 1) {
+    _n.set(nx * T.shoveTopple, T.shoveTopple * 0.5, nz * T.shoveTopple);
+    f.takeHit(_n, dt);
+    f.stagger = 0;
+  }
+}
+
 function block(a, b, dt) {
   const r = T.bodyRadius;
   let dx = b.position.x - a.position.x;
@@ -92,6 +118,26 @@ function block(a, b, dt) {
   la.velZ += nz * ta;
   lb.velX += nx * tb;
   lb.velZ += nz * tb;
+
+  // После обмена оба едут почти вместе — и у каждого проверяется,
+  // не везут ли его. Нормаль у каждого своя: «от соперника».
+  ramPressure(a, -nx, -nz, dt);
+  ramPressure(b, nx, nz, dt);
+
+  // Обоюдный клинч. Встречный таран никого никуда не везёт, и по правилу
+  // выше он не расшатывает НИКОГО — физически честно, но так сумо длится
+  // вечно. Поэтому упор, в котором оба давят навстречу, а пара стоит,
+  // изматывает обоих понемногу: держать клинч — тоже ставка.
+  const pushA = la.wantX * nx + la.wantZ * nz;
+  const pushB = -(lb.wantX * nx + lb.wantZ * nz);
+  const still = Math.abs(va + vb) * 0.5 < 0.25;
+  if (still && pushA > 0.25 && pushB > 0.25) {
+    const grind = T.clinchStaggerRate * dt;
+    a.stagger = Math.min(1, a.stagger + grind);
+    b.stagger = Math.min(1, b.stagger + grind);
+    if (a.stagger >= 1) { _n.set(-nx * T.shoveTopple, T.shoveTopple * 0.5, -nz * T.shoveTopple); a.takeHit(_n, dt); a.stagger = 0; }
+    if (b.stagger >= 1) { _n.set(nx * T.shoveTopple, T.shoveTopple * 0.5, nz * T.shoveTopple); b.takeHit(_n, dt); b.stagger = 0; }
+  }
 }
 
 /**

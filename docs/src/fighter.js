@@ -71,6 +71,8 @@ export class Fighter {
     this.settleTime = 0;
     this.airTime = 0;
     this.deadTime = 0;
+    /** Расшатка от тарана, 0..1. Копит contact.js, спадает сама. */
+    this.stagger = 0;
 
     // Скорость набалдашника меряется по смещению за кадр: кость кинематическая,
     // собственной скорости у неё нет вовсе.
@@ -286,6 +288,8 @@ export class Fighter {
     this.settleTime = 0;
     this.airTime = 0;
     this.deadTime = 0;
+    /** Расшатка от тарана, 0..1. Копит contact.js, спадает сама. */
+    this.stagger = 0;
     this.swingSpeed = 0;
     this.lastHit.clear();
     this.trailPoints.length = 0;
@@ -359,6 +363,10 @@ export class Fighter {
 
     const body = this.body;
     this.updateStrength(dt);
+    // Расшатка от тарана отпускает, как только напор прекратился.
+    // Копится она в contact.js — ДО тика, поэтому при живом напоре
+    // приход всегда обгоняет этот спад.
+    this.stagger = Math.max(0, this.stagger - T.shoveStaggerDecay * dt);
 
     // Управление возвращается не мгновенно, а по мере того, как мышцы
     // снова начинают держать тело.
