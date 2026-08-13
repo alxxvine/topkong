@@ -67,9 +67,14 @@ export class SwingAction {
      *  канонической точки манеры. См. комментарий на переходе в Strike. */
     this.strikeFrom = { angle: 0, reach: 0, lean: 0, height: 0, pitch: 0 };
 
-    /** Доля проноса, уходящая на подхват недобранного замаха (0 — замах
-     *  был полным и подхватывать нечего). Ставится на переходе в Strike. */
-    this.pullFrac = 0;
+    /** Seconds the pull-back takes at the start of Strike (0 when the
+     *  wind-up was full). The pull ADDS to the strike duration instead of
+     *  eating into it: the sweep itself always gets the same time in every
+     *  style and at every charge. When it borrowed from a fixed window,
+     *  overhead taps kept only ~65% of it (the club has the longest way up)
+     *  while side taps kept nearly all — and the strikes felt like
+     *  animations with different frame counts, because they were. */
+    this.pullTime = 0;
   }
 
   /** Идёт пронос — только в это время дубина считается бьющей. Подхват
@@ -78,7 +83,7 @@ export class SwingAction {
    *  в обратную сторону. */
   get striking() {
     if (this.state !== SwingState.Strike) return false;
-    return this.timer / Math.max(0.01, T.swingStrikeTime) >= this.pullFrac;
+    return this.timer >= this.pullTime;
   }
 
   tick(dt) {
@@ -124,14 +129,15 @@ export class SwingAction {
           // дальше полная дуга. Так простой клик бьёт всеми манерами
           // целиком (игрок не обязан зажимать кнопку ради разнообразия),
           // а подхват остаётся непрерывным движением, не скачком.
-          // Доля подхвата — от расстояния, которое руке осталось пройти;
-          // при полном замахе она нулевая и удар идёт как раньше.
+          // Длительность подхвата — от расстояния, которое руке осталось
+          // пройти; при полном замахе она нулевая. Подхват — ДОБАВКА
+          // к времени удара, сам пронос всегда одной длины (см. pullTime).
           const st = SWING_STYLES[this.styleIndex] || SWING_STYLES[0];
           const half = T.swingArcDegrees * 0.5;
           const gapA = Math.abs(this.angle - (half * st.aFrom[0] + st.aFrom[1])) / 320;
           const gapH = Math.abs(this.height - st.hF) / 1.4;
           const gapP = Math.abs(this.pitch - st.pF) / 320;
-          this.pullFrac = Math.min(0.35, Math.max(gapA, gapH, gapP));
+          this.pullTime = Math.min(0.35, Math.max(gapA, gapH, gapP)) * T.swingStrikeTime;
           this.state = SwingState.Strike;
           this.timer = 0;
           this.power = lerp(T.swingWeakestPower, 1, this.charge);
@@ -140,7 +146,7 @@ export class SwingAction {
 
       case SwingState.Strike:
         this.timer += dt;
-        if (this.timer >= T.swingStrikeTime) {
+        if (this.timer >= this.pullTime + T.swingStrikeTime) {
           this.state = SwingState.Recover;
           this.timer = 0;
           this.cooldown = T.swingCooldown;
@@ -181,43 +187,48 @@ export class SwingAction {
         break;
 
       case SwingState.Strike: {
-        const phase = clamp01(this.timer / Math.max(0.01, T.swingStrikeTime));
-        const eased = 1 - (1 - phase) * (1 - phase);
         const from = this.strikeFrom;
-        const pull = this.pullFrac;
-        if (pull > 0.01 && phase < pull) {
+        const pull = this.pullTime;
+        if (pull > 1e-4 && this.timer < pull) {
           // Подхват: рука стремительно, но непрерывно доезжает из позы
           // отпускания в стартовую точку манеры. Быстрый клик получает
           // молниеносный замах внутри самого удара — манера читается
-          // и без зажатой кнопки.
-          const t = phase / pull;
+          // и без зажатой кнопки. Это своё время, не время проноса.
+          const t = this.timer / pull;
           const s = t * t * (3 - 2 * t);
           targetAngle = lerpUnclamped(from.angle, arc(st.aFrom), s);
           targetHeight = lerpUnclamped(from.height, st.hF, s);
           targetPitch = lerpUnclamped(from.pitch, st.pF, s);
+          targetReach = lerp(from.reach, ClubRestReach, s);
+          targetLean = from.lean;
         } else {
-          // Пронос. Ease-out: резкий в начале, доводится к концу — линейная
-          // развёртка выглядела бы равномерным вращением манипулятора.
+          // Пронос — всегда РОВНО swingStrikeTime, у всех манер и при
+          // любом заряде. Разгон косинусом: пик скорости в СЕРЕДИНЕ дуги,
+          // где стоит прицел, доводка после. Прежний ease-out давал
+          // максимум скорости в первом же кадре — удар читался деревянным
+          // рывком манипулятора, а не махом с замахом и проносом.
           // Дуга — из стартовой точки манеры (подхват уже довёл до неё;
           // при полном замахе это же и поза отпускания) в конечную.
           // Рука всегда правая: обратная дуга — бэкхенд, а не
           // перекладывание оружия. У горизонтальных манер пронос плоский,
           // у рубящих высота и наклон дубины падают — удар приходит сверху.
-          const p2 = clamp01((phase - pull) / Math.max(0.01, 1 - pull));
-          const e2 = 1 - (1 - p2) * (1 - p2);
-          const fromA = pull > 0.01 ? arc(st.aFrom) : from.angle;
-          const fromH = pull > 0.01 ? st.hF : from.height;
-          const fromP = pull > 0.01 ? st.pF : from.pitch;
+          const p2 = clamp01((this.timer - pull) / Math.max(0.01, T.swingStrikeTime));
+          const e2 = 0.5 - 0.5 * Math.cos(p2 * Math.PI);
+          const pulled = pull > 1e-4;
+          const fromA = pulled ? arc(st.aFrom) : from.angle;
+          const fromH = pulled ? st.hF : from.height;
+          const fromP = pulled ? st.pF : from.pitch;
           targetAngle = lerpUnclamped(fromA, arc(st.aTo), e2);
           targetHeight = lerpUnclamped(fromH, st.hT, e2);
           targetPitch = lerpUnclamped(fromP, st.pT, e2);
+          // Вынос и наклон корпуса тоже продолжаются без щелчка: вынос
+          // раскрывается к середине дуги, наклон отпускания растворяется
+          // за пронос в наклон вперёд и обратно.
+          const baseReach = pulled ? ClubRestReach : from.reach;
+          targetReach = lerp(lerp(baseReach, ClubRestReach, e2),
+                             T.handMaxReach, Math.sin(p2 * Math.PI));
+          targetLean = from.lean * (1 - e2) + Math.sin(p2 * Math.PI);
         }
-        // Вынос и наклон корпуса продолжаются из позы отпускания по всему
-        // удару: стартуй они с константы, на отпускании полного замаха
-        // корпус щёлкал бы из отклона назад в ноль.
-        targetReach = lerp(lerp(from.reach, ClubRestReach, eased),
-                           T.handMaxReach, Math.sin(phase * Math.PI));
-        targetLean = from.lean * (1 - eased) + Math.sin(phase * Math.PI);
         // Во время удара поза ставится напрямую: любое сглаживание здесь
         // размазало бы тайминг, ради которого сценарный удар и делался.
         blend = 1;
