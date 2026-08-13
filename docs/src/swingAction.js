@@ -58,6 +58,10 @@ export class SwingAction {
 
     /** Какой манерой бьём сейчас. Выбирается заново на каждом замахе. */
     this.styleIndex = 0;
+
+    /** Поза в момент отпускания: пронос стартует из неё, а не из
+     *  канонической точки манеры. См. комментарий на переходе в Strike. */
+    this.strikeFrom = { angle: 0, reach: 0, lean: 0, height: 0, pitch: 0 };
   }
 
   /** Идёт пронос — только в это время дубина считается бьющей. */
@@ -92,6 +96,21 @@ export class SwingAction {
         this.timer += dt;
         this.charge = Math.min(1, this.timer / Math.max(0.01, T.swingChargeTime));
         if (!this.held) {
+          // Тычок без замаха бьётся всегда широкой манерой. Манера читается
+          // по замаху, а замаха не было; стартовая точка широкой совпадает
+          // с походной стойкой (half + 25 = carryAngle), так что быстрый
+          // удар начинается ровно оттуда, где рука уже есть.
+          if (this.charge < 0.35) this.styleIndex = 0;
+          // Пронос стартует из ФАКТИЧЕСКОЙ позы, а не из канонической
+          // точки манеры. Недокрученный замах довёл руку до середины пути —
+          // и удар идёт с этой середины. Иначе на отпускании рука
+          // телепортировалась бы в точку полного замаха: для обратного
+          // это скачок на 200°, и бьёт он «из ниоткуда».
+          this.strikeFrom.angle = this.angle;
+          this.strikeFrom.reach = this.reach;
+          this.strikeFrom.lean = this.lean;
+          this.strikeFrom.height = this.height;
+          this.strikeFrom.pitch = this.pitch;
           this.state = SwingState.Strike;
           this.timer = 0;
           this.power = lerp(T.swingWeakestPower, 1, this.charge);
@@ -145,16 +164,23 @@ export class SwingAction {
         // Ease-out: пронос резкий в начале и доводится к концу. Линейная
         // развёртка выглядит как равномерное вращение манипулятора, а не как удар.
         const eased = 1 - (1 - phase) * (1 - phase);
-        // Дуга — из стартовой точки манеры через прицел в её конечную.
+        const from = this.strikeFrom;
+        // Дуга — из позы отпускания в конечную точку манеры. При полном
+        // заряде поза отпускания и есть полный замах манеры, при недобранном
+        // дуга просто короче — но всегда непрерывна, рука ниоткуда не прыгает.
         // Рука при этом всегда правая: обратная дуга — бэкхенд,
         // а не перекладывание оружия.
-        targetAngle = lerpUnclamped(arc(st.aFrom), arc(st.aTo), eased);
-        targetReach = lerp(ClubRestReach, T.handMaxReach, Math.sin(phase * Math.PI));
-        targetLean = Math.sin(phase * Math.PI);
+        targetAngle = lerpUnclamped(from.angle, arc(st.aTo), eased);
+        // Вынос и наклон корпуса тоже продолжаются из позы отпускания:
+        // раньше оба стартовали с константы, и на отпускании полного замаха
+        // корпус щёлкал из отклона назад в ноль.
+        targetReach = lerp(lerp(from.reach, ClubRestReach, eased),
+                           T.handMaxReach, Math.sin(phase * Math.PI));
+        targetLean = from.lean * (1 - eased) + Math.sin(phase * Math.PI);
         // У горизонтальных манер пронос плоский; у рубящих высота и наклон
         // дубины падают за пронос — удар приходит сверху.
-        targetHeight = lerpUnclamped(st.hF, st.hT, eased);
-        targetPitch = lerpUnclamped(st.pF, st.pT, eased);
+        targetHeight = lerpUnclamped(from.height, st.hT, eased);
+        targetPitch = lerpUnclamped(from.pitch, st.pT, eased);
         // Во время удара поза ставится напрямую: любое сглаживание здесь
         // размазало бы тайминг, ради которого сценарный удар и делался.
         blend = 1;
