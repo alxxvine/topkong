@@ -1,0 +1,42 @@
+# Деплой на GitHub Pages через Actions, а не «из ветки».
+#
+# Встроенный механизм «deploy from branch» — чёрный ящик: 13.08.2026 он молча
+# перестал подхватывать пуши в main (два коммита пролежали по получасу без
+# сборки), и снаружи его никак не пнуть. Этот workflow делает то же самое —
+# публикует docs/ — но виден в Actions, запускается руками (workflow_dispatch)
+# и падает вслух, если что-то не так.
+#
+# configure-pages с enablement: true сам переключает источник Pages
+# с «ветки» на «workflow» при первом запуске.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4
