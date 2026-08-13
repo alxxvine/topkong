@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
 import { P } from 'tk/body.js';
-import { lerp } from 'tk/mathx.js';
+import { clamp, lerp } from 'tk/mathx.js';
 
 // Бойцы наконец занимают место.
 //
@@ -78,8 +78,16 @@ function ramPressure(f, nx, nz, dt) {
   const press = v - want - T.shoveStaggerAt;
   if (press <= 0) return;
   f.stagger = Math.min(1, f.stagger + press * T.shoveStaggerRate * dt);
+  // Куда валит — запоминается для позы: жертва наклоняется ТУДА, куда
+  // её толкают, и падает уже из наклона, а не из ровной стойки.
+  const k = Math.min(1, 10 * dt);
+  f.staggerDirX += (nx - f.staggerDirX) * k;
+  f.staggerDirZ += (nz - f.staggerDirZ) * k;
   if (f.stagger >= 1) {
-    _n.set(nx * T.shoveTopple, T.shoveTopple * 0.5, nz * T.shoveTopple);
+    // Толчок скромный. Тело к этому моменту уже наклонено по ходу тарана,
+    // и ему достаточно отпустить мышцы: большой импульс читался
+    // «отлетел», а нужен «подкосился».
+    _n.set(nx * T.shoveTopple, T.shoveTopple * 0.35, nz * T.shoveTopple);
     f.takeHit(_n, dt);
     f.stagger = 0;
   }
@@ -124,20 +132,43 @@ function block(a, b, dt) {
   ramPressure(a, -nx, -nz, dt);
   ramPressure(b, nx, nz, dt);
 
-  // Обоюдный клинч. Встречный таран никого никуда не везёт, и по правилу
-  // выше он не расшатывает НИКОГО — физически честно, но так сумо длится
-  // вечно. Поэтому упор, в котором оба давят навстречу, а пара стоит,
-  // изматывает обоих понемногу: держать клинч — тоже ставка.
-  const pushA = la.wantX * nx + la.wantZ * nz;
-  const pushB = -(lb.wantX * nx + lb.wantZ * nz);
-  const still = Math.abs(va + vb) * 0.5 < 0.25;
-  if (still && pushA > 0.25 && pushB > 0.25) {
-    const grind = T.clinchStaggerRate * dt;
-    a.stagger = Math.min(1, a.stagger + grind);
-    b.stagger = Math.min(1, b.stagger + grind);
-    if (a.stagger >= 1) { _n.set(-nx * T.shoveTopple, T.shoveTopple * 0.5, -nz * T.shoveTopple); a.takeHit(_n, dt); a.stagger = 0; }
-    if (b.stagger >= 1) { _n.set(nx * T.shoveTopple, T.shoveTopple * 0.5, nz * T.shoveTopple); b.takeHit(_n, dt); b.stagger = 0; }
+  // Задевание вскользь — реакция ТЕЛОМ, а не невидимым полем.
+  //
+  // Когда один проходит мимо и цепляет другого плечом, у столкновения
+  // есть КАСАТЕЛЬНАЯ составляющая — скольжение контакта вбок. Она
+  // проворачивает обоих вокруг точки касания (задетый стоя доворачивается
+  // за проходящим) и коротко качает задетого. Ровно так читается
+  // «задели плечом»: не стена, а человек, которого крутануло.
+  const tx = -nz;
+  const tz = nx;
+  const relT = (la.velX - lb.velX) * tx + (la.velZ - lb.velZ) * tz;
+  if (Math.abs(relT) > 0.15) {
+    const spin = relT * T.grazeSpin * dt;
+    a.yaw += spin;
+    b.yaw += spin;
+    // Корневой доворот контроллер взгляда выправит за доли секунды — и это
+    // правильно, «пошатнулся и вернулся». А вот СКРУТ ПЛЕЧ живёт в позе:
+    // плечи крутануло за проходящим, и они сами отыгрывают обратно.
+    const jolt = relT * T.grazeTwist * dt;
+    if (a.poseDriver) a.poseDriver.grazeJolt = clamp(a.poseDriver.grazeJolt + jolt, -40, 40);
+    if (b.poseDriver) b.poseDriver.grazeJolt = clamp(b.poseDriver.grazeJolt + jolt, -40, 40);
+    // Лёгкая встряска задетому — тому, кто движется МЕДЛЕННЕЕ: его качнуло.
+    // Потолок ниже падения: от задевания шатает, но не роняет.
+    const slower = Math.hypot(la.velX, la.velZ) < Math.hypot(lb.velX, lb.velZ) ? a : b;
+    if (slower.stagger < 0.35) {
+      slower.stagger = Math.min(0.35, slower.stagger + Math.abs(relT) * 0.6 * dt);
+      const sn = slower === a ? -1 : 1;
+      const k = Math.min(1, 10 * dt);
+      slower.staggerDirX += (sn * nx - slower.staggerDirX) * k;
+      slower.staggerDirZ += (sn * nz - slower.staggerDirZ) * k;
+    }
   }
+
+  // Обоюдного износа в клинче НЕТ, и это решение по игре, а не пропуск.
+  // Пробовал: упор, в котором оба давят навстречу, изматывал обоих
+  // поровну — и оба падали в один момент. Выглядело абсурдом: падать
+  // должен только тот, кого везут, а лоб в лоб — честный тупик. Выход
+  // из него — зайти сбоку, и боты так и делают.
 }
 
 /**

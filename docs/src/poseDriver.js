@@ -45,6 +45,8 @@ export class PoseDriver {
 
     /** Разворот плечевого пояса относительно таза, градусы. */
     this.twist = 0;
+    /** Рывок скрута от задевания. Затухает сам, входит в цель скрута. */
+    this.grazeJolt = 0;
     /** Доворот головы относительно плеч, радианы. Читает его отрисовка. */
     this.headTurn = 0;
     /** Фаза дыхания. В покое тело иначе стоит абсолютно неподвижно. */
@@ -209,7 +211,11 @@ export class PoseDriver {
     const idle = clamp01(1 - strideNorm * 3);
     const fromBreath = Math.sin(this.breath * Math.PI * 2) * T.breathTwist * idle;
 
-    const target = fromTurn + fromStep + fromSwing + fromBreath;
+    // 5. Задевание: плечи крутануло за проходящим. Рывок сидит в ЦЕЛИ,
+    // а не в самом скруте — иначе сглаживание съедало его за десятую
+    // секунды, и от касания оставалось пять градусов вместо двадцати.
+    this.grazeJolt *= Math.max(0, 1 - 4 * dt);
+    const target = fromTurn + fromStep + fromSwing + fromBreath + this.grazeJolt;
     // Плечи набирают скрут не мгновенно: масса корпуса своё берёт.
     this.twist = lerp(this.twist, target, clamp01(11 * dt * this.softness()));
 
@@ -301,6 +307,20 @@ export class PoseDriver {
     const vForward = loco.velX * sinY + loco.velZ * cosY;
     const vSide = loco.velX * cosY - loco.velZ * sinY;
 
+    // Расшатка от тарана: наклон ТУДА, КУДА ТОЛКАЮТ, — телеграф падения.
+    // Мировое направление тарана раскладывается по осям бойца и входит
+    // и в наклон вперёд-назад, и в завал вбок. Поверх — мелкая дрожь:
+    // без неё наклон читается позой, а не борьбой за равновесие.
+    const stag = this.f.stagger || 0;
+    let staggerLean = 0;
+    let staggerSway = 0;
+    if (stag > 0.02) {
+      const tilt = stag * T.staggerLean;
+      staggerLean = (this.f.staggerDirX * sinY + this.f.staggerDirZ * cosY) * tilt;
+      staggerSway = (this.f.staggerDirX * cosY - this.f.staggerDirZ * sinY) * tilt
+        + noiseSigned(this.noiseSeed + 47.7, performance.now() * 0.0028) * stag * 0.5;
+    }
+
     // 1а. НАКЛОН В СТОРОНУ ХОДА — от самой скорости, а не от её изменения.
     //
     // Раньше наклон брался только от ускорения, и это и был весь «робот»:
@@ -318,7 +338,8 @@ export class PoseDriver {
     const acceleration = (planarSpeed - this.lastSpeed) / Math.max(1e-5, dt);
     this.lastSpeed = planarSpeed;
     const leanTarget = clamp(
-      leanSpeed - acceleration * T.leanFromAccel * T.leanAmount, -1.6, 1.6);
+      leanSpeed + staggerLean - acceleration * T.leanFromAccel * T.leanAmount,
+      -1.8, 1.8);
     this.lean = this.springTo('lean', leanTarget, dt);
 
     // 2. Покачивание, усиленное у края.
@@ -339,14 +360,6 @@ export class PoseDriver {
     const drunkNoise = noiseSigned(this.noiseSeed + 91.3, this.drunkPhase);
     const drunkSway = T.drunk
       * (drunkNoise * T.drunkSway * 2.2 - vSide * T.drunkList * 0.9);
-
-    // Расшатка от тарана — то же качание, но быстрое: пьяного мотает
-    // медленно и размашисто, а таранимого трясёт. По ней видно, что боец
-    // вот-вот упадёт, и видно ДО падения — в этом весь смысл.
-    const stag = this.f.stagger || 0;
-    const staggerSway = stag > 0.02
-      ? noiseSigned(this.noiseSeed + 47.7, performance.now() * 0.0028) * stag * 1.7
-      : 0;
 
     this.sway = this.springTo('sway',
       (n + stepSway) * amount + listSpeed + drunkSway + staggerSway, dt);
@@ -374,6 +387,7 @@ export class PoseDriver {
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
     this.twist = 0;
+    this.grazeJolt = 0;
     this.headTurn = 0;
   }
 }

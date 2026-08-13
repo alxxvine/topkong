@@ -73,6 +73,9 @@ export class Fighter {
     this.deadTime = 0;
     /** Расшатка от тарана, 0..1. Копит contact.js, спадает сама. */
     this.stagger = 0;
+    /** Куда валит таран — мировое направление; по нему наклоняется поза. */
+    this.staggerDirX = 0;
+    this.staggerDirZ = 0;
 
     // Скорость набалдашника меряется по смещению за кадр: кость кинематическая,
     // собственной скорости у неё нет вовсе.
@@ -290,6 +293,9 @@ export class Fighter {
     this.deadTime = 0;
     /** Расшатка от тарана, 0..1. Копит contact.js, спадает сама. */
     this.stagger = 0;
+    /** Куда валит таран — мировое направление; по нему наклоняется поза. */
+    this.staggerDirX = 0;
+    this.staggerDirZ = 0;
     this.swingSpeed = 0;
     this.lastHit.clear();
     this.trailPoints.length = 0;
@@ -406,6 +412,13 @@ export class Fighter {
       body.setTargets(pose, this.yaw);
       body.step(dt);
       this.slipOffLedge(dt);
+      // Встающий держится за настил, а не скользит по нему. Пока мышцы
+      // на нуле (только что сбили, летит) — никакого хвата: отбрасывание
+      // должно долетать. Хват включается вместе с первыми процентами силы,
+      // то есть ровно тогда, когда тело начало подниматься.
+      if (body.strength > 0.02 && body.touchesDeck()) {
+        body.dampPlanar(T.riseGrip, dt);
+      }
     }
     body.writeBones(this.bones, this.poseDriver.headTurn);
     this.updateThread();
