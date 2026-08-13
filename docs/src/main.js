@@ -162,7 +162,9 @@ export async function start() {
 
       // Боты думают ДО физики: они пишут те же поля ввода, что и игрок,
       // и тик бойца обязан увидеть уже свежие.
-      if (match.controlEnabled) {
+      // Выключенные боты не «думают ноль» — они не думают вовсе и стоят:
+      // удобно спокойно пробовать управление, удары и толчки.
+      if (match.controlEnabled && T.botsActive) {
         for (const d of dummies) if (d.bot) d.bot.tick(STEP, fighters);
       } else {
         for (const d of dummies) { d.moveInput.set(0, 0); d.swing.held = false; }

@@ -359,6 +359,15 @@ export class Fighter {
     this.trailPoints.length = 0;
   }
 
+  /**
+   * Есть ли у ЭТОГО бойца дубина. Общая ручка выключает оружие всем,
+   * отдельная — только ботам: игрок с дубиной против безоружных ботов
+   * (и наоборот) — легитимный способ играть.
+   */
+  get hasClub() {
+    return T.withClub && (this.isPlayer || T.botsArmed);
+  }
+
   // ------------------------------------------------------------------ цикл
 
   tick(dt, controlEnabled) {
@@ -380,10 +389,12 @@ export class Fighter {
 
     // Без дубины бить нечем: замах не считается вовсе, иначе боец
     // размахивает пустой рукой и портит замер походки.
-    this.swing.held = inControl && this.swing.held && T.withClub;
-    if (T.withClub) this.swing.tick(dt);
+    this.swing.held = inControl && this.swing.held && this.hasClub;
+    if (this.hasClub) this.swing.tick(dt);
     else this.swing.reset();
-    this.bones.club.visible = T.withClub;
+    this.bones.club.visible = this.hasClub;
+    // Телу тоже: без дубины набалдашник почти невесом и ничего не тянет.
+    body.clubOn = this.hasClub;
     // Равновесие считается ДО локомоции: она подмешивает его поправку
     // в скорость ядра, а походка — его направление падения в шаг.
     this.balance.tick(dt, this.locomotion.grounded);

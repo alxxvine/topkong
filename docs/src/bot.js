@@ -76,7 +76,7 @@ export class Bot {
     // и довести её до кромки безопаснее, чем кажется. Без этой поправки
     // бот бросал добычу на подходе к краю, и та спокойно вставала:
     // замерено, докатывал до радиуса 5.6 из 7.5 и разворачивался.
-    const pushingOut = victim && (victimDown || !T.withClub) && victimEdge > myEdge + 0.03;
+    const pushingOut = victim && (victimDown || !(T.withClub && T.botsArmed)) && victimEdge > myEdge + 0.03;
     const fearAt = pushingOut ? 0.93 : T.botEdgeFear;
     if (myEdge > fearAt) {
       _away.set(-f.position.x, 0, -f.position.z).normalize();
@@ -94,6 +94,9 @@ export class Bot {
       f.facingTarget.set(-f.position.x, 0, -f.position.z);
       return;
     }
+
+    // Вооружён ли ЭТОТ бот: общая ручка оружия плюс отдельная для ботов.
+    const armed = T.withClub && T.botsArmed;
 
     _to.copy(victim.position).sub(f.position);
     _to.y = 0;
@@ -130,7 +133,7 @@ export class Bot {
     // не копится, и это физически честно. Поэтому лоб в лоб не решает —
     // бот, простояв в упоре секунду, отходит и заходит СБОКУ: жертву,
     // которую везут вбок, её собственный ход не спасает.
-    if (!T.withClub) {
+    if (!armed) {
       const gap = dist - T.bodyRadius * 2;
       if (gap < 0.15 && f.locomotion.planarSpeed < 0.35) this.clinch += dt;
       else this.clinch = Math.max(0, this.clinch - dt * 2);
@@ -156,7 +159,7 @@ export class Bot {
 
     let drive = 0;
     // Без оружия дистанция бессмысленна: бить нечем, и весь бой — таран.
-    if (!T.withClub) drive = 1;
+    if (!armed) drive = 1;
     else if (dist > hit) drive = 1;
     else if (dist < hit * 0.72) drive = -1;
 
@@ -169,7 +172,7 @@ export class Bot {
     // 3. Бить. Заряд копится, пока соперник в досягаемости; отпускается,
     // когда набрано задуманное. Отпускать надо ЗАРАНЕЕ — пронос занимает
     // время, и удар в упор всегда опаздывает.
-    if (!T.withClub) { f.swing.held = false; return; }
+    if (!armed) { f.swing.held = false; return; }
 
     const inRange = dist < hit * 1.25 && this.rest <= 0;
     if (!inRange) {
