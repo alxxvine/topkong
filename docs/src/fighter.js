@@ -615,7 +615,7 @@ export class Fighter {
    * диаметра и точечная проверка просто прошла бы сквозь соперника.
    */
   checkHits(others, dt, now, onHit) {
-    if (!T.withClub) return;
+    if (!this.hasClub) return;
     if (!this.alive || !this.swing.striking) return;
     if (this.swingSpeed < T.minImpactSpeed) return;
 

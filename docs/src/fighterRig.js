@@ -169,7 +169,12 @@ export function makePose() {
  */
 export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReach,
                             lean, sway = 0, clubHeight = 0, clubPitchDeg = 0, lift = 0,
-                            twistDeg = 0, footL = null, footR = null) {
+                            twistDeg = 0, footL = null, footR = null,
+                            // Вооружённость — свойство БОЙЦА, не мира: когда
+                            // у игрока дубина есть, а ботам она выключена,
+                            // глобальная ручка ставила безоружному боту руку
+                            // «на хват» несуществующего оружия.
+                            withClub = T.withClub) {
   const legOut = HipHalfWidth + T.limbOffset;
   const hipSide = sway * 0.02;
   const hipFwd = lean * 0.02;
@@ -282,7 +287,7 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // Раньше держащая рука выбиралась по знаку grip.x, то есть менялась
   // вместе со стороной дуги, и оружие перекладывалось из руки в руку
   // после каждого удара.
-  if (T.withClub) pose.handRight.set(pose.grip.x, pose.grip.y, pose.grip.z);
+  if (withClub) pose.handRight.set(pose.grip.x, pose.grip.y, pose.grip.z);
 
   // Кисть — ровно на длину руки от плеча. Рука тоже одна деталь, и всё,
   // что сказано про ногу, верно и здесь: цель, до которой рука не достаёт,
@@ -291,7 +296,7 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // держит оружие рука, а не оружие руку.
   onSphere(pose.shoulderRight, pose.handRight, ArmLength);
   onSphere(pose.shoulderLeft, pose.handLeft, ArmLength);
-  if (T.withClub) pose.grip.copy(pose.handRight);
+  if (withClub) pose.grip.copy(pose.handRight);
 
   // Наклон отдельно от разворота: без него дубина всегда горизонтальна,
   // и «волочится за спиной» выглядит как парящий на уровне колен шар.
@@ -324,7 +329,7 @@ export function computePose(pose, bob, stepPhase, stride, clubAngleDeg, clubReac
   // этого он вешается прямо под кисть, ровно на длину связи, чтобы она
   // не оказалась растянутой, а масса ему снимается в body.js — так он
   // болтается следом и ничего никуда не тянет.
-  if (!T.withClub) {
+  if (!withClub) {
     pose.grip.copy(pose.handRight);
     pose.clubDir.set(0, -1, 0);
   }

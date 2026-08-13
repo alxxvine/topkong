@@ -130,7 +130,8 @@ export class PoseDriver {
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height, swing.pitch, this.lift, this.twist, _footL, _footR);
+      swing.height, swing.pitch, this.lift, this.twist, _footL, _footR,
+      this.f.hasClub);
 
     this.solveJoints();
     return this.pose;
@@ -165,7 +166,8 @@ export class PoseDriver {
     // Стопы НЕ передаются: computePose посчитает их формулой от фазы.
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
       swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
-      swing.height, swing.pitch, this.lift, this.twist);
+      swing.height, swing.pitch, this.lift, this.twist, null, null,
+      this.f.hasClub);
 
     this.solveJoints();
   }
