@@ -444,7 +444,15 @@ export class Fighter {
     if (!body.touchesDeck()) return;
     const hips = body.pos[P.Hips];
     const len = Math.hypot(hips.x, hips.z) || 1;
-    const k = T.ledgeSlip;
+    // ledgeSlip — УСКОРЕНИЕ, поэтому домножается на dt здесь.
+    //
+    // pushAll принимает изменение скорости и целиком выдаёт его за один
+    // вызов: так и надо удару, который случается однажды. Сползание же
+    // зовётся каждый шаг физики, и без dt оно выдавало 7 м/с по 120 раз
+    // в секунду. Замерено покадрово: тело сходило с кромки на 4.6 м/с,
+    // а через семь шагов физики летело 33.8 — «резко улетает» вместо
+    // плавного падения. С dt это те же честные 7 м/с².
+    const k = T.ledgeSlip * dt;
     _impulse.set(hips.x / len * k, -k * 0.5, hips.z / len * k);
     body.pushAll(_impulse, dt);
   }
