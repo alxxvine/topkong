@@ -77,6 +77,15 @@ export class Fighter {
     this.staggerDirX = 0;
     this.staggerDirZ = 0;
 
+    /** Kills and deaths, CS-style. Survive rounds and respawns; reset only
+     *  when the game mode flips (scores mean different things per mode). */
+    this.kills = 0;
+    this.deaths = 0;
+    /** Who shoved/hit this fighter last, and how long that credit lasts.
+     *  If the fighter falls off while the window is open, that's a kill. */
+    this.lastAttacker = null;
+    this.killCredit = 0;
+
     // Скорость набалдашника меряется по смещению за кадр: кость кинематическая,
     // собственной скорости у неё нет вовсе.
     this.clubHead = new THREE.Vector3();
@@ -291,6 +300,9 @@ export class Fighter {
     this.settleTime = 0;
     this.airTime = 0;
     this.deadTime = 0;
+    // Kill credit does not survive a respawn: a fresh life owes nobody.
+    this.lastAttacker = null;
+    this.killCredit = 0;
     /** Расшатка от тарана, 0..1. Копит contact.js, спадает сама. */
     this.stagger = 0;
     /** Куда валит таран — мировое направление; по нему наклоняется поза. */
@@ -349,11 +361,28 @@ export class Fighter {
     this.swing.reset();
   }
 
+  /**
+   * Credit an outside influence: whoever affected this fighter last within
+   * the credit window owns the eventual fall. Called on club hits, ram
+   * topples and while a downed body is being rolled — the CS rule of
+   * «knocked them down or drove them to it».
+   */
+  credit(attacker) {
+    if (!attacker || attacker === this) return;
+    this.lastAttacker = attacker;
+    this.killCredit = T.killCreditTime;
+  }
+
   eliminate() {
     if (!this.alive) return;
     this.alive = false;
     this.state = BodyState.Dead;
     this.deadTime = 0;
+    this.deaths++;
+    // A posthumous kill still counts: taking each other down is two kills.
+    if (this.killCredit > 0 && this.lastAttacker) this.lastAttacker.kills++;
+    this.lastAttacker = null;
+    this.killCredit = 0;
     this.group.visible = false;
     this.marker.visible = false;
     this.trailPoints.length = 0;
@@ -382,6 +411,9 @@ export class Fighter {
     // Копится она в contact.js — ДО тика, поэтому при живом напоре
     // приход всегда обгоняет этот спад.
     this.stagger = Math.max(0, this.stagger - T.shoveStaggerDecay * dt);
+    // The kill-credit window runs out on its own: shove somebody, let them
+    // recover for a while, and their later stumble is not your kill.
+    this.killCredit = Math.max(0, this.killCredit - dt);
 
     // Управление возвращается не мгновенно, а по мере того, как мышцы
     // снова начинают держать тело.
@@ -650,6 +682,7 @@ export class Fighter {
       // Куда именно пришёлся удар, разберём в отдельной итерации.
       // Пока импульс прикладывается всему телу целиком.
       victim.takeHit(_impulse, dt);
+      victim.credit(this);
       victim.lastImpactSpeed = this.swingSpeed;
       victim.lastImpactPower = strength;
 
@@ -694,7 +727,7 @@ function panel(parent, length, bottom, top, depth, material, offset) {
   // ровно так пропали разом все панели, когда partGap не доехал до tuning.
   if (!Number.isFinite(length) || !Number.isFinite(bottom) ||
       !Number.isFinite(top) || !Number.isFinite(depth)) {
-    console.warn('panel: нечисловой размер', { length, bottom, top, depth });
+    console.warn('panel: non-numeric size', { length, bottom, top, depth });
     length = Number.isFinite(length) ? length : 0.2;
     bottom = Number.isFinite(bottom) ? bottom : 0.1;
     top = Number.isFinite(top) ? top : 0.1;

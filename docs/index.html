@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -16,7 +16,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Top Kong — арена</title>
+<title>Top Kong — arena</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%94%A8</text></svg>">
 <style>
   /* Светлая матовая тема под стать сцене.
@@ -530,26 +530,26 @@
 <div id="ui">
   <div id="banner"><div id="bannerBig"></div><div id="bannerSmall"></div></div>
   <div id="hud"></div>
-  <div id="hint">WASD / стрелки — ход · мышь — прицел · ЛКМ зажать — замах, отпустить — удар · R — сброс</div>
+  <div id="hint">WASD / arrows — move · mouse — aim · hold LMB — wind up, release — strike · R — reset</div>
 
   <div id="tune" class="folded">
-    <div id="tuneHead"><span>Настройки</span><span class="spacer"></span><span class="chev">▾</span></div>
+    <div id="tuneHead"><span>Settings</span><span class="spacer"></span><span class="chev">▾</span></div>
     <div id="tuneBody"></div>
   </div>
 
   <!-- Пауза и четыре ручки, которые крутят прямо по ходу боя. Живут отдельно
        от большой панели настроек: та скрыта в игре целиком, а эти обязаны
        быть под рукой всегда. -->
-  <button id="pause" type="button" aria-label="Пауза">❙❙</button>
+  <button id="pause" type="button" aria-label="Pause">❙❙</button>
 
   <div id="quick">
-    <div id="quickHead"><span>Скорости</span><span class="spacer"></span><span class="chev">▴</span></div>
+    <div id="quickHead"><span>Quick tuning</span><span class="spacer"></span><span class="chev">▴</span></div>
     <div id="quickBody"></div>
   </div>
 
   <div id="paused">
-    <div class="big">Пауза</div>
-    <div class="small">Нажмите, чтобы продолжить</div>
+    <div class="big">Paused</div>
+    <div class="small">Click to resume</div>
   </div>
 
   <!-- Номер сборки виден всегда, внизу экрана. Он уже жил на завесе паузы,
@@ -560,11 +560,11 @@
   <div id="touch">
     <div id="stick"><div id="stickKnob"></div></div>
     <div id="aim"><div id="aimKnob"></div></div>
-    <div id="swing">УДАР</div>
+    <div id="swing">HIT</div>
   </div>
 </div>
 
-<div id="boot">загрузка…</div>
+<div id="boot">loading…</div>
 
 <!--
   Номер сборки и карта импортов живут в одном файле, и это главное.
@@ -582,30 +582,30 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "173";</script>
+<script>window.TK_BUILD = "174";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=173",
-    "tk/main.js":         "./src/main.js?v=173",
-    "tk/tuning.js":       "./src/tuning.js?v=173",
-    "tk/mathx.js":        "./src/mathx.js?v=173",
-    "tk/arena.js":        "./src/arena.js?v=173",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=173",
-    "tk/balance.js":      "./src/balance.js?v=173",
-    "tk/skeleton.js":     "./src/skeleton.js?v=173",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=173",
-    "tk/gait.js":         "./src/gait.js?v=173",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=173",
-    "tk/swingAction.js":  "./src/swingAction.js?v=173",
-    "tk/locomotion.js":   "./src/locomotion.js?v=173",
-    "tk/body.js":         "./src/body.js?v=173",
-    "tk/bot.js":          "./src/bot.js?v=173",
-    "tk/contact.js":      "./src/contact.js?v=173",
-    "tk/match.js":        "./src/match.js?v=173",
-    "tk/fighter.js":      "./src/fighter.js?v=173",
-    "tk/input.js":        "./src/input.js?v=173",
-    "tk/ui.js":           "./src/ui.js?v=173"
+    "three":              "./vendor/three.module.js?v=174",
+    "tk/main.js":         "./src/main.js?v=174",
+    "tk/tuning.js":       "./src/tuning.js?v=174",
+    "tk/mathx.js":        "./src/mathx.js?v=174",
+    "tk/arena.js":        "./src/arena.js?v=174",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=174",
+    "tk/balance.js":      "./src/balance.js?v=174",
+    "tk/skeleton.js":     "./src/skeleton.js?v=174",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=174",
+    "tk/gait.js":         "./src/gait.js?v=174",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=174",
+    "tk/swingAction.js":  "./src/swingAction.js?v=174",
+    "tk/locomotion.js":   "./src/locomotion.js?v=174",
+    "tk/body.js":         "./src/body.js?v=174",
+    "tk/bot.js":          "./src/bot.js?v=174",
+    "tk/contact.js":      "./src/contact.js?v=174",
+    "tk/match.js":        "./src/match.js?v=174",
+    "tk/fighter.js":      "./src/fighter.js?v=174",
+    "tk/input.js":        "./src/input.js?v=174",
+    "tk/ui.js":           "./src/ui.js?v=174"
   }
 }
 </script>

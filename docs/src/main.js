@@ -52,7 +52,7 @@ export async function start() {
   const fx = new HitFx(scene);
 
   const player = new Fighter(scene, arena, {
-    isPlayer: true, name: 'Игрок', color: 0xff8a5c, x: 0, z: -2, yaw: 0,
+    isPlayer: true, name: 'You', color: 0xff8a5c, x: 0, z: -2, yaw: 0,
   });
   // Прицел собирается ПОСЛЕ игрока: он красится его цветом.
   const aim = new AimCursor(scene, player.color);
@@ -62,7 +62,11 @@ export async function start() {
   syncDummies(scene, arena, dummies, fighters);
 
   // Матч перезапускает раунд сам, поэтому расстановка отдаётся ему целиком.
-  const match = new Match(fighters, player, () => placeRound(fighters, arena));
+  // Второй колбэк — точечный respawn для deathmatch: одного бойца, в самое
+  // свободное место, пока остальные продолжают драться.
+  const match = new Match(fighters, player,
+    () => placeRound(fighters, arena),
+    (f) => respawnOne(f, fighters, arena));
 
   resize();
   addEventListener('resize', resize);
@@ -235,7 +239,7 @@ function syncDummies(scene, arena, dummies, fighters) {
   while (dummies.length < want) {
     const index = dummies.length;
     const d = new Fighter(scene, arena, {
-      name: 'Манекен ' + (index + 1),
+      name: 'Bot ' + (index + 1),
       // Приглушённая пастель: на светлой сцене насыщенные цвета кричат,
       // а фигуры должны отличаться друг от друга, а не спорить с фоном.
       color: [0x5b8def, 0x4fbf8b, 0xc46fb0, 0xdcb64a, 0x4bc4c4, 0x8b7ee0][index % 6],
@@ -248,9 +252,34 @@ function syncDummies(scene, arena, dummies, fighters) {
   placeRound(fighters, arena);
 }
 
-// Функции respawnFallen больше нет. Выбывшие не возвращаются: раунд
-// кончается тем, что кто-то остался один, а возврат упавших означал бы,
-// что он не кончается никогда. Перезапуском занимается match.js.
+/**
+ * Respawn одного бойца посреди идущего боя (deathmatch).
+ *
+ * Точка — лучшая из шести случайных: та, до которой живым дальше всего.
+ * Честный worst-case перебором, а не отталкивание после спавна: возникший
+ * внутри чужой свалки боец получает по голове раньше, чем поймёт, где он.
+ */
+function respawnOne(fighter, fighters, arena) {
+  let bestX = 0, bestZ = 0, bestYaw = 0, bestScore = -1;
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = arena.radius * (0.4 + Math.random() * 0.26);
+    const x = Math.sin(a) * r;
+    const z = Math.cos(a) * r;
+    let nearest = Infinity;
+    for (const f of fighters) {
+      if (f === fighter || !f.alive) continue;
+      nearest = Math.min(nearest, Math.hypot(f.position.x - x, f.position.z - z));
+    }
+    if (nearest > bestScore) {
+      bestScore = nearest;
+      bestX = x; bestZ = z;
+      // Лицом к центру с разбросом — как и на общей расстановке.
+      bestYaw = a + Math.PI + (Math.random() * 2 - 1) * 0.5;
+    }
+  }
+  fighter.spawn(bestX, bestZ, bestYaw);
+}
 
 /**
  * Расстановка на раунд — случайная, но не как попало.
@@ -419,9 +448,9 @@ function hudText(player, arena, fps, input, match) {
   const dist = Math.hypot(player.position.x, player.position.z);
   const edge = Math.max(0, arena.radius - dist);
   const state = {
-    [BodyState.Standing]: 'стоит',
-    [BodyState.Downed]: 'СБИТ',
-    [BodyState.Dead]: 'выбыл',
+    [BodyState.Standing]: 'standing',
+    [BodyState.Downed]: 'DOWN',
+    [BodyState.Dead]: 'out',
   }[player.state];
 
   // Прогиб корпуса — насколько грудь ушла от вертикали над тазом. Это
@@ -432,28 +461,28 @@ function hudText(player, arena, fps, input, match) {
   const bend = Math.hypot(chest.x - hips.x, chest.z - hips.z);
 
   const swing = player.swing.state === 'guard' && !player.swing.held
-    ? 'несёт'
+    ? 'carrying'
     : player.swing.state === 'windup'
-      ? 'замах ' + Math.round(player.swing.charge * 100) + '%'
-      : player.swing.state === 'strike' ? 'УДАР' : 'возврат';
+      ? 'wind-up ' + Math.round(player.swing.charge * 100) + '%'
+      : player.swing.state === 'strike' ? 'STRIKE' : 'recover';
 
   return [
     // Номер сборки в кадре — не украшение. Проверить, что открыто в чужом
     // браузере, я не могу: гейтвей не пускает наружу. По этой строке
     // на любом скриншоте сразу видно, дошла правка или висит старый кэш.
-    `сборка ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'замедление (F)' : ''}`,
+    `build ${globalThis.TK_BUILD || '?'}    fps ${fps.toFixed(0)}   ${input.slowMotion ? 'slow motion (F)' : ''}`,
     match ? match.score : '',
-    `тело      ${S.title}   ${state}   мышцы ${(player.body.strength * 100).toFixed(0)}%`,
+    `body      ${S.title}   ${state}   muscles ${(player.body.strength * 100).toFixed(0)}%`,
     // Запас устойчивости — не украшение: по нему видно, что боец СТОИТ,
     // а не висит на мышцах. Единица означает, что точка перехвата ровно
     // над опорой, ноль — что устоять уже нельзя и нужен шаг.
-    `равновесие ${(player.balance.margin * 100).toFixed(0)}%   завал ${player.balance.tilt.toFixed(0)}°`,
+    `balance   ${(player.balance.margin * 100).toFixed(0)}%   tilt ${player.balance.tilt.toFixed(0)}°`,
     // Без дубины строки про неё нет вовсе: пустое «несёт» на экране
     // сбивает с толку сильнее, чем отсутствие строки.
-    T.withClub ? `дубина    ${swing}` : 'дубина    снята (настройки)',
-    `скорость  ${player.locomotion.planarSpeed.toFixed(2)} м/с`,
-    ...(T.withClub ? [`набалдашник ${player.swingSpeed.toFixed(1)} м/с`] : []),
-    `скрут     ${player.poseDriver.twist.toFixed(0)}°   прогиб ${(bend * 100).toFixed(1)} см`,
-    `до края   ${edge.toFixed(2)} м    растяжение ${(player.body.maxStretch * 100).toFixed(1)} см`,
+    T.withClub ? `club      ${swing}` : 'club      off (settings)',
+    `speed     ${player.locomotion.planarSpeed.toFixed(2)} m/s`,
+    ...(T.withClub ? [`club head ${player.swingSpeed.toFixed(1)} m/s`] : []),
+    `twist     ${player.poseDriver.twist.toFixed(0)}°   bend ${(bend * 100).toFixed(1)} cm`,
+    `to edge   ${edge.toFixed(2)} m    stretch ${(player.body.maxStretch * 100).toFixed(1)} cm`,
   ].join('\n');
 }

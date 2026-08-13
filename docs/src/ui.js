@@ -18,8 +18,8 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // сломанным. Поэтому у каждой строки своё чтение и своя запись.
 const QUICK = [
   {
-    label: 'Ходьба',
-    min: 0.3, max: 3.5, step: 0.05, unit: ' м/с',
+    label: 'Walk',
+    min: 0.3, max: 3.5, step: 0.05, unit: ' m/s',
     get: () => T.maxRunSpeed,
     set: (v) => { T.maxRunSpeed = v; },
   },
@@ -29,25 +29,25 @@ const QUICK = [
     // 0.48 назад и 0.45 вбок, при 2.4 — 2.32 / 1.27 / 1.18. Но доли эти
     // зажаты в половину, и потому кажется, что потолок на них не влияет.
     // Здесь они правятся напрямую. Назад чуть свободнее вбок, как и было.
-    label: 'Вбок и назад',
+    label: 'Strafe & back',
     min: 0.15, max: 1, step: 0.05, unit: '×',
     get: () => T.strafeSpeed,
     set: (v) => { T.strafeSpeed = v; T.backSpeed = Math.min(1, v * 1.1); },
   },
   {
-    label: 'Поворот',
-    min: 60, max: 700, step: 10, unit: '°/с',
+    label: 'Turn',
+    min: 60, max: 700, step: 10, unit: '°/s',
     get: () => T.turnSpeed,
     set: (v) => { T.turnSpeed = v; },
   },
   {
-    label: 'Удар',
+    label: 'Swing',
     min: 0.3, max: 3, step: 0.05, unit: '×',
     get: () => T.swingSpeed,
     set: (v) => { T.swingSpeed = v; },
   },
   {
-    label: 'Возврат удара',
+    label: 'Swing return',
     min: 1, max: 12, step: 0.2, unit: '×',
     get: () => 1 / Math.max(0.02, T.swingRecoverTime),
     set: (v) => { T.swingRecoverTime = 1 / Math.max(0.02, v); },
@@ -55,13 +55,13 @@ const QUICK = [
   {
     // Темп, а не откат: ползунок обязан ехать вправо = быстрее, как все
     // остальные. Чтобы удары нельзя было спамить, эту ручку тянут ВЛЕВО.
-    label: 'Темп ударов',
-    min: 0.5, max: 14, step: 0.2, unit: '/с',
+    label: 'Swing rate',
+    min: 0.5, max: 14, step: 0.2, unit: '/s',
     get: () => 1 / Math.max(0.02, T.swingCooldown),
     set: (v) => { T.swingCooldown = 1 / Math.max(0.02, v); },
   },
   {
-    label: 'Вставание',
+    label: 'Get up',
     min: 0.3, max: 6, step: 0.1, unit: '×',
     // Хранится время подъёма, показывается скорость.
     get: () => 1 / Math.max(0.05, T.standUpTime),
@@ -71,13 +71,13 @@ const QUICK = [
     // Наклон в сторону хода. Он и делает походку походкой: без него
     // боец едет стоймя, и это читается роботом, сколько ни качай его
     // случайным шумом.
-    label: 'Наклон',
+    label: 'Lean',
     min: 0, max: 3, step: 0.05, unit: '×',
     get: () => T.leanAmount,
     set: (v) => { T.leanAmount = v; },
   },
   {
-    label: 'Шаткость',
+    label: 'Wobble',
     min: 0, max: 1, step: 0.02, unit: '',
     get: () => T.drunk,
     set: (v) => { T.drunk = v; },
@@ -86,24 +86,34 @@ const QUICK = [
     // Оружие меняет игру целиком — с ним бой про удар, без него про толчок
     // телом, — и переключать это надо на ходу, а не искать в отладочной
     // панели.
-    label: 'Оружие',
+    label: 'Clubs',
     bool: true,
     get: () => !!T.withClub,
     set: (v) => { T.withClub = v; },
   },
   {
     // Стоящие манекены: спокойно пробовать управление, удары и толчки.
-    label: 'Боты дерутся',
+    label: 'Bots fight',
     bool: true,
     get: () => !!T.botsActive,
     set: (v) => { T.botsActive = v; },
   },
   {
     // Игрок с дубиной против безоружных — легитимный способ играть.
-    label: 'Оружие у ботов',
+    label: 'Bots armed',
     bool: true,
     get: () => !!T.botsArmed,
     set: (v) => { T.botsArmed = v; },
+  },
+  {
+    // Two games in one toggle: last-man-standing rounds, or an endless
+    // deathmatch where the fallen respawn and kills are the score.
+    // Match watches the flag and resets scores when it flips — kills
+    // from rounds and kills from an endless brawl mean different things.
+    label: 'Deathmatch',
+    bool: true,
+    get: () => !!T.deathmatch,
+    set: (v) => { T.deathmatch = v; },
   },
 ];
 
@@ -131,7 +141,7 @@ export class Ui {
     // Номер сборки пишется один раз и висит внизу экрана постоянно:
     // сверяться, доехало ли обновление, нужно без похода в паузу.
     const tag = document.getElementById('buildTag');
-    if (tag) tag.textContent = 'сборка ' + (window.TK_BUILD || '?');
+    if (tag) tag.textContent = 'build ' + (window.TK_BUILD || '?');
 
     this.buildPanel();
     this.buildQuick();
@@ -239,7 +249,7 @@ export class Ui {
     document.body.classList.toggle('paused', on);
     if (this.pauseButton) {
       this.pauseButton.textContent = on ? '▶' : '❙❙';
-      this.pauseButton.setAttribute('aria-label', on ? 'Продолжить' : 'Пауза');
+      this.pauseButton.setAttribute('aria-label', on ? 'Resume' : 'Pause');
     }
   }
 
@@ -271,25 +281,25 @@ export class Ui {
     btns.className = 'btns';
 
     const reset = document.createElement('button');
-    reset.textContent = 'Сбросить';
+    reset.textContent = 'Reset';
     reset.addEventListener('click', () => {
       resetTuning();
       this.refresh();
     });
 
     const copy = document.createElement('button');
-    copy.textContent = 'Скопировать JSON';
+    copy.textContent = 'Copy JSON';
     copy.addEventListener('click', async () => {
       const text = JSON.stringify(T, null, 2);
       try {
         await navigator.clipboard.writeText(text);
-        copy.textContent = 'скопировано';
+        copy.textContent = 'copied';
       } catch (e) {
         // Буфер обмена без https недоступен — тогда просто в консоль.
         console.log(text);
-        copy.textContent = 'см. консоль';
+        copy.textContent = 'see console';
       }
-      setTimeout(() => { copy.textContent = 'Скопировать JSON'; }, 1400);
+      setTimeout(() => { copy.textContent = 'Copy JSON'; }, 1400);
     });
 
     btns.append(reset, copy);
@@ -306,7 +316,7 @@ export class Ui {
   addBodyPicker() {
     const title = document.createElement('div');
     title.className = 'grp';
-    title.textContent = 'Телосложение';
+    title.textContent = 'Body type';
     this.body.appendChild(title);
 
     const row = document.createElement('div');

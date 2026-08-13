@@ -244,6 +244,14 @@ export const tuning = {
   matchReadyTime: 2.2,
   // Сколько держится итог раунда, прежде чем начнётся новый.
   matchOverTime: 2.6,
+  // Deathmatch mode: nobody is ever out — the fallen respawn after a pause
+  // and the score (kills) is the game. Off = classic last-man-standing rounds.
+  deathmatch: false,
+  // How long a fallen fighter stays out before respawning (deathmatch only).
+  respawnTime: 2.2,
+  // Kill credit window: whoever landed the last hit / shove / roll on the
+  // victim within this many seconds before the fall gets the kill.
+  killCreditTime: 5,
   // На какой доле радиуса бот бросает всё и уходит к центру. Без этого он
   // упорно идёт бить, стоя пяткой над обрывом, и уходит вниз сам.
   botEdgeFear: 0.74,
@@ -559,7 +567,7 @@ export const defaults = { ...tuning };
 // Описание панели. Порядок и заголовки повторяют [Header] из GameTuning.
 export const tuneGroups = [
   {
-    title: 'Движение',
+    title: 'Movement',
     items: [
       ['maxRunSpeed', 1, 9, 0.1],
       ['strafeSpeed', 0.3, 1, 0.02],
@@ -573,7 +581,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Тело',
+    title: 'Body',
     items: [
       ['bodyMode', 1, 3, 1],
       ['headLevel', 0, 1, 0.05],
@@ -583,7 +591,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Стойка',
+    title: 'Stance',
     items: [
       ['guardOut', 0, 0.7, 0.01],
       ['guardForward', -0.3, 0.7, 0.01],
@@ -593,7 +601,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Шаг',
+    title: 'Stepping',
     items: [
       ['stepTrigger', 0.08, 0.7, 0.01],
       ['stepPivot', 0.06, 0.5, 0.01],
@@ -615,12 +623,14 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Матч и соперники',
+    title: 'Match & bots',
     items: [
       ['dummyCount', 0, 5, 1],
       ['showMarkers', 'bool'],
       ['matchReadyTime', 0, 6, 0.1],
       ['matchOverTime', 0.5, 8, 0.1],
+      ['respawnTime', 0.5, 8, 0.1],
+      ['killCreditTime', 1, 12, 0.5],
       ['botEdgeFear', 0.3, 1, 0.02],
       ['botStrikeRange', 0.6, 3, 0.05],
       ['botChargeMin', 0, 1, 0.05],
@@ -629,7 +639,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Толчок телом',
+    title: 'Body shove',
     items: [
       ['ledgeSlip', 0, 20, 0.5],
       ['drunk', 0, 1, 0.02],
@@ -653,7 +663,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Равновесие',
+    title: 'Balance',
     items: [
       ['balanceGain', 0, 2, 0.05],
       ['balancePush', 0, 2, 0.05],
@@ -664,7 +674,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Вес и шаткость',
+    title: 'Weight & wobble',
     items: [
       ['leanAmount', 0, 3, 0.05],
       ['leanStiffness', 5, 200, 5],
@@ -679,7 +689,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Скрут корпуса',
+    title: 'Torso twist',
     items: [
       ['twistFromTurn', 0, 0.2, 0.005],
       ['headLead', 0, 0.2, 0.005],
@@ -693,7 +703,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Мышцы',
+    title: 'Muscles',
     items: [
       ['muscleStiffness', 60, 1600, 10],
       ['muscleDamping', 0.1, 1.4, 0.02],
@@ -704,7 +714,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Замах',
+    title: 'Swing',
     items: [
       ['swingSpeed', 0.3, 3, 0.05],
       ['carryAngle', 90, 180, 1],
@@ -720,7 +730,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Сила ударов',
+    title: 'Hit power',
     items: [
       ['minImpactSpeed', 0.5, 30, 0.5],
       ['maxImpactSpeed', 10, 70, 1],
@@ -730,7 +740,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Тряпка',
+    title: 'Ragdoll',
     items: [
       ['ragdollDrag', 0, 0.95, 0.05],
       ['ragdollFriction', 0.5, 0.999, 0.005],
@@ -743,7 +753,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Мир и камера',
+    title: 'World & camera',
     items: [
       ['gravity', -60, -6, 1],
       ['arenaRadius', 3, 16, 0.25],
@@ -756,7 +766,7 @@ export const tuneGroups = [
     ],
   },
   {
-    title: 'Показывать',
+    title: 'Debug view',
     items: [
       ['withClub', 'bool'],
       ['showClubTrail', 'bool'],

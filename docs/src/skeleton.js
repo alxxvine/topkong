@@ -150,21 +150,21 @@ const LINKS = [
 // пойдут оба, и ни одной цифры под них подгонять не придётся.
 export const BODIES = {
   картон: {
-    title: 'Картонная кукла',
+    title: 'Cardboard doll',
     cm: 0.09, spring: 0.35, depth: 1,
     head: 5, chestH: 2.5, chestTop: 2, chestBottom: 3, hips: 3,
     arm: 6, armTop: 2, armBottom: 3,
     leg: 8, legTop: 2, legBottom: 3,
   },
   каланча: {
-    title: 'Каланча',
+    title: 'Beanpole',
     cm: 0.085, spring: 0.4, depth: 0.8,
     head: 3.5, chestH: 4, chestTop: 2, chestBottom: 2.4, hips: 2.2,
     arm: 5, armTop: 1.3, armBottom: 1.8,
     leg: 12, legTop: 1.4, legBottom: 2,
   },
   коротышка: {
-    title: 'Коротышка',
+    title: 'Shorty',
     cm: 0.1, spring: 0.3, depth: 1.3,
     head: 6, chestH: 2.2, chestTop: 3, chestBottom: 4, hips: 3.6,
     arm: 8, armTop: 2.4, armBottom: 3.4,

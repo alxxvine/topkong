@@ -71,7 +71,7 @@ function pair(a, b, dt) {
  * Дошедшая до предела расшатка отпускает мышцы: боец падает ПО ХОДУ
  * тарана. Это и есть «таранить до конца».
  */
-function ramPressure(f, nx, nz, dt) {
+function ramPressure(f, attacker, nx, nz, dt) {
   const l = f.locomotion;
   const v = l.velX * nx + l.velZ * nz;
   const want = Math.max(0, l.wantX * nx + l.wantZ * nz);
@@ -89,6 +89,7 @@ function ramPressure(f, nx, nz, dt) {
     // «отлетел», а нужен «подкосился».
     _n.set(nx * T.shoveTopple, T.shoveTopple * 0.35, nz * T.shoveTopple);
     f.takeHit(_n, dt);
+    f.credit(attacker);
     f.stagger = 0;
   }
 }
@@ -129,8 +130,8 @@ function block(a, b, dt) {
 
   // После обмена оба едут почти вместе — и у каждого проверяется,
   // не везут ли его. Нормаль у каждого своя: «от соперника».
-  ramPressure(a, -nx, -nz, dt);
-  ramPressure(b, nx, nz, dt);
+  ramPressure(a, b, -nx, -nz, dt);
+  ramPressure(b, a, nx, nz, dt);
 
   // Задевание вскользь — реакция ТЕЛОМ, а не невидимым полем.
   //
@@ -189,6 +190,7 @@ function roll(mover, downed, dt) {
   const reach = T.bodyRadius + T.shoveReach;
   const body = downed.body;
   const power = (speed - T.shoveMinSpeed) * T.shovePower;
+  let touched = false;
 
   for (let i = 0; i < body.pos.length; i++) {
     const p = body.pos[i];
@@ -204,5 +206,9 @@ function roll(mover, downed, dt) {
     // дальнего конца, а не едет плашмя.
     const bite = 1 - d / reach;
     body.push(i, _n.multiplyScalar(power * bite), dt);
+    touched = true;
   }
+  // Rolling a downed body toward the edge is «driving them to the fall»:
+  // the credit refreshes for as long as the pushing actually lands.
+  if (touched) downed.credit(mover);
 }
