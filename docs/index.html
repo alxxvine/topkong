@@ -452,16 +452,19 @@
   body.paused #paused .big { transform: scale(1); }
   #paused .small { font-size: 13px; color: var(--dim); }
 
-  /* Метка сборки прижата к низу завесы, а не стоит под надписью: панель
-     ползунков раскрыта в правом верхнем углу и накрывала её собой. */
-  #paused .build {
+  /* Метка сборки: по центру низа, поверх завесы паузы, кликов не ловит.
+     Внизу по центру пусто и в бою, и на телефоне — стик и прицел живут
+     по углам. */
+  .build {
     position: absolute;
     left: 50%;
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     font: 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
     color: var(--dim);
     opacity: 0.7;
+    pointer-events: none;
+    z-index: 2;
   }
 
   #boot {
@@ -547,10 +550,12 @@
   <div id="paused">
     <div class="big">Пауза</div>
     <div class="small">Нажмите, чтобы продолжить</div>
-    <!-- Номер сборки живёт ЗДЕСЬ, а не в HUD: в бою он не нужен и мешает,
-         а свериться, доехало ли обновление, надо уметь всегда. -->
-    <div class="build" id="buildTag"></div>
   </div>
+
+  <!-- Номер сборки виден всегда, внизу экрана. Он уже жил на завесе паузы,
+       но сверяться, доехало ли обновление, приходится чаще, чем хотелось бы,
+       и каждый раз лезть за этим в паузу оказалось неудобно. -->
+  <div class="build" id="buildTag"></div>
 
   <div id="touch">
     <div id="stick"><div id="stickKnob"></div></div>
@@ -577,30 +582,30 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "168";</script>
+<script>window.TK_BUILD = "169";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=168",
-    "tk/main.js":         "./src/main.js?v=168",
-    "tk/tuning.js":       "./src/tuning.js?v=168",
-    "tk/mathx.js":        "./src/mathx.js?v=168",
-    "tk/arena.js":        "./src/arena.js?v=168",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=168",
-    "tk/balance.js":      "./src/balance.js?v=168",
-    "tk/skeleton.js":     "./src/skeleton.js?v=168",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=168",
-    "tk/gait.js":         "./src/gait.js?v=168",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=168",
-    "tk/swingAction.js":  "./src/swingAction.js?v=168",
-    "tk/locomotion.js":   "./src/locomotion.js?v=168",
-    "tk/body.js":         "./src/body.js?v=168",
-    "tk/bot.js":          "./src/bot.js?v=168",
-    "tk/contact.js":      "./src/contact.js?v=168",
-    "tk/match.js":        "./src/match.js?v=168",
-    "tk/fighter.js":      "./src/fighter.js?v=168",
-    "tk/input.js":        "./src/input.js?v=168",
-    "tk/ui.js":           "./src/ui.js?v=168"
+    "three":              "./vendor/three.module.js?v=169",
+    "tk/main.js":         "./src/main.js?v=169",
+    "tk/tuning.js":       "./src/tuning.js?v=169",
+    "tk/mathx.js":        "./src/mathx.js?v=169",
+    "tk/arena.js":        "./src/arena.js?v=169",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=169",
+    "tk/balance.js":      "./src/balance.js?v=169",
+    "tk/skeleton.js":     "./src/skeleton.js?v=169",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=169",
+    "tk/gait.js":         "./src/gait.js?v=169",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=169",
+    "tk/swingAction.js":  "./src/swingAction.js?v=169",
+    "tk/locomotion.js":   "./src/locomotion.js?v=169",
+    "tk/body.js":         "./src/body.js?v=169",
+    "tk/bot.js":          "./src/bot.js?v=169",
+    "tk/contact.js":      "./src/contact.js?v=169",
+    "tk/match.js":        "./src/match.js?v=169",
+    "tk/fighter.js":      "./src/fighter.js?v=169",
+    "tk/input.js":        "./src/input.js?v=169",
+    "tk/ui.js":           "./src/ui.js?v=169"
   }
 }
 </script>

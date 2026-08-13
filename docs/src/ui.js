@@ -128,6 +128,11 @@ export class Ui {
     /** Ставит main: ему принадлежит сам флаг паузы. */
     this.onPauseToggle = null;
 
+    // Номер сборки пишется один раз и висит внизу экрана постоянно:
+    // сверяться, доехало ли обновление, нужно без похода в паузу.
+    const tag = document.getElementById('buildTag');
+    if (tag) tag.textContent = 'сборка ' + (window.TK_BUILD || '?');
+
     this.buildPanel();
     this.buildQuick();
     this.bindFold();
@@ -232,10 +237,6 @@ export class Ui {
 
   setPaused(on) {
     document.body.classList.toggle('paused', on);
-    // Номер сборки показывается только на паузе: в бою он не нужен,
-    // а свериться, доехало ли обновление, надо уметь всегда.
-    const tag = document.getElementById('buildTag');
-    if (tag && on) tag.textContent = 'сборка ' + (window.TK_BUILD || '?');
     if (this.pauseButton) {
       this.pauseButton.textContent = on ? '▶' : '❙❙';
       this.pauseButton.setAttribute('aria-label', on ? 'Продолжить' : 'Пауза');
