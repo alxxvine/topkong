@@ -31,7 +31,11 @@ export const SwingState = {
 // ОТКУДА прилетит, и от рубящего сверху уклоняются иначе, чем от широкого.
 export const SWING_STYLES = [
   { name: 'широкий',   aFrom: [1, 25],     aTo: [-1, 0],     wH: 0.14, wP: -22, hF: 0,    hT: 0,     pF: 0,   pT: 0 },
-  { name: 'обратный',  aFrom: [-1, -25],   aTo: [1, 0],      wH: 0.14, wP: -22, hF: 0,    hT: 0,     pF: 0,   pT: 0 },
+  // Старт бэкхенда мелкий, −45° а не зеркальные −100: правая рука,
+  // заведённая за левый бок дальше плеча, ломала силуэт — кисть уходила
+  // «внутрь тела». Настоящий бэкхенд начинается от противоположного
+  // плеча, не из-за спины.
+  { name: 'обратный',  aFrom: [-0.6, 0],   aTo: [1, 0],      wH: 0.2,  wP: -22, hF: 0.06, hT: 0,     pF: 0,   pT: 0 },
   { name: 'сверху',    aFrom: [0, 15],     aTo: [0, -12],    wH: 0.6,  wP: -75, hF: 0.55, hT: -0.08, pF: -70, pT: 28 },
   { name: 'диагональ', aFrom: [0.75, 20],  aTo: [-0.55, 0],  wH: 0.4,  wP: -50, hF: 0.36, hT: -0.05, pF: -45, pT: 12 },
 ];
@@ -62,10 +66,20 @@ export class SwingAction {
     /** Поза в момент отпускания: пронос стартует из неё, а не из
      *  канонической точки манеры. См. комментарий на переходе в Strike. */
     this.strikeFrom = { angle: 0, reach: 0, lean: 0, height: 0, pitch: 0 };
+
+    /** Доля проноса, уходящая на подхват недобранного замаха (0 — замах
+     *  был полным и подхватывать нечего). Ставится на переходе в Strike. */
+    this.pullFrac = 0;
   }
 
-  /** Идёт пронос — только в это время дубина считается бьющей. */
-  get striking() { return this.state === SwingState.Strike; }
+  /** Идёт пронос — только в это время дубина считается бьющей. Подхват
+   *  недобранного замаха в начале проноса не в счёт: дубина там летит
+   *  НАЗАД, в точку замаха, и попадание ею толкало бы соперника
+   *  в обратную сторону. */
+  get striking() {
+    if (this.state !== SwingState.Strike) return false;
+    return this.timer / Math.max(0.01, T.swingStrikeTime) >= this.pullFrac;
+  }
 
   tick(dt) {
     // Скорость удара — одна ручка на весь приём, а не три отдельных времени.
@@ -96,21 +110,28 @@ export class SwingAction {
         this.timer += dt;
         this.charge = Math.min(1, this.timer / Math.max(0.01, T.swingChargeTime));
         if (!this.held) {
-          // Тычок без замаха бьётся всегда широкой манерой. Манера читается
-          // по замаху, а замаха не было; стартовая точка широкой совпадает
-          // с походной стойкой (half + 25 = carryAngle), так что быстрый
-          // удар начинается ровно оттуда, где рука уже есть.
-          if (this.charge < 0.35) this.styleIndex = 0;
           // Пронос стартует из ФАКТИЧЕСКОЙ позы, а не из канонической
-          // точки манеры. Недокрученный замах довёл руку до середины пути —
-          // и удар идёт с этой середины. Иначе на отпускании рука
-          // телепортировалась бы в точку полного замаха: для обратного
-          // это скачок на 200°, и бьёт он «из ниоткуда».
+          // точки манеры: иначе на отпускании рука телепортировалась бы
+          // в точку полного замаха — скачок до 150° одним кадром,
+          // удар «из ниоткуда».
           this.strikeFrom.angle = this.angle;
           this.strikeFrom.reach = this.reach;
           this.strikeFrom.lean = this.lean;
           this.strikeFrom.height = this.height;
           this.strikeFrom.pitch = this.pitch;
+          // Недобранный замах докручивается ВНУТРИ удара: первая доля
+          // проноса — стремительный подхват в стартовую точку манеры,
+          // дальше полная дуга. Так простой клик бьёт всеми манерами
+          // целиком (игрок не обязан зажимать кнопку ради разнообразия),
+          // а подхват остаётся непрерывным движением, не скачком.
+          // Доля подхвата — от расстояния, которое руке осталось пройти;
+          // при полном замахе она нулевая и удар идёт как раньше.
+          const st = SWING_STYLES[this.styleIndex] || SWING_STYLES[0];
+          const half = T.swingArcDegrees * 0.5;
+          const gapA = Math.abs(this.angle - (half * st.aFrom[0] + st.aFrom[1])) / 320;
+          const gapH = Math.abs(this.height - st.hF) / 1.4;
+          const gapP = Math.abs(this.pitch - st.pF) / 320;
+          this.pullFrac = Math.min(0.35, Math.max(gapA, gapH, gapP));
           this.state = SwingState.Strike;
           this.timer = 0;
           this.power = lerp(T.swingWeakestPower, 1, this.charge);
@@ -161,26 +182,42 @@ export class SwingAction {
 
       case SwingState.Strike: {
         const phase = clamp01(this.timer / Math.max(0.01, T.swingStrikeTime));
-        // Ease-out: пронос резкий в начале и доводится к концу. Линейная
-        // развёртка выглядит как равномерное вращение манипулятора, а не как удар.
         const eased = 1 - (1 - phase) * (1 - phase);
         const from = this.strikeFrom;
-        // Дуга — из позы отпускания в конечную точку манеры. При полном
-        // заряде поза отпускания и есть полный замах манеры, при недобранном
-        // дуга просто короче — но всегда непрерывна, рука ниоткуда не прыгает.
-        // Рука при этом всегда правая: обратная дуга — бэкхенд,
-        // а не перекладывание оружия.
-        targetAngle = lerpUnclamped(from.angle, arc(st.aTo), eased);
-        // Вынос и наклон корпуса тоже продолжаются из позы отпускания:
-        // раньше оба стартовали с константы, и на отпускании полного замаха
-        // корпус щёлкал из отклона назад в ноль.
+        const pull = this.pullFrac;
+        if (pull > 0.01 && phase < pull) {
+          // Подхват: рука стремительно, но непрерывно доезжает из позы
+          // отпускания в стартовую точку манеры. Быстрый клик получает
+          // молниеносный замах внутри самого удара — манера читается
+          // и без зажатой кнопки.
+          const t = phase / pull;
+          const s = t * t * (3 - 2 * t);
+          targetAngle = lerpUnclamped(from.angle, arc(st.aFrom), s);
+          targetHeight = lerpUnclamped(from.height, st.hF, s);
+          targetPitch = lerpUnclamped(from.pitch, st.pF, s);
+        } else {
+          // Пронос. Ease-out: резкий в начале, доводится к концу — линейная
+          // развёртка выглядела бы равномерным вращением манипулятора.
+          // Дуга — из стартовой точки манеры (подхват уже довёл до неё;
+          // при полном замахе это же и поза отпускания) в конечную.
+          // Рука всегда правая: обратная дуга — бэкхенд, а не
+          // перекладывание оружия. У горизонтальных манер пронос плоский,
+          // у рубящих высота и наклон дубины падают — удар приходит сверху.
+          const p2 = clamp01((phase - pull) / Math.max(0.01, 1 - pull));
+          const e2 = 1 - (1 - p2) * (1 - p2);
+          const fromA = pull > 0.01 ? arc(st.aFrom) : from.angle;
+          const fromH = pull > 0.01 ? st.hF : from.height;
+          const fromP = pull > 0.01 ? st.pF : from.pitch;
+          targetAngle = lerpUnclamped(fromA, arc(st.aTo), e2);
+          targetHeight = lerpUnclamped(fromH, st.hT, e2);
+          targetPitch = lerpUnclamped(fromP, st.pT, e2);
+        }
+        // Вынос и наклон корпуса продолжаются из позы отпускания по всему
+        // удару: стартуй они с константы, на отпускании полного замаха
+        // корпус щёлкал бы из отклона назад в ноль.
         targetReach = lerp(lerp(from.reach, ClubRestReach, eased),
                            T.handMaxReach, Math.sin(phase * Math.PI));
         targetLean = from.lean * (1 - eased) + Math.sin(phase * Math.PI);
-        // У горизонтальных манер пронос плоский; у рубящих высота и наклон
-        // дубины падают за пронос — удар приходит сверху.
-        targetHeight = lerpUnclamped(from.height, st.hT, eased);
-        targetPitch = lerpUnclamped(from.pitch, st.pT, eased);
         // Во время удара поза ставится напрямую: любое сглаживание здесь
         // размазало бы тайминг, ради которого сценарный удар и делался.
         blend = 1;
