@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Top Kong — metrics</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%93%8A</text></svg>">
+<style>
+  /* Owner's dashboard. Static hosting has no auth, so the gate is
+     a passphrase checked against a SHA-256 hash: the phrase itself is
+     nowhere in the source, and without it the page renders nothing. */
+  :root {
+    --panel: rgba(255, 255, 255, 0.72);
+    --panel-solid: rgba(255, 255, 255, 0.9);
+    --line: rgba(0, 0, 0, 0.08);
+    --text: #1d1d1f;
+    --dim: #6e6e73;
+    --accent: #0071e3;
+    --shadow: 0 6px 28px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #e4e7ec;
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 24px; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 12.5px; margin-bottom: 18px; }
+
+  #gate {
+    max-width: 340px; margin: 18vh auto; padding: 22px;
+    background: var(--panel-solid); border: 1px solid var(--line);
+    border-radius: 18px; box-shadow: var(--shadow);
+  }
+  #gate input {
+    width: 100%; margin-top: 10px; padding: 10px 12px; font: inherit;
+    border: 1px solid var(--line); border-radius: 10px; outline: none;
+  }
+  #gate button {
+    width: 100%; margin-top: 10px; padding: 10px; font: inherit; font-weight: 600;
+    color: #fff; background: var(--accent); border: none; border-radius: 10px; cursor: pointer;
+  }
+  #gate .err { color: #c0392b; font-size: 12px; margin-top: 8px; min-height: 16px; }
+
+  #app { display: none; }
+
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tabs button {
+    padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    color: var(--text); background: var(--panel-solid); border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+  }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tab { display: none; }
+  .tab.on { display: block; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .tile {
+    padding: 14px; background: var(--panel-solid); border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: var(--shadow);
+  }
+  .tile .v { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .tile .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+  .card {
+    padding: 16px; background: var(--panel-solid); border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .card h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); }
+
+  .bar { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12.5px; }
+  .bar .n { width: 110px; color: var(--dim); text-align: right; flex: none; }
+  .bar .t { flex: 1; height: 16px; background: rgba(0,0,0,0.05); border-radius: 6px; overflow: hidden; }
+  .bar .f { height: 100%; background: var(--accent); border-radius: 6px; min-width: 2px; }
+  .bar .v { width: 70px; flex: none; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .scroll { overflow-x: auto; }
+  .chip { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+  .id { color: var(--dim); font: 11px ui-monospace, Menlo, monospace; }
+
+  textarea {
+    width: 100%; height: 70px; font: 11px ui-monospace, Menlo, monospace;
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px; resize: vertical;
+  }
+  .row-btns { display: flex; gap: 8px; margin-top: 8px; }
+  .row-btns button {
+    padding: 8px 14px; font: inherit; font-size: 12.5px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px; cursor: pointer;
+  }
+  .row-btns button.ghost { background: var(--panel-solid); color: var(--text); border: 1px solid var(--line); }
+  .note { color: var(--dim); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <b>Top Kong metrics</b>
+  <div class="note">Owner's area. Enter the passphrase.</div>
+  <input id="pass" type="password" placeholder="Passphrase" autocomplete="off">
+  <button id="enter">Enter</button>
+  <div class="err" id="gateErr"></div>
+</div>
+
+<div id="app" class="wrap">
+  <h1>Top Kong — metrics</h1>
+  <div class="sub" id="scopeLine"></div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="overview" class="on">Overview</button>
+    <button data-t="gameplay">Gameplay</button>
+    <button data-t="ux">UX</button>
+    <button data-t="players">Players</button>
+    <button data-t="sessions">Sessions</button>
+  </div>
+
+  <div class="tab on" id="tab-overview">
+    <div class="tiles" id="ovTiles"></div>
+    <div class="card"><h3>Activity — last 14 days (minutes played)</h3><div id="ovDays"></div></div>
+    <div class="card"><h3>Builds seen</h3><div id="ovBuilds"></div></div>
+  </div>
+
+  <div class="tab" id="tab-gameplay">
+    <div class="tiles" id="gpTiles"></div>
+    <div class="card"><h3>Strikes by style</h3><div id="gpStyles"></div></div>
+  </div>
+
+  <div class="tab" id="tab-ux">
+    <div class="tiles" id="uxTiles"></div>
+    <div class="card"><h3>Weapon choice (per fight entered)</h3><div id="uxWeapon"></div></div>
+    <div class="card"><h3>Body choice</h3><div id="uxBody"></div></div>
+    <div class="card"><h3>Device</h3><div id="uxDevice"></div></div>
+  </div>
+
+  <div class="tab" id="tab-players">
+    <div class="card scroll"><h3>Everyone seen by this dashboard</h3><table id="plTable"></table></div>
+    <div class="card">
+      <h3>Import a friend's stats code</h3>
+      <div class="note">There is no server — Pages is static. A friend opens the pause
+        screen in the game, taps «copy stats code», sends it to you; paste it here.
+        Codes merge by player id, re-importing updates that player.</div>
+      <textarea id="impBox" placeholder="Paste a stats code…"></textarea>
+      <div class="row-btns">
+        <button id="impGo">Import</button>
+        <button id="impClear" class="ghost">Forget all imported</button>
+      </div>
+      <div class="note" id="impMsg"></div>
+    </div>
+  </div>
+
+  <div class="tab" id="tab-sessions">
+    <div class="card scroll"><h3>Recent sessions — everyone</h3><table id="ssTable"></table></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const HASH = '150437d05131f0d36d826bf3f92533b03019dcb605be8fcecda082e5cea3f887';
+
+  // ------------------------------------------------------------- the gate
+  async function sha(s) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+  }
+  const gate = document.getElementById('gate');
+  const app = document.getElementById('app');
+  async function tryEnter(p) {
+    if (await sha(p) !== HASH) return false;
+    try { localStorage.setItem('tk-metrics-gate', HASH); } catch {}
+    gate.style.display = 'none';
+    app.style.display = 'block';
+    render();
+    return true;
+  }
+  document.getElementById('enter').addEventListener('click', async () => {
+    if (!await tryEnter(document.getElementById('pass').value)) {
+      document.getElementById('gateErr').textContent = 'Wrong passphrase.';
+    }
+  });
+  document.getElementById('pass').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('enter').click();
+  });
+  try {
+    if (localStorage.getItem('tk-metrics-gate') === HASH) {
+      gate.style.display = 'none'; app.style.display = 'block';
+    }
+  } catch {}
+
+  // ------------------------------------------------------------------ data
+  function ownBlob() {
+    try {
+      const d = JSON.parse(localStorage.getItem('tk-metrics') || 'null');
+      if (d && d.v === 1) return d;
+    } catch {}
+    return null;
+  }
+  function friendBlobs() {
+    try { return JSON.parse(localStorage.getItem('tk-metrics-friends') || '{}'); }
+    catch { return {}; }
+  }
+  function everyone() {
+    const list = [];
+    const own = ownBlob();
+    if (own) list.push({ ...own, source: 'this device' });
+    for (const [id, b] of Object.entries(friendBlobs())) {
+      if (b && b.sessions) list.push({ ...b, source: 'imported' });
+    }
+    return list;
+  }
+  const allSessions = (ppl) => ppl.flatMap((p) =>
+    p.sessions.map((s) => ({ ...s, _pid: p.player.id, _src: p.source })));
+
+  const nameOf = (p) => {
+    for (let i = p.sessions.length - 1; i >= 0; i--) {
+      if (p.sessions[i].name) return p.sessions[i].name;
+    }
+    return 'anon';
+  };
+  const sum = (a, f) => a.reduce((t, x) => t + (f(x) || 0), 0);
+  const fmtDur = (sec) => {
+    sec = Math.round(sec);
+    if (sec < 90) return sec + 's';
+    const m = Math.round(sec / 60);
+    return m < 90 ? m + 'm' : (sec / 3600).toFixed(1) + 'h';
+  };
+  const fmtWhen = (t) => new Date(t).toLocaleString(undefined,
+    { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const swingsOf = (s) => sum(Object.values(s.swings || {}), (x) => x);
+  const topStyle = (ss) => {
+    const agg = {};
+    for (const s of ss) for (const [k, v] of Object.entries(s.swings || {})) agg[k] = (agg[k] || 0) + v;
+    let best = '—', n = 0;
+    for (const [k, v] of Object.entries(agg)) if (v > n) { n = v; best = k; }
+    return best;
+  };
+  const median = (a) => {
+    const v = a.filter((x) => x !== null && x !== undefined).sort((x, y) => x - y);
+    return v.length ? v[Math.floor(v.length / 2)] : 0;
+  };
+
+  // -------------------------------------------------------------- widgets
+  const tile = (v, k) => `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  function bars(el, entries, fmt = (v) => v) {
+    const max = Math.max(1, ...entries.map((e) => e[1]));
+    el.innerHTML = entries.map(([n, v, color]) => `
+      <div class="bar"><div class="n">${n}</div>
+        <div class="t"><div class="f" style="width:${(v / max) * 100}%${color ? `;background:${color}` : ''}"></div></div>
+        <div class="v">${fmt(v)}</div></div>`).join('')
+      || '<div class="note">no data yet</div>';
+  }
+  const count = (ss, key) => {
+    const m = {};
+    for (const s of ss) { const k = s[key]; if (k) m[k] = (m[k] || 0) + 1; }
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  };
+
+  // --------------------------------------------------------------- render
+  function render() {
+    const ppl = everyone();
+    const ss = allSessions(ppl);
+    const fought = ss.filter((s) => s.fights > 0);
+    document.getElementById('scopeLine').textContent =
+      `${ppl.length} player(s) · ${ss.length} session(s) · data lives in this browser; import codes below`;
+
+    // Overview: product numbers — how much, how often, does the menu convert.
+    const time = sum(ss, (s) => s.dur);
+    document.getElementById('ovTiles').innerHTML =
+      tile(ppl.length, 'players') +
+      tile(ss.length, 'sessions') +
+      tile(fmtDur(time), 'time played') +
+      tile(fmtDur(ss.length ? time / ss.length : 0), 'avg session') +
+      tile(sum(ss, (s) => s.fights), 'fights started') +
+      tile((ss.length ? Math.round(fought.length / ss.length * 100) : 0) + '%', 'sessions that fight') +
+      tile(fmtDur(median(ss.map((s) => s.menuTime))), 'median menu → FIGHT');
+
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+      const next = d.getTime() + 86400000;
+      const mins = sum(ss.filter((s) => s.t0 >= d.getTime() && s.t0 < next), (s) => s.dur) / 60;
+      days.push([d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), Math.round(mins)]);
+    }
+    bars(document.getElementById('ovDays'), days, (v) => v + 'm');
+    bars(document.getElementById('ovBuilds'), count(ss, 'build'), (v) => v + ' ses.');
+
+    // Gameplay: what the fights are made of.
+    const kills = sum(ss, (s) => s.kills), deaths = sum(ss, (s) => s.deaths);
+    const swings = sum(ss, (s) => swingsOf(s)), hits = sum(ss, (s) => s.hits);
+    document.getElementById('gpTiles').innerHTML =
+      tile(kills, 'kills') + tile(deaths, 'deaths') +
+      tile(deaths ? (kills / deaths).toFixed(2) : kills, 'k/d') +
+      tile(swings, 'strikes thrown') + tile(hits, 'hits landed') +
+      tile((swings ? Math.round(hits / swings * 100) : 0) + '%', 'hit rate') +
+      tile(fought.length ? (kills / fought.length).toFixed(1) : 0, 'kills / fighting session');
+    const styleAgg = {};
+    for (const s of ss) for (const [k, v] of Object.entries(s.swings || {})) styleAgg[k] = (styleAgg[k] || 0) + v;
+    bars(document.getElementById('gpStyles'), Object.entries(styleAgg).sort((a, b) => b[1] - a[1]));
+
+    // UX: friction — where time and clicks go before and around fighting.
+    document.getElementById('uxTiles').innerHTML =
+      tile(sum(ss, (s) => s.menuReturns), 'returns to menu') +
+      tile(sum(ss, (s) => s.pauses), 'pauses') +
+      tile(sum(ss, (s) => s.settings), 'settings touches') +
+      tile(fmtDur(median(ss.map((s) => s.menuTime))), 'median time in menu');
+    bars(document.getElementById('uxWeapon'), count(fought, 'weapon'), (v) => v + ' ses.');
+    bars(document.getElementById('uxBody'), count(fought, 'body'), (v) => v + ' ses.');
+    bars(document.getElementById('uxDevice'), count(ss, 'device'), (v) => v + ' ses.');
+
+    // Players: who exactly does what.
+    const rows = ppl.map((p) => {
+      const ps = p.sessions;
+      const k = sum(ps, (s) => s.kills), d = sum(ps, (s) => s.deaths);
+      const last = ps.length ? ps[ps.length - 1] : null;
+      return `<tr>
+        <td>${last && last.color ? `<span class="chip" style="background:#${last.color}"></span>` : ''}${nameOf(p)}</td>
+        <td class="id">${p.player.id.slice(0, 8)}</td>
+        <td>${p.source}</td>
+        <td>${ps.length}</td>
+        <td>${fmtDur(sum(ps, (s) => s.dur))}</td>
+        <td>${sum(ps, (s) => s.fights)}</td>
+        <td>${k}</td><td>${d}</td>
+        <td>${d ? (k / d).toFixed(2) : k}</td>
+        <td>${topStyle(ps)}</td>
+        <td>${last ? (last.weapon || '—') : '—'}</td>
+        <td>${last ? fmtWhen(last.t0) : '—'}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('plTable').innerHTML =
+      `<tr><th>name</th><th>id</th><th>source</th><th>ses.</th><th>time</th><th>fights</th>
+       <th>kills</th><th>deaths</th><th>k/d</th><th>fav strike</th><th>weapon</th><th>last seen</th></tr>` +
+      (rows || '<tr><td colspan="12" class="note">nobody yet — play a session or import a code</td></tr>');
+
+    // Sessions: the raw-ish timeline, newest first.
+    const names = Object.fromEntries(ppl.map((p) => [p.player.id, nameOf(p)]));
+    const recent = [...ss].sort((a, b) => b.t0 - a.t0).slice(0, 60);
+    document.getElementById('ssTable').innerHTML =
+      `<tr><th>when</th><th>player</th><th>build</th><th>device</th><th>length</th>
+       <th>fights</th><th>kills</th><th>deaths</th><th>strikes</th><th>menu→fight</th></tr>` +
+      (recent.map((s) => `<tr>
+        <td>${fmtWhen(s.t0)}</td><td>${names[s._pid] || '?'}</td><td>${s.build}</td>
+        <td>${s.device}</td><td>${fmtDur(s.dur)}</td><td>${s.fights}</td>
+        <td>${s.kills}</td><td>${s.deaths}</td><td>${swingsOf(s)}</td>
+        <td>${s.menuTime === null || s.menuTime === undefined ? '—' : fmtDur(s.menuTime)}</td>
+      </tr>`).join('') ||
+      '<tr><td colspan="10" class="note">no sessions yet</td></tr>');
+  }
+
+  // --------------------------------------------------------------- import
+  document.getElementById('impGo').addEventListener('click', () => {
+    const msg = document.getElementById('impMsg');
+    try {
+      const raw = document.getElementById('impBox').value.trim();
+      const blob = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      if (!blob || blob.v !== 1 || !blob.player || !Array.isArray(blob.sessions)) {
+        throw new Error('bad shape');
+      }
+      const friends = friendBlobs();
+      friends[blob.player.id] = { player: blob.player, sessions: blob.sessions, importedAt: Date.now() };
+      localStorage.setItem('tk-metrics-friends', JSON.stringify(friends));
+      msg.textContent = `Imported ${nameOf(blob)} — ${blob.sessions.length} session(s).`;
+      document.getElementById('impBox').value = '';
+      render();
+    } catch {
+      msg.textContent = 'Could not read that code — make sure it was copied whole.';
+    }
+  });
+  document.getElementById('impClear').addEventListener('click', () => {
+    localStorage.removeItem('tk-metrics-friends');
+    document.getElementById('impMsg').textContent = 'Imported data forgotten.';
+    render();
+  });
+
+  // ----------------------------------------------------------------- tabs
+  document.getElementById('tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === b);
+    for (const t of document.querySelectorAll('.tab')) {
+      t.classList.toggle('on', t.id === 'tab-' + b.dataset.t);
+    }
+  });
+
+  if (app.style.display === 'block') render();
+})();
+</script>
+</body>
+</html>

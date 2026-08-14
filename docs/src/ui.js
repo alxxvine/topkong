@@ -207,6 +207,7 @@ export class Ui {
       item.set(parseFloat(input.value));
       show();
       saveTuning();
+      this.onTuned?.();
     });
 
     row.append(label, input);
@@ -232,6 +233,7 @@ export class Ui {
       item.set(input.checked);
       show();
       saveTuning();
+      this.onTuned?.();
     });
 
     row.appendChild(label);
@@ -367,6 +369,7 @@ export class Ui {
       T[key] = parseFloat(input.value);
       show();
       saveTuning();
+      this.onTuned?.();
     });
 
     row.append(label, input);
@@ -390,6 +393,7 @@ export class Ui {
     input.addEventListener('change', () => {
       T[key] = input.checked;
       saveTuning();
+      this.onTuned?.();
     });
 
     row.appendChild(label);

@@ -477,6 +477,18 @@
   body.paused #paused .big { transform: scale(1); }
   #paused .small { font-size: 13px; color: var(--dim); }
 
+  #statsCopy {
+    margin-top: 14px;
+    padding: 7px 14px;
+    font: 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--dim);
+    background: var(--panel-solid);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
   /* Экран персонажа: карточка у левого края, боец живой в центре кадра.
      Затемнять сцену нельзя — сцена и есть предпросмотр. */
   #setup {
@@ -678,6 +690,9 @@
   <div id="paused">
     <div class="big">Paused</div>
     <div class="small">Click to resume</div>
+    <!-- The stats code: how a friend's telemetry reaches the owner's
+         dashboard without a server — copy here, paste in metrics.html. -->
+    <button id="statsCopy" type="button">copy stats code</button>
   </div>
 
   <!-- Character screen: shown once at load. The card sits to the side and
@@ -731,31 +746,32 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "178";</script>
+<script>window.TK_BUILD = "179";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=178",
-    "tk/main.js":         "./src/main.js?v=178",
-    "tk/tuning.js":       "./src/tuning.js?v=178",
-    "tk/mathx.js":        "./src/mathx.js?v=178",
-    "tk/arena.js":        "./src/arena.js?v=178",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=178",
-    "tk/balance.js":      "./src/balance.js?v=178",
-    "tk/skeleton.js":     "./src/skeleton.js?v=178",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=178",
-    "tk/gait.js":         "./src/gait.js?v=178",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=178",
-    "tk/swingAction.js":  "./src/swingAction.js?v=178",
-    "tk/locomotion.js":   "./src/locomotion.js?v=178",
-    "tk/body.js":         "./src/body.js?v=178",
-    "tk/bot.js":          "./src/bot.js?v=178",
-    "tk/contact.js":      "./src/contact.js?v=178",
-    "tk/match.js":        "./src/match.js?v=178",
-    "tk/fighter.js":      "./src/fighter.js?v=178",
-    "tk/input.js":        "./src/input.js?v=178",
-    "tk/ui.js":           "./src/ui.js?v=178",
-    "tk/sound.js":        "./src/sound.js?v=178"
+    "three":              "./vendor/three.module.js?v=179",
+    "tk/main.js":         "./src/main.js?v=179",
+    "tk/tuning.js":       "./src/tuning.js?v=179",
+    "tk/mathx.js":        "./src/mathx.js?v=179",
+    "tk/arena.js":        "./src/arena.js?v=179",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=179",
+    "tk/balance.js":      "./src/balance.js?v=179",
+    "tk/skeleton.js":     "./src/skeleton.js?v=179",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=179",
+    "tk/gait.js":         "./src/gait.js?v=179",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=179",
+    "tk/swingAction.js":  "./src/swingAction.js?v=179",
+    "tk/locomotion.js":   "./src/locomotion.js?v=179",
+    "tk/body.js":         "./src/body.js?v=179",
+    "tk/bot.js":          "./src/bot.js?v=179",
+    "tk/contact.js":      "./src/contact.js?v=179",
+    "tk/match.js":        "./src/match.js?v=179",
+    "tk/fighter.js":      "./src/fighter.js?v=179",
+    "tk/input.js":        "./src/input.js?v=179",
+    "tk/ui.js":           "./src/ui.js?v=179",
+    "tk/sound.js":        "./src/sound.js?v=179",
+    "tk/telemetry.js":    "./src/telemetry.js?v=179"
   }
 }
 </script>

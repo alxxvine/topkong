@@ -13,6 +13,8 @@ import { P } from 'tk/body.js';
 import { Input } from 'tk/input.js';
 import { Ui } from 'tk/ui.js';
 import { Sound } from 'tk/sound.js';
+import { Telemetry } from 'tk/telemetry.js';
+import { SWING_STYLES } from 'tk/swingAction.js';
 
 // Точка сборки: сцена, цикл, спавн и всё, что связывает модули между собой.
 //
@@ -57,6 +59,9 @@ export async function start() {
   const ui = new Ui();
   const fx = new HitFx(scene);
   const sound = new Sound();
+  // Телеметрия локальная: Pages статический, слать события некуда.
+  // Дашборд — metrics.html; чужие данные приезжают кодом с паузы.
+  const telem = new Telemetry(globalThis.TK_BUILD);
   // Browsers keep AudioContext suspended until a user gesture; unlock is
   // idempotent, so it simply rides on every input the page gets anyway.
   addEventListener('pointerdown', () => sound.unlock(), { passive: true });
@@ -79,9 +84,24 @@ export async function start() {
     () => placeRound(fighters, arena),
     (f) => respawnOne(f, fighters, arena));
 
+  ui.onTuned = () => telem.add('settings');
+
+  // «Код статистики» на паузе: телеметрия друга доезжает до дашборда
+  // без сервера — скопировал, прислал, владелец вставил в metrics.html.
+  const statsBtn = document.getElementById('statsCopy');
+  if (statsBtn) {
+    statsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const code = telem.export();
+      const done = () => { statsBtn.textContent = 'copied!'; };
+      if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, done);
+      setTimeout(() => { statsBtn.textContent = 'copy stats code'; }, 1500);
+    });
+  }
+
   // Экран персонажа. Пока он открыт, отсчёт матча не заканчивается;
   // кнопка FIGHT применяет выбор, прячет экран и начинает бой заново.
-  const setupState = initSetup(player, aim, match);
+  const setupState = initSetup(player, aim, match, telem);
 
   resize();
   addEventListener('resize', resize);
@@ -102,9 +122,11 @@ export async function start() {
   let paused = false;
   let lastOverField = null;
   let sndKills = 0;
+  let prevDeaths = 0;
 
   ui.onPauseToggle = () => {
     paused = !paused;
+    if (paused) telem.add('pauses');
     ui.setPaused(paused);
     // Накопитель обнуляется на выходе: за время паузы кадры шли, а шаги
     // физики нет, и без сброса игра доганяла бы пропущенное пачкой шагов.
@@ -133,6 +155,7 @@ export async function start() {
       return;
     }
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
+    telem.beat(real);
 
     arena.tick();
     if (dummies.length !== Math.round(T.dummyCount)) {
@@ -215,6 +238,7 @@ export async function start() {
           rig.addShake(0.25 + strength * 0.75 * T.shakeMul);
           hitStop = T.hitStopMax * (0.4 + strength * 0.6);
           sound.impact(strength);
+          if (attacker === player) telem.add('hits');
           // Remember when the hit sounded, so the fall that follows the
           // same blow does not add a second, duplicate thud.
           victim.sndHitAt = now;
@@ -236,7 +260,12 @@ export async function start() {
     // no controller tells the mixer anything, the mixer watches the game.
     for (const f of fighters) {
       const striking = f.hasClub && f.swing.striking;
-      if (striking && !f.sndStriking) sound.whoosh(f.swing.power);
+      if (striking && !f.sndStriking) {
+        sound.whoosh(f.swing.power);
+        if (f.isPlayer) {
+          telem.swing((SWING_STYLES[f.swing.styleIndex] || SWING_STYLES[0]).name);
+        }
+      }
       f.sndStriking = striking;
 
       // A body that went down WITHOUT a club hit in the last quarter
@@ -251,8 +280,13 @@ export async function start() {
       if (f.alive && f.sndAlive === false && match.deathmatch) sound.respawn();
       f.sndAlive = f.alive;
     }
-    if (player.kills > sndKills) sound.kill();
+    if (player.kills > sndKills) {
+      sound.kill();
+      telem.add('kills', player.kills - sndKills);
+    }
     sndKills = player.kills;
+    if (player.deaths > prevDeaths) telem.add('deaths', player.deaths - prevDeaths);
+    prevDeaths = player.deaths;
     // Хвост накопителя не копится бесконечно: после долгого залипания вкладки
     // иначе прилетает пачка шагов и всё разлетается.
     if (accumulator > STEP * MAX_STEPS) accumulator = 0;
@@ -283,7 +317,7 @@ export async function start() {
   requestAnimationFrame(frame);
 
   // Пригодится из консоли браузера и из автотеста.
-  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, sound, tuning: T };
+  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, sound, telemetry: telem, tuning: T };
   globalThis.TopKong = api;
   return api;
 }
@@ -297,7 +331,7 @@ export async function start() {
  * is the game itself, not a mockup. FIGHT hides the card and restarts
  * the match countdown. Choices persist in localStorage.
  */
-function initSetup(player, aim, match) {
+function initSetup(player, aim, match, telem) {
   const root = document.getElementById('setup');
   const state = { done: !root };
   if (!root) return state;
@@ -375,6 +409,12 @@ function initSetup(player, aim, match) {
     root.classList.add('gone');
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
+    telem.fight({
+      name: player.name,
+      weapon,
+      color: color.toString(16).padStart(6, '0'),
+      body: currentBody,
+    });
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }
@@ -385,6 +425,7 @@ function initSetup(player, aim, match) {
   state.open = () => {
     if (!state.done) return;
     state.done = false;
+    telem.add('menuReturns');
     root.classList.remove('gone');
     if (menuBtn) menuBtn.classList.add('gone');
     match.phase = 'ready';
