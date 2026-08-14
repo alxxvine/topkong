@@ -120,6 +120,14 @@ export async function start() {
     // Пауза останавливает ВСЁ: физику, ботов, матч, эффекты и камеру.
     // Кадр при этом продолжает рисоваться — иначе окно замирает мёртвой
     // картинкой и непонятно, игра встала или вкладка.
+    // Меню персонажа с паузой несовместимо: его предпросмотр — живая
+    // сцена, поэтому открытое меню паузу снимает.
+    if (paused && !setupState.done) {
+      paused = false;
+      ui.setPaused(false);
+      accumulator = 0;
+      last = time;
+    }
     if (paused) {
       renderer.render(scene, camera);
       return;
@@ -161,8 +169,11 @@ export async function start() {
 
     player.facingTarget.copy(input.aim).sub(player.position);
     player.facingTarget.y = 0;
-    player.swing.held = input.swingHeld && match.controlEnabled;
-    if (!match.controlEnabled) player.moveInput.set(0, 0);
+    // На экране персонажа игрок УЖЕ управляем: походить, помахать, послушать
+    // звук — всё пробуется прямо в меню, на стоящих вокруг ботах, а не в бою.
+    const playerFree = match.controlEnabled || !setupState.done;
+    player.swing.held = input.swingHeld && playerFree;
+    if (!playerFree) player.moveInput.set(0, 0);
 
     if (input.consumeReset()) match.begin();
 
@@ -194,7 +205,9 @@ export async function start() {
       // корень, и правку положения должен увидеть он, а не следующий кадр.
       resolveContacts(fighters, STEP);
 
-      for (const f of fighters) f.tick(STEP, match.controlEnabled);
+      for (const f of fighters) {
+        f.tick(STEP, match.controlEnabled || (f.isPlayer && !setupState.done));
+      }
 
       for (const f of fighters) {
         f.checkHits(fighters, STEP, now, (attacker, victim, point, strength) => {
@@ -212,8 +225,11 @@ export async function start() {
     }
     // The character screen holds the match at the countdown's door: the
     // timer never runs out while the player is still picking a color.
-    if (!setupState.done && match.phase === 'ready') {
-      match.timer = Math.max(match.timer, 1.5);
+    // Falling off during the menu test drive costs nothing — straight back
+    // to the center, like a sandbox.
+    if (!setupState.done) {
+      if (match.phase === 'ready') match.timer = Math.max(match.timer, 1.5);
+      if (!player.alive && player.deadTime > 0.7) player.spawn(0, 0, Math.PI * 0.25);
     }
 
     // Sound is edge-triggered off state the simulation already keeps:
@@ -348,6 +364,8 @@ function initSetup(player, aim, match) {
   // Лицом к камере, в центре: экран персонажа должен показывать персонажа.
   player.spawn(0, 0, Math.PI * 0.25);
 
+  const menuBtn = document.getElementById('menu');
+
   document.getElementById('setupGo').addEventListener('click', () => {
     player.name = (nameEl.value || '').trim().slice(0, 12) || 'You';
     try {
@@ -355,9 +373,26 @@ function initSetup(player, aim, match) {
         JSON.stringify({ name: player.name === 'You' ? '' : player.name, color, weapon }));
     } catch { /* private mode */ }
     root.classList.add('gone');
+    if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
+    // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
+    // примерял цвет, в счёт боя не идёт.
+    for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }
     match.begin();
   });
+
+  /** Вернуться с поля в меню: карточка открывается, бой встаёт у отсчёта. */
+  state.open = () => {
+    if (!state.done) return;
+    state.done = false;
+    root.classList.remove('gone');
+    if (menuBtn) menuBtn.classList.add('gone');
+    match.phase = 'ready';
+    match.timer = 2;
+    match.winner = null;
+    player.spawn(0, 0, Math.PI * 0.25);
+  };
+  if (menuBtn) menuBtn.addEventListener('click', () => state.open());
 
   return state;
 }

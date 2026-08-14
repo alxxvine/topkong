@@ -373,6 +373,31 @@
 
   #pause:active { transform: scale(0.94); }
 
+  /* Выход в меню персонажа — вторая кнопка того же семейства, правее паузы.
+     Прячется, пока меню и так открыто. */
+  #menu {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 62px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    font: 600 16px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: var(--text);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 2;
+  }
+
+  #menu:active { transform: scale(0.94); }
+  #menu.gone { display: none; }
+
   /* HUD стоит в том же углу — сдвигаем его вправо от кнопки. */
   #hud { left: 62px; }
 
@@ -643,6 +668,7 @@
        от большой панели настроек: та скрыта в игре целиком, а эти обязаны
        быть под рукой всегда. -->
   <button id="pause" type="button" aria-label="Pause">❙❙</button>
+  <button id="menu" class="gone" type="button" aria-label="Back to menu">⌂</button>
 
   <div id="quick">
     <div id="quickHead"><span>Quick tuning</span><span class="spacer"></span><span class="chev">▴</span></div>
@@ -705,31 +731,31 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "177";</script>
+<script>window.TK_BUILD = "178";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=177",
-    "tk/main.js":         "./src/main.js?v=177",
-    "tk/tuning.js":       "./src/tuning.js?v=177",
-    "tk/mathx.js":        "./src/mathx.js?v=177",
-    "tk/arena.js":        "./src/arena.js?v=177",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=177",
-    "tk/balance.js":      "./src/balance.js?v=177",
-    "tk/skeleton.js":     "./src/skeleton.js?v=177",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=177",
-    "tk/gait.js":         "./src/gait.js?v=177",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=177",
-    "tk/swingAction.js":  "./src/swingAction.js?v=177",
-    "tk/locomotion.js":   "./src/locomotion.js?v=177",
-    "tk/body.js":         "./src/body.js?v=177",
-    "tk/bot.js":          "./src/bot.js?v=177",
-    "tk/contact.js":      "./src/contact.js?v=177",
-    "tk/match.js":        "./src/match.js?v=177",
-    "tk/fighter.js":      "./src/fighter.js?v=177",
-    "tk/input.js":        "./src/input.js?v=177",
-    "tk/ui.js":           "./src/ui.js?v=177",
-    "tk/sound.js":        "./src/sound.js?v=177"
+    "three":              "./vendor/three.module.js?v=178",
+    "tk/main.js":         "./src/main.js?v=178",
+    "tk/tuning.js":       "./src/tuning.js?v=178",
+    "tk/mathx.js":        "./src/mathx.js?v=178",
+    "tk/arena.js":        "./src/arena.js?v=178",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=178",
+    "tk/balance.js":      "./src/balance.js?v=178",
+    "tk/skeleton.js":     "./src/skeleton.js?v=178",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=178",
+    "tk/gait.js":         "./src/gait.js?v=178",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=178",
+    "tk/swingAction.js":  "./src/swingAction.js?v=178",
+    "tk/locomotion.js":   "./src/locomotion.js?v=178",
+    "tk/body.js":         "./src/body.js?v=178",
+    "tk/bot.js":          "./src/bot.js?v=178",
+    "tk/contact.js":      "./src/contact.js?v=178",
+    "tk/match.js":        "./src/match.js?v=178",
+    "tk/fighter.js":      "./src/fighter.js?v=178",
+    "tk/input.js":        "./src/input.js?v=178",
+    "tk/ui.js":           "./src/ui.js?v=178",
+    "tk/sound.js":        "./src/sound.js?v=178"
   }
 }
 </script>
