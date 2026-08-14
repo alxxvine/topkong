@@ -106,6 +106,38 @@ export async function start() {
   // кнопка FIGHT применяет выбор, прячет экран и начинает бой заново.
   const setupState = initSetup(player, aim, match, telem, prog);
 
+  // On the character screen the hero faces the CAMERA until the mouse
+  // takes over: a menu where the fighter shows you his back is no menu.
+  // Camera yaw is 45°, so the camera sits toward (-1, -1) on the deck.
+  const faceCamera = () => {
+    input.hasPointer = false;
+    input.aim.set(player.position.x - 6, 0, player.position.z - 6);
+  };
+  // The close-up frames the hero alone: opponents caught standing next
+  // to him read as photobombers. Distance alone is no cure — the camera
+  // is orthographic, so anything near the CAMERA AXIS projects straight
+  // onto the hero no matter how far away it stands. The menu parks the
+  // bots into the two side sectors, clear of the axis corridor; FIGHT
+  // re-seats everyone through match.begin anyway.
+  const parkDummies = () => {
+    let slot = 0;
+    for (const f of fighters) {
+      if (f.isPlayer || !f.alive) continue;
+      // Lateral offset from the camera axis (axis runs along (1,1)/√2).
+      const lat = Math.abs(f.position.x - f.position.z) * 0.7071;
+      const r = Math.hypot(f.position.x, f.position.z);
+      if (r < 4.2 || lat < 2.8) {
+        const side = slot % 2 ? 1 : -1;
+        const a = (side > 0 ? 2.356 : -0.785) + Math.floor(slot / 2) * 0.5 * side;
+        f.spawn(Math.sin(a) * 5.4, Math.cos(a) * 5.4, a + Math.PI);
+      }
+      slot++;
+    }
+  };
+  faceCamera();
+  const openSetup = setupState.open;
+  setupState.open = () => { openSetup(); faceCamera(); };
+
   resize();
   addEventListener('resize', resize);
   document.getElementById('boot').classList.add('gone');
@@ -168,7 +200,8 @@ export async function start() {
     }
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
     telem.beat(real);
-    prog.beat(real);
+    // Playtime achievements tick in the game, not on the menu screen.
+    if (setupState.done) prog.beat(real);
 
     arena.tick();
     if (dummies.length !== Math.round(T.dummyCount)) {
@@ -327,7 +360,7 @@ export async function start() {
           if (blocked) sound.block();
           else {
             sound.impact(strength);
-            if (attacker === player) telem.add('hits');
+            if (attacker === player && setupState.done) telem.add('hits');
           }
           // Remember when the hit sounded, so the fall that follows the
           // same blow does not add a second, duplicate thud.
@@ -344,7 +377,12 @@ export async function start() {
     if (!setupState.done) {
       if (match.phase === 'ready') match.timer = Math.max(match.timer, 1.5);
       if (!player.alive && player.deadTime > 0.7) player.spawn(0, 0, Math.PI * 0.25);
+      // Photobomber patrol: a no-op scan once everyone is parked wide.
+      parkDummies();
     }
+    // The camera: hero close-up while the menu is open, the arena after.
+    rig.menuTarget = setupState.done ? 0 : 1;
+    document.body.classList.toggle('insetup', !setupState.done);
 
     // Sound is edge-triggered off state the simulation already keeps:
     // no controller tells the mixer anything, the mixer watches the game.
@@ -353,7 +391,8 @@ export async function start() {
       if (striking && !f.sndStriking) {
         // A fist cuts less air than a club head.
         sound.whoosh(f.swing.power * (f.hasClub ? 1 : 0.55));
-        if (f.isPlayer) telem.swing(f.swing.style.name);
+        // Menu swings are rehearsal: they make sound but leave no stats.
+        if (f.isPlayer && setupState.done) telem.swing(f.swing.style.name);
       }
       f.sndStriking = striking;
 
@@ -369,13 +408,16 @@ export async function start() {
       if (f.alive && f.sndAlive === false && match.deathmatch) sound.respawn();
       f.sndAlive = f.alive;
     }
-    if (player.kills > sndKills) {
+    // Progression and stats accrue IN THE GAME only: the menu test drive
+    // is a sandbox, and sandbox kills counting toward achievements made
+    // the menu the best farming spot.
+    if (player.kills > sndKills && setupState.done) {
       sound.kill();
       telem.add('kills', player.kills - sndKills);
       for (let n = player.kills - sndKills; n > 0; n--) prog.kill(player.hasClub);
     }
     sndKills = player.kills;
-    if (player.deaths > prevDeaths) {
+    if (player.deaths > prevDeaths && setupState.done) {
       telem.add('deaths', player.deaths - prevDeaths);
       prog.death();
     }

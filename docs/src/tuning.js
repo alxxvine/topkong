@@ -600,6 +600,13 @@ export const tuning = {
   // Запас кадра над ареной: диск влезает, а голова бойца торчит за край,
   // если про неё забыть.
   camHeadroom: 2.2,
+  // The character-menu close-up (cameraRig.menuBlend): frame half-height
+  // in meters, flatter tilt, and how far above the feet the camera looks.
+  // The menu must FEEL like a character screen — the hero big, nearly
+  // head-on — and FIGHT pulls back into the arena framing, one camera.
+  menuCamHalf: 1.5,
+  menuCamPitch: 16,
+  menuCamLift: 0.95,
   camFollowWeight: 0.45,
   camSmooth: 0.18,
   camLookAhead: 0.35,

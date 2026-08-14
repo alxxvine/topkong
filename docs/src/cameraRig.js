@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
-import { clamp01, noiseSigned, DEG } from 'tk/mathx.js';
+import { clamp01, lerp, noiseSigned, DEG } from 'tk/mathx.js';
 
 // The camera is isometric: an orthographic projection at a fixed angle.
 //
@@ -39,6 +39,13 @@ export class CameraRig {
     this.lookAhead = new THREE.Vector3();
     this.shake = 0;
     this.shakeSeed = Math.random() * 100;
+
+    /** The character-menu close-up, 0..1. The menu drives menuTarget and
+     *  the blend eases toward it, so opening the menu is a dolly-in on
+     *  the hero and pressing FIGHT is the pull-back that reveals the
+     *  arena — one camera, two framings, no cut. */
+    this.menuBlend = 0;
+    this.menuTarget = 0;
 
     this.cam.near = -60;
     this.cam.far = 260;
@@ -94,7 +101,8 @@ export class CameraRig {
 
     // The frame must hold both the width and the height: take whichever is
     // larger and stretch the other side by the screen's aspect.
-    const halfH = Math.max(tall, r / a);
+    // The menu close-up shrinks the frame to hero size instead.
+    const halfH = lerp(Math.max(tall, r / a), T.menuCamHalf, this.menuBlend);
     const halfW = halfH * a;
 
     const c = this.cam;
@@ -104,7 +112,10 @@ export class CameraRig {
   }
 
   desiredPosition(focus, out) {
-    _euler.set(T.camPitch * DEG, T.camYaw * DEG, 0);
+    // The menu flattens the tilt: the hero is seen almost head-on with a
+    // hint of top-down left, so it still reads as the same game.
+    _euler.set(lerp(T.camPitch, T.menuCamPitch, this.menuBlend) * DEG,
+      T.camYaw * DEG, 0);
     _quat.setFromEuler(_euler);
     // The camera looks down-forward, so it stands behind and above the
     // point of attention.
@@ -119,6 +130,13 @@ export class CameraRig {
    * responsive, or the frame trails the player with a lag.
    */
   tick(dt, target) {
+    // The menu close-up eases in and out — a dolly, never a cut.
+    this.menuBlend += (this.menuTarget - this.menuBlend)
+      * clamp01(2.6 * dt);
+    if (Math.abs(this.menuBlend - this.menuTarget) < 0.002) {
+      this.menuBlend = this.menuTarget;
+    }
+
     // The arena radius and the tilt are live sliders, and the frame bounds
     // depend on them.
     this.applyFrustum();
@@ -126,7 +144,11 @@ export class CameraRig {
     _focus.copy(this.center);
     if (target) {
       _focus.copy(target).addScaledVector(this.lookAhead, T.camLookAhead);
-      _focus.lerpVectors(this.center, _focus, clamp01(T.camFollowWeight));
+      _focus.lerpVectors(this.center, _focus,
+        clamp01(lerp(T.camFollowWeight, 1, this.menuBlend)));
+      // Look at the chest, not the feet: without the lift the close-up
+      // frames the hero waist-down.
+      _focus.y += this.menuBlend * T.menuCamLift;
     }
 
     this.desiredPosition(_focus, _desired);

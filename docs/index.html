@@ -561,83 +561,105 @@
     pointer-events: auto;
   }
 
-  /* Экран персонажа: карточка у левого края, боец живой в центре кадра.
-     Затемнять сцену нельзя — сцена и есть предпросмотр. */
+  /* Экран персонажа: полноэкранное меню без карточек. Герой крупно
+     в центре (камера сама наезжает — cameraRig.menuBlend), выборы
+     разнесены по краям кадра, снизу имя и FIGHT. Затемнять сцену
+     нельзя — сцена и есть предпросмотр. */
   #setup {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    padding-left: max(4vw, 12px);
     pointer-events: none;
     z-index: 2;
   }
 
   #setup.gone { display: none; }
 
-  #setupCard {
-    pointer-events: auto;
-    width: 252px;
-    max-width: calc(100vw - 24px);
-    max-height: calc(100% - 24px);
-    overflow-y: auto;
-    padding: 16px;
-    background: var(--panel);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    box-shadow: var(--shadow);
+  #setupTitle {
+    position: absolute;
+    top: calc(26px + env(safe-area-inset-top, 0px));
+    left: 0;
+    right: 0;
+    text-align: center;
+  }
+
+  #setupTitle b {
+    display: block;
+    font-size: clamp(40px, 7vw, 66px);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 0.95;
+    color: var(--text);
+  }
+
+  #setupTitle span {
+    display: block;
+    margin-top: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .setupCol {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     gap: 8px;
+    width: min(210px, 34vw);
+    pointer-events: auto;
   }
 
-  #setupCard .h { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+  #setupLeft { left: max(5vw, 16px); }
 
-  #setupCard .l {
-    margin-top: 4px;
+  #setupRight {
+    right: max(5vw, 16px);
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  #setup .l {
+    margin-top: 10px;
     color: var(--dim);
     font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
+    font-weight: 700;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
   }
 
-  #setupName {
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--panel-solid);
-    font: inherit;
-    color: var(--text);
-    outline: none;
-  }
-
-  #setupColors { display: flex; gap: 6px; flex-wrap: wrap; }
+  #setupColors { display: flex; gap: 8px; flex-wrap: wrap; max-width: 176px; }
 
   #setupColors button {
-    width: 26px;
-    height: 26px;
+    width: 31px;
+    height: 31px;
     border-radius: 50%;
-    border: 2px solid transparent;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
     cursor: pointer;
     padding: 0;
+    transition: transform 0.12s;
   }
 
-  #setupColors button.sel { border-color: var(--text); }
+  #setupColors button:hover { transform: scale(1.12); }
+  #setupColors button.sel { border-color: var(--text); transform: scale(1.12); }
 
-  #setupWeapon, #setupBody { display: flex; gap: 6px; flex-wrap: wrap; }
+  #setupWeapon, #setupBody { display: flex; flex-direction: column; gap: 7px; }
+  #setupWeapon { align-self: stretch; align-items: stretch; }
+  #setupBody { flex-direction: row; flex-wrap: wrap; }
 
   #setupWeapon button, #setupBody button {
-    flex: 1;
-    padding: 7px 8px;
+    padding: 9px 16px;
     border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--panel-solid);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
     font: inherit;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
     color: var(--text);
     cursor: pointer;
     white-space: nowrap;
@@ -649,19 +671,48 @@
     color: #fff;
   }
 
+  #setupFoot {
+    position: absolute;
+    left: 50%;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    pointer-events: auto;
+  }
+
+  #setupName {
+    width: 170px;
+    padding: 12px 18px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+  }
+
   #setupGo {
-    margin-top: 8px;
-    padding: 11px;
+    padding: 12px 46px;
     border: none;
-    border-radius: 12px;
+    border-radius: 999px;
     background: var(--accent);
     color: #fff;
     font: inherit;
-    font-weight: 700;
-    font-size: 15px;
-    letter-spacing: 0.02em;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+    box-shadow: 0 10px 26px rgba(0, 113, 227, 0.35);
     cursor: pointer;
+    transition: transform 0.12s;
   }
+
+  #setupGo:hover { transform: scale(1.04); }
 
   /* Замки прогрессии. Закрытая награда видна, но не отдаётся; скрытая
      даже не показывает, что она такое, — тёмный кружок со знаком вопроса. */
@@ -684,7 +735,7 @@
     cursor: not-allowed;
   }
 
-  #setupProg { display: flex; flex-direction: column; gap: 3px; }
+  #setupProg { display: flex; flex-direction: column; gap: 4px; }
 
   #setupProg div {
     font-size: 10.5px;
@@ -694,6 +745,27 @@
 
   #setupProg div.got { color: var(--text); }
   #setupProg div.hid { opacity: 0.6; }
+
+  /* Narrow screens: the columns tuck into the lower corners above the
+     FIGHT bar, the title shrinks, the achievement list steps aside. */
+  @media (max-width: 640px) {
+    #setupTitle b { font-size: 34px; }
+    .setupCol {
+      top: auto;
+      bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+      transform: none;
+      width: 44vw;
+    }
+    #setupColors button { width: 26px; height: 26px; }
+    #setupProg { display: none; }
+    #setupName { width: 34vw; }
+  }
+
+  /* The menu hides the in-game service chrome under it: the tuning
+     panel and the pause button belong to the fight, and the panel sat
+     exactly on top of the weapon column. */
+  body.insetup #hint, body.insetup #stam, body.insetup #hud,
+  body.insetup #tune, body.insetup #quick, body.insetup #pause { display: none; }
 
   /* Тост достижения: сверху по центру, поверх всего, кликов не ловит. */
   #toast {
@@ -828,22 +900,27 @@
     <button id="statsCopy" type="button">copy stats code</button>
   </div>
 
-  <!-- Character screen: shown once at load. The card sits to the side and
-       the arena stays live behind it — the player stands centered facing
-       the camera, and every choice repaints the REAL fighter, so the
-       preview is the game itself, not a mockup. -->
+  <!-- Character screen: shown once at load. No card — the whole frame IS
+       the menu: the hero stands huge in the center (the camera dollies in,
+       see cameraRig.menuBlend), the choices hang along the screen edges,
+       and every pick repaints the REAL fighter. Pressing FIGHT pulls the
+       camera back out into the arena framing. -->
   <div id="setup">
-    <div id="setupCard">
-      <div class="h">Your fighter</div>
-      <input id="setupName" maxlength="12" placeholder="Name" autocomplete="off" spellcheck="false">
+    <div id="setupTitle"><b>TOP KONG</b><span>pick your brawler</span></div>
+    <div id="setupLeft" class="setupCol">
       <div class="l">Color</div>
       <div id="setupColors"></div>
-      <div class="l">Weapon</div>
-      <div id="setupWeapon"></div>
       <div class="l">Body</div>
       <div id="setupBody"></div>
+    </div>
+    <div id="setupRight" class="setupCol">
+      <div class="l">Weapon</div>
+      <div id="setupWeapon"></div>
       <div class="l">Progress</div>
       <div id="setupProg"></div>
+    </div>
+    <div id="setupFoot">
+      <input id="setupName" maxlength="12" placeholder="Name" autocomplete="off" spellcheck="false">
       <button id="setupGo" type="button">FIGHT</button>
     </div>
   </div>
@@ -882,33 +959,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "185";</script>
+<script>window.TK_BUILD = "186";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=185",
-    "tk/main.js":         "./src/main.js?v=185",
-    "tk/tuning.js":       "./src/tuning.js?v=185",
-    "tk/mathx.js":        "./src/mathx.js?v=185",
-    "tk/arena.js":        "./src/arena.js?v=185",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=185",
-    "tk/balance.js":      "./src/balance.js?v=185",
-    "tk/skeleton.js":     "./src/skeleton.js?v=185",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=185",
-    "tk/gait.js":         "./src/gait.js?v=185",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=185",
-    "tk/swingAction.js":  "./src/swingAction.js?v=185",
-    "tk/locomotion.js":   "./src/locomotion.js?v=185",
-    "tk/body.js":         "./src/body.js?v=185",
-    "tk/bot.js":          "./src/bot.js?v=185",
-    "tk/contact.js":      "./src/contact.js?v=185",
-    "tk/match.js":        "./src/match.js?v=185",
-    "tk/fighter.js":      "./src/fighter.js?v=185",
-    "tk/input.js":        "./src/input.js?v=185",
-    "tk/ui.js":           "./src/ui.js?v=185",
-    "tk/sound.js":        "./src/sound.js?v=185",
-    "tk/telemetry.js":    "./src/telemetry.js?v=185",
-    "tk/progress.js":     "./src/progress.js?v=185"
+    "three":              "./vendor/three.module.js?v=186",
+    "tk/main.js":         "./src/main.js?v=186",
+    "tk/tuning.js":       "./src/tuning.js?v=186",
+    "tk/mathx.js":        "./src/mathx.js?v=186",
+    "tk/arena.js":        "./src/arena.js?v=186",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=186",
+    "tk/balance.js":      "./src/balance.js?v=186",
+    "tk/skeleton.js":     "./src/skeleton.js?v=186",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=186",
+    "tk/gait.js":         "./src/gait.js?v=186",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=186",
+    "tk/swingAction.js":  "./src/swingAction.js?v=186",
+    "tk/locomotion.js":   "./src/locomotion.js?v=186",
+    "tk/body.js":         "./src/body.js?v=186",
+    "tk/bot.js":          "./src/bot.js?v=186",
+    "tk/contact.js":      "./src/contact.js?v=186",
+    "tk/match.js":        "./src/match.js?v=186",
+    "tk/fighter.js":      "./src/fighter.js?v=186",
+    "tk/input.js":        "./src/input.js?v=186",
+    "tk/ui.js":           "./src/ui.js?v=186",
+    "tk/sound.js":        "./src/sound.js?v=186",
+    "tk/telemetry.js":    "./src/telemetry.js?v=186",
+    "tk/progress.js":     "./src/progress.js?v=186"
   }
 }
 </script>
