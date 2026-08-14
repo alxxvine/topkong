@@ -167,6 +167,32 @@
     box-shadow: var(--shadow);
   }
 
+  /* Stamina: a sliver of a bar that only exists while it is not full.
+     Deliberately the one meter in the game — no health bars on
+     principle, but a resource the player SPENDS needs a receipt. */
+  #stam {
+    position: absolute;
+    left: 50%;
+    bottom: calc(46px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    width: 110px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(125, 125, 138, 0.22);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #stam.show { opacity: 1; }
+  #stamBar {
+    display: block;
+    height: 100%;
+    width: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  #stam.low #stamBar { background: #e05555; }
+
   /* --- панель настроек --- */
   body.bare #tune, body.bare #hud, body.bare #hint { display: none; }
 
@@ -773,6 +799,7 @@
 <div id="ui">
   <div id="banner"><div id="bannerBig"></div><div id="bannerSmall"></div></div>
   <div id="hud"></div>
+  <div id="stam"><i id="stamBar"></i></div>
   <div id="hint">WASD — move · LMB — strike (hold to charge) · wheel — overhead / rising · RMB — block · Space — dash · R — reset</div>
 
   <div id="tune" class="folded">
@@ -855,33 +882,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "184";</script>
+<script>window.TK_BUILD = "185";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=184",
-    "tk/main.js":         "./src/main.js?v=184",
-    "tk/tuning.js":       "./src/tuning.js?v=184",
-    "tk/mathx.js":        "./src/mathx.js?v=184",
-    "tk/arena.js":        "./src/arena.js?v=184",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=184",
-    "tk/balance.js":      "./src/balance.js?v=184",
-    "tk/skeleton.js":     "./src/skeleton.js?v=184",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=184",
-    "tk/gait.js":         "./src/gait.js?v=184",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=184",
-    "tk/swingAction.js":  "./src/swingAction.js?v=184",
-    "tk/locomotion.js":   "./src/locomotion.js?v=184",
-    "tk/body.js":         "./src/body.js?v=184",
-    "tk/bot.js":          "./src/bot.js?v=184",
-    "tk/contact.js":      "./src/contact.js?v=184",
-    "tk/match.js":        "./src/match.js?v=184",
-    "tk/fighter.js":      "./src/fighter.js?v=184",
-    "tk/input.js":        "./src/input.js?v=184",
-    "tk/ui.js":           "./src/ui.js?v=184",
-    "tk/sound.js":        "./src/sound.js?v=184",
-    "tk/telemetry.js":    "./src/telemetry.js?v=184",
-    "tk/progress.js":     "./src/progress.js?v=184"
+    "three":              "./vendor/three.module.js?v=185",
+    "tk/main.js":         "./src/main.js?v=185",
+    "tk/tuning.js":       "./src/tuning.js?v=185",
+    "tk/mathx.js":        "./src/mathx.js?v=185",
+    "tk/arena.js":        "./src/arena.js?v=185",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=185",
+    "tk/balance.js":      "./src/balance.js?v=185",
+    "tk/skeleton.js":     "./src/skeleton.js?v=185",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=185",
+    "tk/gait.js":         "./src/gait.js?v=185",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=185",
+    "tk/swingAction.js":  "./src/swingAction.js?v=185",
+    "tk/locomotion.js":   "./src/locomotion.js?v=185",
+    "tk/body.js":         "./src/body.js?v=185",
+    "tk/bot.js":          "./src/bot.js?v=185",
+    "tk/contact.js":      "./src/contact.js?v=185",
+    "tk/match.js":        "./src/match.js?v=185",
+    "tk/fighter.js":      "./src/fighter.js?v=185",
+    "tk/input.js":        "./src/input.js?v=185",
+    "tk/ui.js":           "./src/ui.js?v=185",
+    "tk/sound.js":        "./src/sound.js?v=185",
+    "tk/telemetry.js":    "./src/telemetry.js?v=185",
+    "tk/progress.js":     "./src/progress.js?v=185"
   }
 }
 </script>

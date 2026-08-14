@@ -107,6 +107,12 @@ export class Fighter {
     this.clubHeadPrev = new THREE.Vector3();
     this.clubGrip = new THREE.Vector3();
     this.swingSpeed = 0;
+    /** Stamina 0..1. Strikes, the dash and a held block spend from it;
+     *  it refills after a short pause. Empty means no new strikes and a
+     *  broken block — the counter to infinite clicking (see tuning). */
+    this.stamina = 1;
+    this.staminaWait = 0;
+    this._swingWas = 'guard';
     // The fists get the same treatment for bare-knuckle strikes.
     this.fistR = new THREE.Vector3();
     this.fistRPrev = new THREE.Vector3();
@@ -331,6 +337,9 @@ export class Fighter {
     this.staggerDirX = 0;
     this.staggerDirZ = 0;
     this.swingSpeed = 0;
+    this.stamina = 1;
+    this.staminaWait = 0;
+    this._swingWas = 'guard';
     this.lastHit.clear();
     this.trailPoints.length = 0;
 
@@ -487,7 +496,35 @@ export class Fighter {
     // club toggles live.
     this.swing.fists = !this.hasClub;
     this.swing.held = inControl && this.swing.held;
+
+    // Stamina. A new strike must be affordable BEFORE the windup starts —
+    // player and bot alike get their held wish silently dropped when the
+    // pool is dry; the charge lands at the moment the windup begins.
+    // The block drain and the dash cost live with their verbs (main.js).
+    this.staminaWait = Math.max(0, this.staminaWait - dt);
+    const strikeCost = this.hasClub ? T.staminaClubCost : T.staminaPunchCost;
+    if (T.staminaOn && this.swing.state === 'guard' && this.swing.held
+        && this.stamina < strikeCost) {
+      this.swing.held = false;
+      this.swing.castNow = false;
+    }
     this.swing.tick(dt);
+    if (T.staminaOn) {
+      if (this.swing.state === 'windup' && this._swingWas !== 'windup') {
+        this.stamina = Math.max(0, this.stamina - strikeCost);
+        this.staminaWait = T.staminaDelay;
+      }
+      const busy = this.blocking
+        || this.swing.state === 'windup' || this.swing.state === 'strike';
+      if (this.blocking) {
+        this.stamina = Math.max(0, this.stamina - T.staminaBlockDrain * dt);
+      } else if (!busy && this.staminaWait <= 0) {
+        this.stamina = Math.min(1, this.stamina + T.staminaRegen * dt);
+      }
+    } else {
+      this.stamina = 1;
+    }
+    this._swingWas = this.swing.state;
     this.bones.club.visible = this.hasClub;
     // Телу тоже: без дубины набалдашник почти невесом и ничего не тянет.
     body.clubOn = this.hasClub;

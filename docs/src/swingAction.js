@@ -48,11 +48,15 @@ export const SwingState = {
 export const SWING_STYLES = [
   { name: 'side',     aFrom: [1, 25], aTo: [-1, 0],  wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
   { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 0.9, wind: 4.2 },
-  // The rising scoop is the overhead's mirror: the club dips to the knees
-  // tip-down right in front of the fighter and rips straight up past the
-  // face, finishing tip-up. It used to travel a wide horizontal arc from
-  // the right side, which made it read as a slightly tilted side swing.
-  { name: 'rising',   aFrom: [0, 14], aTo: [0, -12], wH: -0.28, wP: 65,  hF: -0.18, hT: 0.5,   pF: 55,  pT: -60, up: 3.2, pow: 1.15, time: 0.9, wind: 3.8 },
+  // The rising scoop winds BACK-AND-DOWN past the hip — an underhand
+  // throw, not a raise — and rips forward-up in one diagonal sweep,
+  // finishing tip-up in front of the face. Two earlier cuts both failed:
+  // a wide horizontal arc read as a tilted side swing, and a windup IN
+  // FRONT of the body read as a lift before the lifting hit — the strike
+  // stuttered upward twice. The vertical travel dominates the arc
+  // (0.85 of height against ~55° of turn), which is what keeps it a
+  // scoop and not a side hit.
+  { name: 'rising',   aFrom: [0.55, 5], aTo: [0, -10], wH: -0.3, wP: 70, hF: -0.3, hT: 0.55, pF: 65, pT: -60, up: 3.2, pow: 1.15, time: 0.9, wind: 4.6 },
 ];
 
 // The bare-knuckle set — same machine, same slots (LMB 0, wheel up 1,
@@ -62,10 +66,17 @@ export const SWING_STYLES = [
 // every punch (see `hand`). The pitch fields are dead weight without a
 // club and stay at zero.
 export const PUNCH_STYLES = [
-  { name: 'jab',      aFrom: [0, 16], aTo: [0, -12], wH: 0.25,  wP: 0, hF: 0.25,  hT: 0.38, pF: 0, pT: 0, up: 0.8, pow: 0.5,  time: 0.55, wind: 0.7, rec: 0.5 },
+  { name: 'jab',      aFrom: [0, 16], aTo: [0, -12], wH: 0.25,  wP: 0, hF: 0.25,  hT: 0.38, pF: 0, pT: 0, up: 0.8, pow: 0.5,  time: 0.55, wind: 0.7, rec: 0.4 },
   { name: 'overhand', aFrom: [0, 14], aTo: [0, -10], wH: 0.55,  wP: 0, hF: 0.52,  hT: 0.1,  pF: 0, pT: 0, up: 0.5, pow: 0.75, time: 0.7,  wind: 2.4, rec: 0.85 },
   { name: 'uppercut', aFrom: [0, 12], aTo: [0, -8],  wH: -0.08, wP: 0, hF: -0.08, hT: 0.52, pF: 0, pT: 0, up: 3.4, pow: 0.6,  time: 0.7,  wind: 2.0, rec: 0.85 },
 ];
+
+// Per-style pacing with live tuning knobs layered on top: the club
+// styles read `<name>Wind` / `<name>Time` from tuning (sliders in the
+// Strike group), anything without such keys — the punches — keeps the
+// constants written in its style.
+const styleWind = (st) => T[st.name + 'Wind'] ?? st.wind ?? 1;
+const styleTime = (st) => T[st.name + 'Time'] ?? st.time ?? 1;
 
 export class SwingAction {
   constructor() {
@@ -209,7 +220,7 @@ export class SwingAction {
           // The style's `wind` stretches the pull: on a heavy vertical
           // strike the raise must READ as a windup, not flicker past.
           this.pullTime = Math.min(0.35, Math.max(gapA, gapH, gapP))
-            * T.swingStrikeTime * (st.wind || 1);
+            * T.swingStrikeTime * styleWind(st);
           this.state = SwingState.Strike;
           this.timer = 0;
           this.power = lerp(T.swingWeakestPower, 1, this.charge);
@@ -221,7 +232,7 @@ export class SwingAction {
         // Sweep length and recover are per-style (`time`, `rec`): punches
         // chain fast, the heavy vertical club strikes pay their windup.
         const st = this.style;
-        if (this.timer >= this.pullTime + T.swingStrikeTime * (st.time || 1)) {
+        if (this.timer >= this.pullTime + T.swingStrikeTime * styleTime(st)) {
           this.state = SwingState.Recover;
           this.timer = 0;
           this.cooldown = T.swingCooldown * (st.rec || 1);
@@ -289,7 +300,7 @@ export class SwingAction {
           // перекладывание оружия. У горизонтальных манер пронос плоский,
           // у рубящих высота и наклон дубины падают — удар приходит сверху.
           const p2 = clamp01((this.timer - pull)
-            / Math.max(0.01, T.swingStrikeTime * (st.time || 1)));
+            / Math.max(0.01, T.swingStrikeTime * styleTime(st)));
           const e2 = 0.5 - 0.5 * Math.cos(p2 * Math.PI);
           const pulled = pull > 1e-4;
           const fromA = pulled ? arc(st.aFrom) : from.angle;

@@ -67,7 +67,8 @@ export const tuning = {
   swingMoveLock: 0.2,
   // Рывок (пробел): прибавка скорости по направлению хода. Нарочно мягкий —
   // темп игры вязкий и пьяный, и резкий телепорт-дэш из него выпадал бы.
-  dashPower: 2.6,
+  // A dash is a HOP, not a sprint: short, readable, then done.
+  dashPower: 1.9,
   dashCooldown: 0.9,
   // Блок (ПКМ): принявший удар не падает, а отъезжает назад на столько.
   blockPushback: 2.6,
@@ -503,12 +504,48 @@ export const tuning = {
   // масса на кисти, и её физический предел около 15 м/с. Это и есть та самая
   // тяжесть оружия, которую требует замысел, но старые пороги на этом
   // диапазоне не срабатывали вовсе: удары просто перестали засчитываться.
+  // Per-style pacing, live-tunable: `*Wind` stretches the windup pull,
+  // `*Time` stretches the blow itself (SwingAction reads these by style
+  // name and falls back to the style's own fields — the punch styles
+  // keep their constants). These are dev knobs: once the tempo feels
+  // right the winning numbers get baked in as the defaults.
+  sideWind: 1,
+  sideTime: 1,
+  overheadWind: 4.2,
+  overheadTime: 0.9,
+  risingWind: 4.6,
+  risingTime: 0.9,
+  // The fists are their own weapon with their own tempo.
+  jabWind: 0.7,
+  jabTime: 0.55,
+  overhandWind: 2.4,
+  overhandTime: 0.7,
+  uppercutWind: 2,
+  uppercutTime: 0.7,
   minImpactSpeed: 4,
   maxImpactSpeed: 17,
   // The bare fist tops out far below a club head on a full sweep, so
   // punches grade on their own speed scale (see fighter.checkHits).
   punchMinSpeed: 1.6,
   punchMaxSpeed: 8,
+
+  // --- Stamina ---
+  // The answer to infinite clicking, infinite dashing and turtling in
+  // the block: every aggressive verb spends from one small pool. Strikes
+  // charge at windup start (club swings cost ~3 in a row, punches ~8),
+  // the dash is nearly half the pool, and a held block leaks — the shell
+  // is a moment, not a home. Regen pauses briefly after every spend and
+  // while the body is busy swinging or blocking.
+  staminaOn: true,
+  staminaRegen: 0.45,
+  staminaDelay: 0.5,
+  staminaClubCost: 0.32,
+  staminaPunchCost: 0.11,
+  staminaDashCost: 0.42,
+  staminaBlockDrain: 0.22,
+  // Below this the broken block will not re-engage (hysteresis: an empty
+  // pool must climb back here before RMB works again).
+  staminaFloor: 0.3,
   // Замерено на стенде: незаряженный удар отбрасывает метра на четыре,
   // полный — метров на пять. С прежними числами любой удар в центре арены
   // выносил сразу за кромку, и край переставал быть местом, куда соперника
@@ -742,9 +779,35 @@ export const tuneGroups = [
       ['swingChargeTime', 0.1, 1.5, 0.02],
       ['swingStrikeTime', 0.06, 0.5, 0.01],
       ['swingRecoverTime', 0.05, 0.6, 0.01],
+      ['sideWind', 0.2, 8, 0.1],
+      ['sideTime', 0.4, 2.5, 0.05],
+      ['overheadWind', 0.2, 8, 0.1],
+      ['overheadTime', 0.4, 2.5, 0.05],
+      ['risingWind', 0.2, 8, 0.1],
+      ['risingTime', 0.4, 2.5, 0.05],
+      ['jabWind', 0.2, 8, 0.1],
+      ['jabTime', 0.3, 2.5, 0.05],
+      ['overhandWind', 0.2, 8, 0.1],
+      ['overhandTime', 0.3, 2.5, 0.05],
+      ['uppercutWind', 0.2, 8, 0.1],
+      ['uppercutTime', 0.3, 2.5, 0.05],
+      ['punchMinSpeed', 0.2, 10, 0.1],
+      ['punchMaxSpeed', 2, 30, 0.5],
       ['swingArcDegrees', 60, 260, 5],
       ['windUpReach', 0.1, 0.8, 0.02],
       ['handMaxReach', 0.3, 0.9, 0.02],
+    ],
+  },
+  {
+    title: 'Stamina',
+    items: [
+      ['staminaRegen', 0.05, 2, 0.05],
+      ['staminaDelay', 0, 2, 0.05],
+      ['staminaClubCost', 0, 1, 0.02],
+      ['staminaPunchCost', 0, 0.6, 0.01],
+      ['staminaDashCost', 0, 1, 0.02],
+      ['staminaBlockDrain', 0, 1, 0.02],
+      ['staminaFloor', 0, 0.8, 0.02],
     ],
   },
   {

@@ -91,6 +91,123 @@ const QUICK = [
     get: () => 1 / Math.max(0.02, T.swingCooldown),
     set: (v) => { T.swingCooldown = 1 / Math.max(0.02, v); },
   },
+  // Per-strike pacing. `windup` is how much the pull-in stretches (right
+  // = longer, more readable raise); `blow` is the speed of the strike
+  // itself (right = faster, matching every other slider). These are dev
+  // knobs for dialing the tempo per style — the winners get baked in as
+  // defaults later.
+  {
+    label: 'Side windup',
+    min: 0.2, max: 8, step: 0.1, unit: '×',
+    get: () => T.sideWind,
+    set: (v) => { T.sideWind = v; },
+  },
+  {
+    label: 'Side blow',
+    min: 0.4, max: 2.5, step: 0.05, unit: '×',
+    get: () => 1 / Math.max(0.1, T.sideTime),
+    set: (v) => { T.sideTime = 1 / Math.max(0.1, v); },
+  },
+  {
+    label: 'Overhead windup',
+    min: 0.2, max: 8, step: 0.1, unit: '×',
+    get: () => T.overheadWind,
+    set: (v) => { T.overheadWind = v; },
+  },
+  {
+    label: 'Overhead blow',
+    min: 0.4, max: 2.5, step: 0.05, unit: '×',
+    get: () => 1 / Math.max(0.1, T.overheadTime),
+    set: (v) => { T.overheadTime = 1 / Math.max(0.1, v); },
+  },
+  {
+    label: 'Rising windup',
+    min: 0.2, max: 8, step: 0.1, unit: '×',
+    get: () => T.risingWind,
+    set: (v) => { T.risingWind = v; },
+  },
+  {
+    label: 'Rising blow',
+    min: 0.4, max: 2.5, step: 0.05, unit: '×',
+    get: () => 1 / Math.max(0.1, T.risingTime),
+    set: (v) => { T.risingTime = 1 / Math.max(0.1, v); },
+  },
+  // The fists are their own weapon and get their own tempo knobs.
+  {
+    group: 'Fists',
+    label: 'Jab windup',
+    min: 0.2, max: 8, step: 0.1, unit: '×',
+    get: () => T.jabWind,
+    set: (v) => { T.jabWind = v; },
+  },
+  {
+    label: 'Jab blow',
+    min: 0.4, max: 3, step: 0.05, unit: '×',
+    get: () => 1 / Math.max(0.1, T.jabTime),
+    set: (v) => { T.jabTime = 1 / Math.max(0.1, v); },
+  },
+  {
+    label: 'Overhand windup',
+    min: 0.2, max: 8, step: 0.1, unit: '×',
+    get: () => T.overhandWind,
+    set: (v) => { T.overhandWind = v; },
+  },
+  {
+    label: 'Overhand blow',
+    min: 0.4, max: 3, step: 0.05, unit: '×',
+    get: () => 1 / Math.max(0.1, T.overhandTime),
+    set: (v) => { T.overhandTime = 1 / Math.max(0.1, v); },
+  },
+  {
+    label: 'Uppercut windup',
+    min: 0.2, max: 8, step: 0.1, unit: '×',
+    get: () => T.uppercutWind,
+    set: (v) => { T.uppercutWind = v; },
+  },
+  {
+    label: 'Uppercut blow',
+    min: 0.4, max: 3, step: 0.05, unit: '×',
+    get: () => 1 / Math.max(0.1, T.uppercutTime),
+    set: (v) => { T.uppercutTime = 1 / Math.max(0.1, v); },
+  },
+  // Stamina: the price list of the aggressive verbs.
+  {
+    group: 'Stamina',
+    label: 'Stamina',
+    bool: true,
+    get: () => !!T.staminaOn,
+    set: (v) => { T.staminaOn = v; },
+  },
+  {
+    label: 'Regen',
+    min: 0.05, max: 2, step: 0.05, unit: '/s',
+    get: () => T.staminaRegen,
+    set: (v) => { T.staminaRegen = v; },
+  },
+  {
+    label: 'Club hit cost',
+    min: 0, max: 1, step: 0.02,
+    get: () => T.staminaClubCost,
+    set: (v) => { T.staminaClubCost = v; },
+  },
+  {
+    label: 'Punch cost',
+    min: 0, max: 0.6, step: 0.01,
+    get: () => T.staminaPunchCost,
+    set: (v) => { T.staminaPunchCost = v; },
+  },
+  {
+    label: 'Dash cost',
+    min: 0, max: 1, step: 0.02,
+    get: () => T.staminaDashCost,
+    set: (v) => { T.staminaDashCost = v; },
+  },
+  {
+    label: 'Block drain',
+    min: 0, max: 1, step: 0.02, unit: '/s',
+    get: () => T.staminaBlockDrain,
+    set: (v) => { T.staminaBlockDrain = v; },
+  },
   {
     // Оружие меняет игру целиком — с ним бой про удар, без него про толчок
     // телом, — и переключать это надо на ходу, а не искать в отладочной

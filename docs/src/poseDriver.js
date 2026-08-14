@@ -58,6 +58,9 @@ export class PoseDriver {
      *  leaving never snaps. */
     this.punchBlend = 0;
     this.blockBlend = 0;
+    /** Dash pulse 1→0: a crouch-and-lunge that sells the hop. Set by
+     *  main on the dash, decays here. */
+    this.dashKick = 0;
 
     this.pose = Rig.makePose();
   }
@@ -80,6 +83,12 @@ export class PoseDriver {
     const yaw = this.f.yaw;
 
     const strideNorm = clamp01(planarSpeed / Math.max(0.1, T.maxRunSpeed));
+
+    // The dash pulse decays here, BEFORE the body-mode split: both pose
+    // paths read it (a lean term at their computePose calls plus a dip
+    // of the hips). Without it the dash read as "walking, but briefly
+    // faster".
+    this.dashKick = Math.max(0, this.dashKick - 5 * dt);
 
     // Кинематическая походка — первая итерация тела, вернувшаяся режимом.
     //
@@ -132,11 +141,14 @@ export class PoseDriver {
     const targetBob = grounded ? gait.lift * T.stepBob / Math.max(0.01, T.stepLift) : 0;
     this.bob = lerp(this.bob, targetBob, clamp01(14 * dt));
 
+    this.bob -= this.dashKick * 0.1;
+
     this.updateWobble(dt, planarSpeed, strideNorm);
     this.updateTwist(dt, strideNorm, grounded);
 
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
-      swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
+      swing.angle + this.clubLag, swing.reach,
+      swing.lean + this.lean + this.dashKick * 0.55, this.sway,
       swing.height, swing.pitch, this.lift, this.twist, _footL, _footR,
       this.f.hasClub);
 
@@ -167,13 +179,15 @@ export class PoseDriver {
         * Rig.LegLength * strideNorm
       : 0;
     this.bob = lerp(this.bob, targetBob, clamp01(12 * dt * this.softness()));
+    this.bob -= this.dashKick * 0.1;
 
     this.updateWobble(dt, this.f.locomotion.planarSpeed, strideNorm);
     this.updateTwist(dt, strideNorm, grounded);
 
     // Стопы НЕ передаются: computePose посчитает их формулой от фазы.
     Rig.computePose(this.pose, this.bob, this.stepPhase, this.stride,
-      swing.angle + this.clubLag, swing.reach, swing.lean + this.lean, this.sway,
+      swing.angle + this.clubLag, swing.reach,
+      swing.lean + this.lean + this.dashKick * 0.55, this.sway,
       swing.height, swing.pitch, this.lift, this.twist, null, null,
       this.f.hasClub);
 
@@ -452,6 +466,7 @@ export class PoseDriver {
     this.clubLag = 0;
     this.punchBlend = 0;
     this.blockBlend = 0;
+    this.dashKick = 0;
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
     this.twist = 0;

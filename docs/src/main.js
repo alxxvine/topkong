@@ -127,6 +127,14 @@ export async function start() {
   let sndKills = 0;
   let prevDeaths = 0;
   let dashCd = 0;
+  /** Block-broken latch: an empty pool keeps the shell down until
+   *  stamina climbs back over the floor. */
+  let blockBroken = false;
+  /** The strike buffer: a click during a swing fires on the next guard. */
+  let strikeBuf = 0;
+  let prevSwingHeld = false;
+  const stamEl = document.getElementById('stam');
+  const stamBar = document.getElementById('stamBar');
 
   ui.onPauseToggle = () => {
     paused = !paused;
@@ -203,29 +211,60 @@ export async function start() {
 
     // Блок (ПКМ): пока держится — ударов нет, дубина поперёк корпуса,
     // а принятый удар отталкивает, но не роняет (см. checkHits).
-    player.blocking = input.blockHeld && playerFree
+    // A strike thrown while the block is held WINS: the block drops the
+    // same tick and the swing fires. Making the player release RMB first
+    // cost a beat, and that beat killed the counter feel — striking out
+    // of the block is the UFC rule. The block also stays down through
+    // the swing itself: blocking WHILE hitting would be having it both
+    // ways. RMB still held when the swing ends — the shell comes back up.
+    const wheel = input.consumeWheelStrike();
+    const strikeAsked = input.swingHeld || wheel !== null
+      || player.swing.state === 'windup' || player.swing.state === 'strike';
+    // An empty pool breaks the block, and it stays broken until stamina
+    // climbs back over the floor — no flickering shell at zero.
+    if (player.stamina <= 0.01) blockBroken = true;
+    else if (player.stamina >= T.staminaFloor) blockBroken = false;
+    player.blocking = input.blockHeld && !strikeAsked && playerFree
+      && !(T.staminaOn && blockBroken)
       && player.state === BodyState.Standing;
     // Fists block too — both hands up in a boxing shell (poseDriver).
     player.swing.blockPose = player.blocking;
 
     // Удары целиком на мыши: ЛКМ — боковой (держи для заряда), колесо
     // вверх/вниз — рубящий сверху / черпающий снизу одним тиком.
-    player.swing.held = input.swingHeld && playerFree && !player.blocking;
+    player.swing.held = input.swingHeld && playerFree;
     if (player.swing.held && player.swing.state === 'guard') {
       player.swing.wantStyle = 0;
     }
     // Same slots armed and bare-handed: 1 is the overhead/overhand,
     // 2 is the scoop/uppercut.
-    const wheel = input.consumeWheelStrike();
-    if (wheel && playerFree && !player.blocking) {
+    if (wheel && playerFree) {
       player.swing.cast(wheel === 'overhead' ? 1 : 2);
     }
 
-    // Рывок (пробел): мягкая прибавка скорости по направлению хода —
-    // темп игры вязкий, и телепорт-дэш из него выпадал бы. Без ввода
-    // хода рывок идёт туда, куда боец смотрит.
+    // The strike buffer. A click that lands DURING a swing used to
+    // vanish, and chaining punches meant timing every click into the
+    // exact guard frame — the pause the chain complaints were about.
+    // Now the press is remembered for a beat and fires the moment the
+    // fighter is ready: mashing LMB gives left-right-left as fast as
+    // the machine and the stamina allow.
+    if (input.swingHeld && !prevSwingHeld
+        && (player.swing.state !== 'guard' || player.swing.cooldown > 0)) {
+      strikeBuf = 0.4;
+    }
+    prevSwingHeld = input.swingHeld;
+    strikeBuf = Math.max(0, strikeBuf - real);
+    if (strikeBuf > 0 && playerFree && player.swing.state === 'guard'
+        && player.swing.cooldown <= 0) {
+      player.swing.cast(0);
+      strikeBuf = 0;
+    }
+
+    // Рывок (пробел): короткий ПРЫЖОК-выпад по направлению хода, со своей
+    // ценой в стамине. Без ввода хода рывок идёт туда, куда боец смотрит.
     dashCd = Math.max(0, dashCd - real);
     if (input.consumeDash() && playerFree && dashCd <= 0
+        && (!T.staminaOn || player.stamina >= T.staminaDashCost)
         && player.state === BodyState.Standing) {
       let dx = player.moveInput.x;
       let dz = player.moveInput.y;
@@ -234,6 +273,13 @@ export async function start() {
       else { dx /= len; dz /= len; }
       player.locomotion.shove(dx * T.dashPower, dz * T.dashPower);
       dashCd = T.dashCooldown;
+      if (T.staminaOn) {
+        player.stamina = Math.max(0, player.stamina - T.staminaDashCost);
+        player.staminaWait = T.staminaDelay;
+      }
+      // The body sells the hop: a quick crouch-and-lunge pulse in the
+      // pose, so the dash reads as a leap and not as fast walking.
+      player.poseDriver.dashKick = 1;
       sound.whoosh(0.45);
     }
 
@@ -361,6 +407,14 @@ export async function start() {
     if (rig.lookAhead.lengthSq() > 1) rig.lookAhead.normalize();
     rig.tick(real, player.alive ? player.position : null);
 
+    // The stamina sliver: visible only while the pool is not full, red
+    // once the block would break. The one meter in the game.
+    if (stamBar) {
+      stamBar.style.width = `${Math.round(player.stamina * 100)}%`;
+      stamEl.classList.toggle('show',
+        T.staminaOn && setupState.done && player.stamina < 0.97);
+      stamEl.classList.toggle('low', blockBroken || player.stamina < T.staminaFloor);
+    }
     ui.setHud(hudText(player, arena, fps, input, match));
     ui.setBanner(setupState.done ? match.banner : null);
     // The combat buttons stay up bare-handed too: fists punch now, and
