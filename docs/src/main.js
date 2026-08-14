@@ -199,9 +199,15 @@ export async function start() {
       return;
     }
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
+    // The three flags everything else keys off. Practice is the arena
+    // with the countdown held forever: free player, mannequin bots,
+    // and nothing feeding the stats.
+    const practice = setupState.done && setupState.practice;
+    const playerFree = match.controlEnabled || !setupState.done || practice;
+    const inGame = setupState.done && !practice;
     telem.beat(real);
     // Playtime achievements tick in the game, not on the menu screen.
-    if (setupState.done) prog.beat(real);
+    if (inGame) prog.beat(real);
 
     arena.tick();
     if (dummies.length !== Math.round(T.dummyCount)) {
@@ -236,9 +242,6 @@ export async function start() {
         player.position.x + (ax / len) * 6, 0, player.position.z + (az / len) * 6);
     }
 
-    // На экране персонажа игрок УЖЕ управляем: походить, помахать, послушать
-    // звук — всё пробуется прямо в меню, на стоящих вокруг ботах, а не в бою.
-    const playerFree = match.controlEnabled || !setupState.done;
 
     if (setupState.done) {
       player.facingTarget.copy(input.aim).sub(player.position);
@@ -379,7 +382,7 @@ export async function start() {
       resolveContacts(fighters, STEP);
 
       for (const f of fighters) {
-        f.tick(STEP, match.controlEnabled || (f.isPlayer && !setupState.done));
+        f.tick(STEP, match.controlEnabled || (f.isPlayer && playerFree));
       }
 
       for (const f of fighters) {
@@ -390,7 +393,7 @@ export async function start() {
           if (blocked) sound.block();
           else {
             sound.impact(strength);
-            if (attacker === player && setupState.done) telem.add('hits');
+            if (attacker === player && inGame) telem.add('hits');
           }
           // Remember when the hit sounded, so the fall that follows the
           // same blow does not add a second, duplicate thud.
@@ -419,6 +422,14 @@ export async function start() {
       }
       // Photobomber patrol: a no-op scan once everyone is parked wide.
       parkDummies();
+    } else if (practice) {
+      // Practice holds the match at the countdown's door forever; the
+      // player and the mannequins come back on their own after falls.
+      if (match.phase === 'ready') match.timer = Math.max(match.timer, 1.5);
+      if (!player.alive && player.deadTime > 0.7) player.spawn(0, 0, Math.PI * 0.25);
+      for (const f of fighters) {
+        if (!f.isPlayer && !f.alive && f.deadTime > 1.2) respawnOne(f, fighters, arena);
+      }
     }
     // The camera: hero close-up while the menu is open, the arena after.
     rig.menuTarget = setupState.done ? 0 : 1;
@@ -432,7 +443,7 @@ export async function start() {
         // A fist cuts less air than a club head.
         sound.whoosh(f.swing.power * (f.hasClub ? 1 : 0.55));
         // Menu swings are rehearsal: they make sound but leave no stats.
-        if (f.isPlayer && setupState.done) telem.swing(f.swing.style.name);
+        if (f.isPlayer && inGame) telem.swing(f.swing.style.name);
       }
       f.sndStriking = striking;
 
@@ -451,13 +462,13 @@ export async function start() {
     // Progression and stats accrue IN THE GAME only: the menu test drive
     // is a sandbox, and sandbox kills counting toward achievements made
     // the menu the best farming spot.
-    if (player.kills > sndKills && setupState.done) {
+    if (player.kills > sndKills && inGame) {
       sound.kill();
       telem.add('kills', player.kills - sndKills);
       for (let n = player.kills - sndKills; n > 0; n--) prog.kill(player.hasClub);
     }
     sndKills = player.kills;
-    if (player.deaths > prevDeaths && setupState.done) {
+    if (player.deaths > prevDeaths && inGame) {
       telem.add('deaths', player.deaths - prevDeaths);
       prog.death();
     }
@@ -500,7 +511,7 @@ export async function start() {
       stamEl.classList.toggle('low', blockBroken || player.stamina < T.staminaFloor);
     }
     ui.setHud(hudText(player, arena, fps, input, match));
-    ui.setBanner(setupState.done ? match.banner : null);
+    ui.setBanner(inGame ? match.banner : null);
     // The combat buttons stay up bare-handed too: fists punch now, and
     // the wheel slots map to overhand/uppercut.
     renderer.render(scene, camera);
@@ -539,7 +550,7 @@ function toast(text) {
  */
 function initSetup(player, aim, match, telem, prog) {
   const root = document.getElementById('setup');
-  const state = { done: !root };
+  const state = { done: !root, practice: false };
   if (!root) return state;
 
   let saved = {};
@@ -646,31 +657,73 @@ function initSetup(player, aim, match, telem, prog) {
       weaponEl.appendChild(b);
     }
 
-    // Прогресс: открытые с галкой, видимые — с числами, скрытые — «???».
-    const progEl = document.getElementById('setupProg');
-    progEl.innerHTML = '';
-    for (const a of ACHIEVEMENTS) {
-      const row = document.createElement('div');
-      const got = prog.has(a.id);
-      if (got) {
-        row.className = 'got';
-        row.textContent = `✓ ${a.name}${a.reward ? ' — ' + a.reward.label : ''}`;
-      } else if (a.hidden) {
-        row.className = 'hid';
-        row.textContent = '??? — hidden';
-      } else {
-        const cur = Math.min(a.need, Math.floor(a.of(prog.p)));
-        const show = a.time
-          ? `${Math.floor(cur / 60)}/${Math.floor(a.need / 60)}m`
-          : `${cur}/${a.need}`;
-        row.textContent = `${a.name} · ${a.desc} · ${show}`;
-      }
-      progEl.appendChild(row);
-    }
+    renderAch();
 
     applyColor(color);
     applyWeapon(weapon);
   };
+
+  // The achievements live in a pop-up now: cards with an icon, the
+  // requirement and a progress bar, over a blurred scene — the dry text
+  // list read as debug output. Hidden ones stay a dark "???" until won.
+  const ACH_ICONS = {
+    first: '🩸', gold: '💪', ink: '🛡️', snow: '👊',
+    gild: '⏱️', century: '💯', void: '🌌',
+  };
+  const renderAch = () => {
+    const list = document.getElementById('achList');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const a of ACHIEVEMENTS) {
+      const got = prog.has(a.id);
+      const card = document.createElement('div');
+      card.className = 'ach' + (got ? ' got' : a.hidden ? ' hid' : '');
+      const ico = document.createElement('div');
+      ico.className = 'ico';
+      ico.textContent = !got && a.hidden ? '❓' : (ACH_ICONS[a.id] || '🏆');
+      const bd = document.createElement('div');
+      bd.className = 'bd';
+      const nm = document.createElement('b');
+      nm.textContent = !got && a.hidden ? '???' : a.name;
+      const ds = document.createElement('span');
+      ds.textContent = got
+        ? (a.reward ? `${a.desc} — ${a.reward.label} unlocked` : a.desc)
+        : a.hidden ? 'Hidden — keep playing' : a.desc;
+      bd.append(nm, ds);
+      card.append(ico, bd);
+      const em = document.createElement('em');
+      if (got) {
+        em.textContent = '✓';
+      } else if (!a.hidden) {
+        const cur = Math.min(a.need, Math.floor(a.of(prog.p)));
+        const bar = document.createElement('i');
+        bar.className = 'bar';
+        const fill = document.createElement('b');
+        fill.style.width = `${Math.round((cur / a.need) * 100)}%`;
+        bar.appendChild(fill);
+        bd.appendChild(bar);
+        em.textContent = a.time
+          ? `${Math.floor(cur / 60)}/${Math.floor(a.need / 60)}m`
+          : `${cur}/${a.need}`;
+      }
+      card.appendChild(em);
+      list.appendChild(card);
+    }
+  };
+  const achModal = document.getElementById('achModal');
+  const achBtn = document.getElementById('achBtn');
+  if (achBtn && achModal) {
+    achBtn.addEventListener('click', () => {
+      renderAch();
+      achModal.classList.remove('gone');
+    });
+    achModal.addEventListener('click', (e) => {
+      if (e.target === achModal || e.target.id === 'achClose') {
+        achModal.classList.add('gone');
+      }
+    });
+  }
+
   buildPickers();
   state.refresh = buildPickers;
 
@@ -694,7 +747,11 @@ function initSetup(player, aim, match, telem, prog) {
 
   const menuBtn = document.getElementById('menu');
 
-  document.getElementById('setupGo').addEventListener('click', () => {
+  // FIGHT and PRACTICE share the commit: apply the character, close the
+  // menu, start the round. Practice differs only in the flag — main
+  // holds the countdown forever, bots stand as mannequins, nothing
+  // counts. A place to feel the strikes out, not a mode to win.
+  const commit = (practice) => {
     player.name = (nameEl.value || '').trim().slice(0, 12) || 'You';
     try {
       localStorage.setItem('tk-player',
@@ -703,17 +760,23 @@ function initSetup(player, aim, match, telem, prog) {
     root.classList.add('gone');
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
-    telem.fight({
-      name: player.name,
-      weapon,
-      color: color.toString(16).padStart(6, '0'),
-      body: currentBody,
-    });
+    state.practice = practice;
+    if (!practice) {
+      telem.fight({
+        name: player.name,
+        weapon,
+        color: color.toString(16).padStart(6, '0'),
+        body: currentBody,
+      });
+    }
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }
     match.begin();
-  });
+  };
+  document.getElementById('setupGo').addEventListener('click', () => commit(false));
+  const testBtn = document.getElementById('setupTest');
+  if (testBtn) testBtn.addEventListener('click', () => commit(true));
 
   /** Вернуться с поля в меню: карточка открывается, бой встаёт у отсчёта. */
   state.open = () => {

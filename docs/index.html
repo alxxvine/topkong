@@ -479,6 +479,11 @@
     right: 10px;
     width: 208px;
     max-width: calc(100vw - 20px);
+    /* The panel must never outgrow the screen: with plain overflow:hidden
+       and no height cap, half the sliders were simply unreachable. */
+    max-height: calc(100% - 20px - env(safe-area-inset-top, 0px));
+    display: flex;
+    flex-direction: column;
     background: var(--panel);
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
@@ -503,8 +508,37 @@
 
   #quickHead .spacer { flex: 1; }
   #quickHead .chev { color: var(--dim); }
-  #quickBody { padding: 0 12px 10px; }
+  #quickBody { padding: 0 12px 10px; overflow-y: auto; }
   #quick.folded #quickBody { display: none; }
+
+  /* Tabs inside the quick panel: one group of knobs at a time. */
+  #quickTabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-bottom: 8px;
+    position: sticky;
+    top: 0;
+    background: inherit;
+  }
+  #quickTabs button {
+    padding: 4px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    font: inherit;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--dim);
+    cursor: pointer;
+  }
+  #quickTabs button.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .qsec { display: none; }
+  .qsec.on { display: block; }
 
   /* Панель настроек — тоже справа сверху; уступает место быстрой. */
   #tune { top: calc(62px + env(safe-area-inset-top, 0px)); }
@@ -735,19 +769,146 @@
     cursor: not-allowed;
   }
 
-  #setupProg { display: flex; flex-direction: column; gap: 4px; }
-
-  #setupProg div {
-    font-size: 10.5px;
-    color: var(--dim);
-    line-height: 1.35;
+  /* The achievements button and the practice button share the glass
+     pill language of the weapon column. */
+  #achBtn {
+    margin-top: 14px;
+    padding: 9px 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
   }
 
-  #setupProg div.got { color: var(--text); }
-  #setupProg div.hid { opacity: 0.6; }
+  #setupTest {
+    padding: 12px 26px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    cursor: pointer;
+    transition: transform 0.12s;
+  }
+  #setupTest:hover { transform: scale(1.04); }
+
+  /* The achievements pop-up: everything behind it blurs, the list is
+     cards — icon, name, a progress bar — not dry text lines. */
+  #achModal {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(226, 229, 236, 0.45);
+    backdrop-filter: blur(16px) saturate(130%);
+    -webkit-backdrop-filter: blur(16px) saturate(130%);
+    pointer-events: auto;
+  }
+  #achModal.gone { display: none; }
+
+  #achCard {
+    width: min(480px, 94vw);
+    max-height: min(78vh, 640px);
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-solid);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+  }
+
+  #achHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  #achClose {
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--dim);
+    cursor: pointer;
+  }
+
+  #achList {
+    padding: 4px 14px 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ach {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.65);
+  }
+  .ach .ico {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.05);
+  }
+  .ach .bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .ach .bd b { font-size: 13px; letter-spacing: -0.01em; }
+  .ach .bd span { font-size: 11px; color: var(--dim); line-height: 1.35; }
+  .ach .bar {
+    display: block;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    margin-top: 3px;
+  }
+  .ach .bar b { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .ach em {
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--dim);
+    flex: none;
+  }
+  .ach.got { border-color: rgba(0, 113, 227, 0.45); }
+  .ach.got .ico { background: rgba(0, 113, 227, 0.12); }
+  .ach.got em { color: var(--accent); font-size: 14px; }
+  .ach.hid { opacity: 0.6; }
 
   /* Narrow screens: the columns tuck into the lower corners above the
-     FIGHT bar, the title shrinks, the achievement list steps aside. */
+     FIGHT bar, the title shrinks. */
   @media (max-width: 640px) {
     #setupTitle b { font-size: 34px; }
     .setupCol {
@@ -757,8 +918,8 @@
       width: 44vw;
     }
     #setupColors button { width: 26px; height: 26px; }
-    #setupProg { display: none; }
-    #setupName { width: 34vw; }
+    #setupName { width: 30vw; }
+    #setupTest { padding: 12px 16px; }
   }
 
   /* The menu hides the in-game service chrome under it: the tuning
@@ -916,12 +1077,22 @@
     <div id="setupRight" class="setupCol">
       <div class="l">Weapon</div>
       <div id="setupWeapon"></div>
-      <div class="l">Progress</div>
-      <div id="setupProg"></div>
+      <button id="achBtn" type="button">🏆 Achievements</button>
     </div>
     <div id="setupFoot">
       <input id="setupName" maxlength="12" placeholder="Name" autocomplete="off" spellcheck="false">
+      <button id="setupTest" type="button">PRACTICE</button>
       <button id="setupGo" type="button">FIGHT</button>
+    </div>
+  </div>
+
+  <!-- Achievements pop-up: the scene blurs behind, the list becomes
+       cards instead of the dry text lines it used to be. -->
+  <div id="achModal" class="gone">
+    <div id="achCard">
+      <div id="achHead"><span>Achievements</span>
+        <button id="achClose" type="button" aria-label="Close">✕</button></div>
+      <div id="achList"></div>
     </div>
   </div>
 
@@ -959,33 +1130,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "188";</script>
+<script>window.TK_BUILD = "189";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=188",
-    "tk/main.js":         "./src/main.js?v=188",
-    "tk/tuning.js":       "./src/tuning.js?v=188",
-    "tk/mathx.js":        "./src/mathx.js?v=188",
-    "tk/arena.js":        "./src/arena.js?v=188",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=188",
-    "tk/balance.js":      "./src/balance.js?v=188",
-    "tk/skeleton.js":     "./src/skeleton.js?v=188",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=188",
-    "tk/gait.js":         "./src/gait.js?v=188",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=188",
-    "tk/swingAction.js":  "./src/swingAction.js?v=188",
-    "tk/locomotion.js":   "./src/locomotion.js?v=188",
-    "tk/body.js":         "./src/body.js?v=188",
-    "tk/bot.js":          "./src/bot.js?v=188",
-    "tk/contact.js":      "./src/contact.js?v=188",
-    "tk/match.js":        "./src/match.js?v=188",
-    "tk/fighter.js":      "./src/fighter.js?v=188",
-    "tk/input.js":        "./src/input.js?v=188",
-    "tk/ui.js":           "./src/ui.js?v=188",
-    "tk/sound.js":        "./src/sound.js?v=188",
-    "tk/telemetry.js":    "./src/telemetry.js?v=188",
-    "tk/progress.js":     "./src/progress.js?v=188"
+    "three":              "./vendor/three.module.js?v=189",
+    "tk/main.js":         "./src/main.js?v=189",
+    "tk/tuning.js":       "./src/tuning.js?v=189",
+    "tk/mathx.js":        "./src/mathx.js?v=189",
+    "tk/arena.js":        "./src/arena.js?v=189",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=189",
+    "tk/balance.js":      "./src/balance.js?v=189",
+    "tk/skeleton.js":     "./src/skeleton.js?v=189",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=189",
+    "tk/gait.js":         "./src/gait.js?v=189",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=189",
+    "tk/swingAction.js":  "./src/swingAction.js?v=189",
+    "tk/locomotion.js":   "./src/locomotion.js?v=189",
+    "tk/body.js":         "./src/body.js?v=189",
+    "tk/bot.js":          "./src/bot.js?v=189",
+    "tk/contact.js":      "./src/contact.js?v=189",
+    "tk/match.js":        "./src/match.js?v=189",
+    "tk/fighter.js":      "./src/fighter.js?v=189",
+    "tk/input.js":        "./src/input.js?v=189",
+    "tk/ui.js":           "./src/ui.js?v=189",
+    "tk/sound.js":        "./src/sound.js?v=189",
+    "tk/telemetry.js":    "./src/telemetry.js?v=189",
+    "tk/progress.js":     "./src/progress.js?v=189"
   }
 }
 </script>

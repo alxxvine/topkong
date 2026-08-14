@@ -274,17 +274,33 @@ export class Ui {
 
   buildQuick() {
     if (!this.quickBody) return;
+    // Tabs, one group at a time. Five groups in one column ran the panel
+    // past the bottom of the screen with overflow:hidden on top — half
+    // the sliders were simply unreachable. A tab bar keeps every group
+    // short enough to fit, and the active tab survives reloads.
+    this.quickTabs = document.createElement('div');
+    this.quickTabs.id = 'quickTabs';
+    this.quickBody.appendChild(this.quickTabs);
+    this.quickSections = new Map();
+    this.quickSection = null;
     for (const item of QUICK) {
-      // Секции: движение, удар, матч. Ходьба и удар просились в разные
-      // кучки — без заголовков панель читалась одной простынёй.
       if (item.group) {
-        const h = document.createElement('div');
-        h.className = 'grp';
-        h.textContent = item.group;
-        this.quickBody.appendChild(h);
+        const section = document.createElement('div');
+        section.className = 'qsec';
+        this.quickBody.appendChild(section);
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.textContent = item.group;
+        tab.addEventListener('click', () => this.showQuickTab(item.group));
+        this.quickTabs.appendChild(tab);
+        this.quickSections.set(item.group, { section, tab });
+        this.quickSection = section;
       }
       this.addQuickRow(item);
     }
+    let saved = null;
+    try { saved = localStorage.getItem('tk-quicktab'); } catch { /* private mode */ }
+    this.showQuickTab(saved || QUICK[0].group);
 
     const head = document.getElementById('quickHead');
     // На телефоне панель начинается свёрнутой: девять строк занимают
@@ -299,6 +315,17 @@ export class Ui {
       head.querySelector('.chev').textContent =
         this.quick.classList.contains('folded') ? '▾' : '▴';
     });
+  }
+
+  showQuickTab(name) {
+    if (!this.quickSections.has(name)) {
+      name = this.quickSections.keys().next().value;
+    }
+    for (const [g, { section, tab }] of this.quickSections) {
+      section.classList.toggle('on', g === name);
+      tab.classList.toggle('on', g === name);
+    }
+    try { localStorage.setItem('tk-quicktab', name); } catch { /* private mode */ }
   }
 
   addQuickRow(item) {
@@ -335,7 +362,7 @@ export class Ui {
     });
 
     row.append(label, input);
-    this.quickBody.appendChild(row);
+    (this.quickSection || this.quickBody).appendChild(row);
     // В общий список тоже: после «Сбросить» эти обязаны перечитаться.
     this.rows.push({ key: item.label, input, show, quick: true });
     show();
@@ -361,7 +388,7 @@ export class Ui {
     });
 
     row.appendChild(label);
-    this.quickBody.appendChild(row);
+    (this.quickSection || this.quickBody).appendChild(row);
     this.rows.push({ key: item.label, input, show, quick: true });
     show();
   }
