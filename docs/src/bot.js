@@ -2,18 +2,18 @@ import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 
-// Соперник.
+// The opponent.
 //
-// Своей физики и своей позы у него нет вовсе: он пишет ровно те же три поля,
-// что и живой игрок, — куда идти, куда смотреть, держать ли замах. Всё
-// остальное делают те же локомоция, походка и удар. Это не экономия,
-// а проверка: если бы боту понадобилось что-то своё, значит управление
-// игрока устроено неправильно.
+// It has no physics and no pose of its own at all: it writes exactly the
+// same three fields as a live player — where to walk, where to look,
+// whether to hold the wind-up. Everything else is done by the same
+// locomotion, gait and strike. That is not economy but a test: if a bot
+// ever needed something extra, the player's controls would be built wrong.
 //
-// Умения у него три, и он выбирает между ними по расстоянию до соперника
-// и до края. Никакого дерева поведения: на арене без укрытий выбирать
-// особо не из чего, а лишний слой только скрыл бы, почему бот сделал то,
-// что сделал.
+// It has three skills and picks between them by distance — to the opponent
+// and to the edge. No behavior tree: on an arena with no cover there is
+// little to choose from, and an extra layer would only hide why the bot
+// did what it did.
 
 const _to = new THREE.Vector3();
 const _away = new THREE.Vector3();
@@ -41,16 +41,16 @@ export class Bot {
   constructor(fighter, arena, persona = null) {
     this.f = fighter;
     this.arena = arena;
-    /** Своя задержка реакции: одинаковые боты выглядят одним ботом в трёх лицах. */
+    /** Its own reaction delay: identical bots read as one bot in three bodies. */
     this.lag = 0.12 + Math.random() * 0.18;
     this.think = Math.random() * this.lag;
     this.target = null;
     this.wantSwing = false;
-    /** После своего удара выжидает — иначе долбит без остановки. */
+    /** Waits after its own strike — otherwise it hammers non-stop. */
     this.rest = 0;
-    /** Сколько времени упираемся в соперника без хода. */
+    /** How long we have been leaning into the opponent with no headway. */
     this.clinch = 0;
-    /** Сколько ещё отходить после клинча и в какую сторону заходить. */
+    /** How much longer to back off after a clinch, and which side to circle. */
     this.backoff = 0;
     this.side = 1;
     this.clinchLimit = 0.5 + Math.random() * 0.8;
@@ -96,15 +96,16 @@ export class Bot {
       : 0;
     const victimDown = victim && victim.body.strength < T.controlStrength;
 
-    // 1. Спасаться. У самого края всё остальное не имеет значения: боец,
-    // который упорно идёт бить, стоя пяткой над обрывом, просто уходит вниз
-    // и никакого боя не показывает.
+    // 1. Survive. At the very edge nothing else matters: a fighter who
+    // stubbornly walks into a fight while standing heels-over-the-drop
+    // simply goes down and shows no fight at all.
     //
-    // НО страх отступает, когда бот сам толкает: жертва лежит или стоит
-    // ДАЛЬШЕ от центра, чем он, — значит между ним и обрывом её тело,
-    // и довести её до кромки безопаснее, чем кажется. Без этой поправки
-    // бот бросал добычу на подходе к краю, и та спокойно вставала:
-    // замерено, докатывал до радиуса 5.6 из 7.5 и разворачивался.
+    // BUT the fear recedes while the bot is the one pushing: the victim
+    // lies (or stands) FARTHER from the center than he does — so their
+    // body is between him and the drop, and walking them to the rim is
+    // safer than it looks. Without this correction the bot abandoned its
+    // prey on the approach and the prey calmly got up: measured, it rolled
+    // them to radius 5.6 of 7.5 and turned away.
     const pushingOut = victim && (victimDown || !f.hasClub) && victimEdge > myEdge + 0.03;
     const fearAt = pushingOut ? 0.93
       : Math.min(0.92, Math.max(0.4, T.botEdgeFear + this.fearBias));
@@ -119,13 +120,13 @@ export class Bot {
     if (!victim) {
       f.moveInput.set(0, 0);
       f.swing.held = false;
-      // Без соперника разворачивается к центру: так он хотя бы не стоит
-      // спиной к арене.
+      // Without an opponent it turns toward the center: at least it is not
+      // standing with its back to the arena.
       f.facingTarget.set(-f.position.x, 0, -f.position.z);
       return;
     }
 
-    // Вооружён ли ЭТОТ бот: его собственный выбор из базы плюс общие ручки.
+    // Is THIS bot armed: its own roster choice plus the global toggles.
     const armed = f.hasClub;
 
     _to.copy(victim.position).sub(f.position);
@@ -134,19 +135,21 @@ export class Bot {
     if (dist > 1e-4) _to.divideScalar(dist);
     f.facingTarget.copy(_to);
 
-    // 2. Держать дистанцию. Ближе, чем нужно для удара, подходить незачем:
-    // там начинается толкотня вплотную, из которой ни один не выходит.
+    // 2. Keep distance. There is no point coming closer than strike range:
+    // that way lies close-quarters jostling nobody wins.
     //
-    // С ЛЕЖАЧИМ наоборот: к нему идут вплотную и катят к краю телом.
-    // Пока правило было общим, бот вставал в метре от упавшего и топтался
-    // там — снаружи это выглядело упором в невидимую стену, тем более
-    // что тела тогда вообще не сталкивались и стены не было никакой.
+    // With a DOWNED victim it is the opposite: walk right in and roll them
+    // to the edge with the body. While the rule was shared, the bot stood
+    // a meter from the fallen and shuffled there — from the outside it
+    // looked like leaning on an invisible wall, all the more so when
+    // bodies did not collide at all and there was no wall of any kind.
     const hit = T.botStrikeRange;
 
-    // Лежачего КАТЯТ К КРАЮ, а не идут «к нему». Курс на самого лежачего
-    // кончался топтанием у тела: дошёл — цель под ногами — стоит. Цель
-    // ставится ЗА жертвой, наружу от центра арены, и бот проходит сквозь,
-    // толкая тело перед собой. У кромки его развернёт страх края выше.
+    // A downed victim is ROLLED TO THE EDGE, not approached. A course at
+    // the body itself ended in shuffling next to it: arrived — target
+    // underfoot — standing. The target is placed BEYOND the victim, out
+    // from the arena's center, and the bot walks through, pushing the body
+    // ahead. Near the rim the edge fear above turns him around.
     if (victimDown) {
       const vlen = Math.hypot(victim.position.x, victim.position.z);
       const ox = vlen > 0.3 ? victim.position.x / vlen : _to.x;
@@ -159,17 +162,18 @@ export class Bot {
       return;
     }
 
-    // Клинч. Встречный таран — сумо: обоих никуда не везёт, расшатка
-    // не копится, и это физически честно. Поэтому лоб в лоб не решает —
-    // бот, простояв в упоре секунду, отходит и заходит СБОКУ: жертву,
-    // которую везут вбок, её собственный ход не спасает.
+    // The clinch. A head-on ram is sumo: neither is carried anywhere, no
+    // rattle accrues, and that is physically honest. So head-to-head does
+    // not decide — a bot that has leaned in for a second backs off and
+    // comes in from the SIDE: a victim carried sideways is not saved by
+    // their own stride.
     if (!armed) {
       const gap = dist - T.bodyRadius * 2;
       if (gap < 0.15 && f.locomotion.planarSpeed < 0.35) this.clinch += dt;
       else this.clinch = Math.max(0, this.clinch - dt * 2);
-      // Порог у каждого клинча свой. Два одинаковых бота с одинаковым
-      // порогом отходили СИНХРОННО и танцевали так вечно: симметрию
-      // некому было разбить.
+      // Each clinch gets its own limit. Two identical bots with the same
+      // limit backed off IN SYNC and danced like that forever: nobody was
+      // there to break the symmetry.
       if (this.clinch > this.clinchLimit) {
         this.clinch = 0;
         this.clinchLimit = 0.5 + Math.random() * 0.8;
@@ -178,7 +182,8 @@ export class Bot {
       }
       if (this.backoff > 0) {
         this.backoff -= dt;
-        // Назад и вбок разом: выход из клинча по дуге, а не отскок.
+        // Back and sideways at once: leaving the clinch along an arc,
+        // not a bounce.
         f.moveInput.set(
           -_to.x * 0.7 + _to.z * this.side * 0.7,
           -_to.z * 0.7 - _to.x * this.side * 0.7);
@@ -188,20 +193,21 @@ export class Bot {
     }
 
     let drive = 0;
-    // Без оружия дистанция бессмысленна: бить нечем, и весь бой — таран.
+    // Unarmed, distance is meaningless: nothing to strike with, the whole
+    // fight is the ram.
     if (!armed) drive = 1;
     else if (dist > hit) drive = 1;
     else if (dist < hit * 0.72) drive = -1;
 
-    // На отходе после своего удара пятится: пауза, за которую соперник
-    // успевает ответить, и по ней бой читается обменом, а не свалкой.
+    // After its own strike it backs off: a pause the opponent can answer
+    // in, and it is what makes the fight read as an exchange, not a scrum.
     if (this.rest > 0) drive = -1;
 
     f.moveInput.set(_to.x * drive, _to.z * drive);
 
-    // 3. Бить. Заряд копится, пока соперник в досягаемости; отпускается,
-    // когда набрано задуманное. Отпускать надо ЗАРАНЕЕ — пронос занимает
-    // время, и удар в упор всегда опаздывает.
+    // 3. Strike. The charge builds while the opponent is in reach and is
+    // released once the intended amount is banked. Release EARLY — the
+    // sweep takes time, and a point-blank release always arrives late.
     if (!armed) { f.swing.held = false; return; }
 
     const inRange = dist < hit * 1.25 && this.rest <= 0;
@@ -213,9 +219,10 @@ export class Bot {
 
     if (!f.swing.held && f.swing.state === 'guard') {
       f.swing.held = true;
-      // Сколько копить в этот раз. Разброс намеренный: бот с постоянным
-      // зарядом читается как метроном. Степень — характер: горячие боты
-      // тянут жребий к быстрым тычкам, терпеливые — к полным замахам.
+      // How much to bank this time. The spread is deliberate: a bot with
+      // a constant charge reads as a metronome. The exponent is character:
+      // hot heads skew the draw toward quick pokes, the patient toward
+      // full wind-ups.
       this.wantSwing = lerp(T.botChargeMin, T.botChargeMax,
         Math.pow(Math.random(), this.chargePow));
     }
@@ -226,7 +233,7 @@ export class Bot {
     }
   }
 
-  /** Ближайший живой, кроме себя. */
+  /** The nearest living fighter other than itself. */
   pickTarget(fighters) {
     let best = null;
     let bestDist = Infinity;

@@ -1,8 +1,8 @@
-// Мелкая математика, которой в Unity занимался Mathf.
+// Small math, the things Mathf did in Unity.
 //
-// Отдельный модуль нужен ровно затем, чтобы порты остальных файлов читались
-// как оригиналы: там, где в C# было Mathf.MoveTowards, здесь moveTowards —
-// и сравнивать две версии можно построчно.
+// A separate module exists precisely so the ports of the other files read
+// like their originals: where C# had Mathf.MoveTowards, here it is
+// moveTowards — and the two versions can be compared line by line.
 
 export const DEG = Math.PI / 180;
 export const RAD = 180 / Math.PI;
@@ -19,7 +19,7 @@ export function moveTowards(current, target, maxDelta) {
   return current + Math.sign(d) * maxDelta;
 }
 
-/** Разница углов в градусах, приведённая к -180..180. */
+/** Angle difference in degrees, wrapped to -180..180. */
 export function deltaAngle(a, b) {
   let d = (b - a) % 360;
   if (d > 180) d -= 360;
@@ -27,35 +27,35 @@ export function deltaAngle(a, b) {
   return d;
 }
 
-/** Интерполяция углов по короткой дуге — иначе дубина на переходе через 180°
- *  прокручивалась бы через всё тело. */
+/** Angle interpolation along the short arc — otherwise the club would
+ *  spin through the whole body when crossing 180°. */
 export function lerpAngle(a, b, t) {
   return a + deltaAngle(a, b) * clamp01(t);
 }
 
-/** Экспоненциальное сглаживание, не зависящее от частоты кадров.
- *  Прямой аналог Lerp(a, b, Clamp01(k * dt)) при разумных dt,
- *  но не разваливающийся, когда кадр просел. */
+/** Frame-rate-independent exponential smoothing.
+ *  A direct stand-in for Lerp(a, b, Clamp01(k * dt)) at sane dt,
+ *  but one that does not fall apart when a frame hitches. */
 export function damp(current, target, rate, dt) {
   return target + (current - target) * Math.exp(-rate * dt);
 }
 
-// --- Шум ---
-// Заменяет Mathf.PerlinNoise. Значение-шум с плавной интерполяцией:
-// для покачивания корпуса и тряски камеры этого достаточно, а честный
-// градиентный Перлин здесь ничего бы не добавил, кроме кода.
+// --- Noise ---
+// Replaces Mathf.PerlinNoise. Value noise with smooth interpolation:
+// for body sway and camera shake it is plenty, and honest gradient
+// Perlin would add nothing here except code.
 
 function hash2(ix, iy) {
   let h = ix * 374761393 + iy * 668265263;
   h = (h ^ (h >> 13)) * 1274126177;
   h = h ^ (h >> 16);
-  // >>> 0 приводит к беззнаковому: в JS битовые операции работают со знаком.
+  // >>> 0 makes it unsigned: JS bitwise operators work on signed ints.
   return ((h >>> 0) % 100000) / 100000;
 }
 
 const smooth = (t) => t * t * (3 - 2 * t);
 
-/** Гладкий шум 0..1. seed задаёт «дорожку», по x идёт время. */
+/** Smooth 0..1 noise. seed picks the "track", x is time. */
 export function noise(seed, x) {
   const ix = Math.floor(x);
   const fx = smooth(x - ix);
@@ -63,5 +63,5 @@ export function noise(seed, x) {
   return lerpUnclamped(hash2(ix, iy), hash2(ix + 1, iy), fx);
 }
 
-/** Шум -1..1 — так он используется почти везде. */
+/** Noise in -1..1 — the form almost every caller wants. */
 export const noiseSigned = (seed, x) => noise(seed, x) * 2 - 1;

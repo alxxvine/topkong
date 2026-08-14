@@ -363,6 +363,10 @@ export async function start() {
     ui.setHud(hudText(player, arena, fps, input, match));
     ui.setBanner(setupState.done ? match.banner : null);
     if (ui.swingButton) ui.swingButton.style.display = player.hasClub ? '' : 'none';
+    for (const id of ['ovr', 'rise']) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = player.hasClub ? '' : 'none';
+    }
     renderer.render(scene, camera);
   }
 

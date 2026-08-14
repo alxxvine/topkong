@@ -343,6 +343,52 @@
 
   #swing.on { background: #0058b0; transform: scale(0.96); }
 
+  /* The rest of the combat verbs, thumb-sized. The two strike picks sit
+     in a column left of the big HIT button; BLOCK is a hold under them;
+     DASH lives over the move stick for the left thumb. */
+  #ovr, #rise, #blockBtn, #dashBtn {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    font: 700 15px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    pointer-events: auto;
+  }
+
+  #ovr {
+    right: 132px;
+    bottom: calc(206px + env(safe-area-inset-bottom, 0px));
+  }
+
+  #rise {
+    right: 132px;
+    bottom: calc(146px + env(safe-area-inset-bottom, 0px));
+  }
+
+  #blockBtn {
+    right: 132px;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    font-size: 11px;
+  }
+
+  #dashBtn {
+    left: 51px;
+    bottom: calc(158px + env(safe-area-inset-bottom, 0px));
+    font-size: 11px;
+  }
+
+  #ovr.on, #rise.on, #blockBtn.on, #dashBtn.on {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(0.96);
+  }
+
   /* --- пауза и быстрые ручки ---
      Оба виджета живут В ВЕРХНИХ УГЛАХ и не прячутся вместе с отладочной
      панелью: пауза нужна всегда, а ползунки нужны именно во время боя.
@@ -784,6 +830,10 @@
     <div id="stick"><div id="stickKnob"></div></div>
     <div id="aim"><div id="aimKnob"></div></div>
     <div id="swing">HIT</div>
+    <button id="ovr" type="button" aria-label="Overhead strike">▲</button>
+    <button id="rise" type="button" aria-label="Rising strike">▼</button>
+    <button id="blockBtn" type="button" aria-label="Block">BLK</button>
+    <button id="dashBtn" type="button" aria-label="Dash">DASH</button>
   </div>
 </div>
 
@@ -805,33 +855,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "181";</script>
+<script>window.TK_BUILD = "182";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=181",
-    "tk/main.js":         "./src/main.js?v=181",
-    "tk/tuning.js":       "./src/tuning.js?v=181",
-    "tk/mathx.js":        "./src/mathx.js?v=181",
-    "tk/arena.js":        "./src/arena.js?v=181",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=181",
-    "tk/balance.js":      "./src/balance.js?v=181",
-    "tk/skeleton.js":     "./src/skeleton.js?v=181",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=181",
-    "tk/gait.js":         "./src/gait.js?v=181",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=181",
-    "tk/swingAction.js":  "./src/swingAction.js?v=181",
-    "tk/locomotion.js":   "./src/locomotion.js?v=181",
-    "tk/body.js":         "./src/body.js?v=181",
-    "tk/bot.js":          "./src/bot.js?v=181",
-    "tk/contact.js":      "./src/contact.js?v=181",
-    "tk/match.js":        "./src/match.js?v=181",
-    "tk/fighter.js":      "./src/fighter.js?v=181",
-    "tk/input.js":        "./src/input.js?v=181",
-    "tk/ui.js":           "./src/ui.js?v=181",
-    "tk/sound.js":        "./src/sound.js?v=181",
-    "tk/telemetry.js":    "./src/telemetry.js?v=181",
-    "tk/progress.js":     "./src/progress.js?v=181"
+    "three":              "./vendor/three.module.js?v=182",
+    "tk/main.js":         "./src/main.js?v=182",
+    "tk/tuning.js":       "./src/tuning.js?v=182",
+    "tk/mathx.js":        "./src/mathx.js?v=182",
+    "tk/arena.js":        "./src/arena.js?v=182",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=182",
+    "tk/balance.js":      "./src/balance.js?v=182",
+    "tk/skeleton.js":     "./src/skeleton.js?v=182",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=182",
+    "tk/gait.js":         "./src/gait.js?v=182",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=182",
+    "tk/swingAction.js":  "./src/swingAction.js?v=182",
+    "tk/locomotion.js":   "./src/locomotion.js?v=182",
+    "tk/body.js":         "./src/body.js?v=182",
+    "tk/bot.js":          "./src/bot.js?v=182",
+    "tk/contact.js":      "./src/contact.js?v=182",
+    "tk/match.js":        "./src/match.js?v=182",
+    "tk/fighter.js":      "./src/fighter.js?v=182",
+    "tk/input.js":        "./src/input.js?v=182",
+    "tk/ui.js":           "./src/ui.js?v=182",
+    "tk/sound.js":        "./src/sound.js?v=182",
+    "tk/telemetry.js":    "./src/telemetry.js?v=182",
+    "tk/progress.js":     "./src/progress.js?v=182"
   }
 }
 </script>

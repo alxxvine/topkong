@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 
-// Ввод: клавиатура, мышь и тач — три источника, один набор полей на выходе.
+// Input: keyboard, mouse and touch — three sources, one set of output
+// fields.
 //
-// Прицел принципиально мировой, а не экранный: игра — про то, куда полетит
-// соперник, и «мышь вправо» обязано означать «удар вправо» независимо от
-// того, где сейчас стоит камера. Поэтому курсор каждый кадр проецируется
-// лучом на плоскость настила, и дальше вся игра работает с точкой на арене.
+// The aim is world-space by principle, not screen-space: the game is about
+// where the opponent will fly, and "mouse right" must mean "strike right"
+// regardless of where the camera stands. So every frame the cursor is
+// projected by a ray onto the deck plane, and from there the whole game
+// works with a point on the arena.
 
 const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
@@ -15,16 +17,16 @@ export class Input {
   constructor(canvas) {
     this.canvas = canvas;
 
-    this.move = new THREE.Vector2();     // -1..1 по осям экрана
-    this.aim = new THREE.Vector3(0, 0, 1); // точка прицела на настиле
+    this.move = new THREE.Vector2();     // -1..1 in screen axes
+    this.aim = new THREE.Vector3(0, 0, 1); // aim point on the deck
     this.swingHeld = false;
     this.resetPressed = false;
     this.slowMotion = false;
-    /** Блок: держится, пока зажата ПКМ. */
+    /** Block: held while RMB is down. */
     this.blockHeld = false;
-    /** Разовый рывок (пробел): съедается consumeDash. */
+    /** One-shot dash (Space): consumed by consumeDash. */
     this.dashPressed = false;
-    /** Разовый удар колесом: 'overhead' | 'rising', съедается consume. */
+    /** One-shot wheel strike: 'overhead' | 'rising', consumed once. */
     this.wheelStrike = null;
 
     this.keys = new Set();
@@ -33,9 +35,9 @@ export class Input {
 
     this.touchMode = false;
     this.stickVector = new THREE.Vector2();
-    /** Направление прицела с правого стика, в экранных осях. */
+    /** Aim direction from the right stick, in screen axes. */
     this.aimVector = new THREE.Vector2();
-    /** Правый стик держат прямо сейчас — прицел ведёт он, а не курсор. */
+    /** The right stick is held right now — it drives the aim, not the cursor. */
     this.aimStickHeld = false;
 
     this.bindKeyboard();
@@ -45,18 +47,19 @@ export class Input {
 
   bindKeyboard() {
     addEventListener('keydown', (e) => {
-      // Пробел и стрелки скроллят страницу — на весь экран это заметно.
+      // Space and the arrows scroll the page — very visible in fullscreen.
       if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
       }
       this.keys.add(e.code);
       if (e.code === 'KeyR') this.resetPressed = true;
       if (e.code === 'KeyF') this.slowMotion = !this.slowMotion;
-      // Служебный слой — счётчики, подсказка, панель — по умолчанию спрятан:
-      // в кадре должна быть игра, а не приборная доска. Возвращается по H.
+      // The service layer — counters, hints, the settings panel — is hidden
+      // by default: the frame should show the game, not a dashboard.
+      // H brings it back.
       if (e.code === 'KeyH') document.body.classList.toggle('bare');
-      // Пробел — рывок по направлению хода. Ударом он был, пока удар
-      // был один; теперь удары живут на мыши целиком.
+      // Space is a dash along the move direction. It used to be a strike,
+      // back when there was one strike; strikes live on the mouse now.
       if (e.code === 'Space') this.dashPressed = true;
     });
 
@@ -64,7 +67,7 @@ export class Input {
       this.keys.delete(e.code);
     });
 
-    // Уход со вкладки не должен оставлять зажатыми клавиши.
+    // Leaving the tab must not leave keys stuck down.
     addEventListener('blur', () => {
       this.keys.clear();
       this.swingHeld = false;
@@ -98,11 +101,11 @@ export class Input {
       if (e.button === 2) this.blockHeld = false;
     });
 
-    // Правая кнопка на арене — это не контекстное меню, это блок.
+    // The right button over the arena is not a context menu — it is a block.
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Колесо — выбор удара: вверх — рубящий сверху, вниз — черпающий снизу.
-    // Один тик колеса — один удар; между тиками ничего не копится.
+    // The wheel picks a strike: up — the overhead slam, down — the rising
+    // scoop. One wheel tick, one strike; nothing accumulates between ticks.
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (Math.abs(e.deltaY) < 1) return;
@@ -116,16 +119,16 @@ export class Input {
     const swing = document.getElementById('swing');
     if (!stick || !aim || !swing) return;
 
-    // Виджеты показываются только на устройстве без мыши: на ноутбуке
-    // они закрывали бы арену без всякой пользы.
+    // The widgets only show on a device without a mouse: on a laptop they
+    // would cover the arena for no benefit.
     if (matchMedia('(pointer: coarse)').matches) {
       document.body.classList.add('touch');
       this.touchMode = true;
     }
 
-    // Оба стика устроены одинаково, поэтому и собираются одной функцией.
-    // Прицельный отличается лишь тем, что не отпускает направление,
-    // когда палец убрали: боец должен остаться смотреть, куда навели.
+    // Both sticks are built the same, hence one function. The aim stick
+    // differs only in keeping its direction when the finger lifts: the
+    // fighter must keep facing where he was pointed.
     this.bindStick(stick, 'stickKnob', this.stickVector, false);
     this.bindStick(aim, 'aimKnob', this.aimVector, true);
 
@@ -141,14 +144,45 @@ export class Input {
     swing.addEventListener('pointerup', swingEnd);
     swing.addEventListener('pointercancel', swingEnd);
 
-    // Тыканья в арену ради разворота больше нет: палец закрывал ровно то
-    // место, куда целишься, и прицеливаться приходилось вслепую.
+    // The rest of the combat verbs. Tap buttons flash for a beat; the
+    // block button is a true hold, like RMB on the mouse.
+    const tap = (id, fire) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        fire();
+        el.classList.add('on');
+        setTimeout(() => el.classList.remove('on'), 160);
+      });
+    };
+    tap('ovr', () => { this.wheelStrike = 'overhead'; });
+    tap('rise', () => { this.wheelStrike = 'rising'; });
+    tap('dashBtn', () => { this.dashPressed = true; });
+
+    const blockBtn = document.getElementById('blockBtn');
+    if (blockBtn) {
+      blockBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.blockHeld = true;
+        blockBtn.classList.add('on');
+      });
+      const blockEnd = () => {
+        this.blockHeld = false;
+        blockBtn.classList.remove('on');
+      };
+      blockBtn.addEventListener('pointerup', blockEnd);
+      blockBtn.addEventListener('pointercancel', blockEnd);
+    }
+
+    // There is no tapping the arena to turn anymore: the finger covered
+    // exactly the spot being aimed at, and aiming went blind.
   }
 
   /**
-   * Один стик. keepDirection означает, что после отпускания направление
-   * сохраняется — так ведёт себя прицел: убрал палец, а боец продолжает
-   * смотреть туда же.
+   * One stick. keepDirection means the direction survives release — that
+   * is how the aim behaves: lift the finger and the fighter keeps facing
+   * the same way.
    */
   bindStick(el, knobId, out, keepDirection) {
     const knob = document.getElementById(knobId);
@@ -170,11 +204,11 @@ export class Input {
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       id = e.pointerId;
-      // Захват указателя — оптимизация, а не обязательство: он позволяет
-      // вести палец за пределами кружка. Если браузер откажет, исключение
-      // из обработчика убило бы стик целиком, поэтому отказ просто
-      // проглатывается.
-      try { el.setPointerCapture(e.pointerId); } catch (err) { /* см. выше */ }
+      // Pointer capture is an optimization, not an obligation: it lets the
+      // finger travel outside the circle. If the browser refuses, an
+      // exception out of the handler would kill the whole stick, so the
+      // refusal is simply swallowed.
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* see above */ }
       at(e);
     });
     el.addEventListener('pointermove', (e) => {
@@ -184,14 +218,14 @@ export class Input {
       if (e.pointerId !== id) return;
       id = null;
       knob.style.transform = '';
-      // Направление хода отпускается, направление прицела — нет.
+      // The move direction is released; the aim direction is not.
       if (!keepDirection) out.set(0, 0);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   }
 
-  /** Собрать направление хода из клавиш и стика. */
+  /** Assemble the move direction from keys and the stick. */
   updateMove() {
     let x = 0, y = 0;
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1;
@@ -209,8 +243,8 @@ export class Input {
   }
 
   /**
-   * Точка прицела на плоскости настила. Возвращает false, если луч ушёл
-   * в небо — тогда прицел просто остаётся прежним, а не улетает в бесконечность.
+   * The aim point on the deck plane. Returns false when the ray went into
+   * the sky — the aim then simply stays put instead of flying to infinity.
    */
   updateAim(camera, width, height) {
     if (!this.hasPointer) return false;

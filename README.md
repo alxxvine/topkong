@@ -90,18 +90,21 @@ default: the frame should show the game, not a dashboard. **H** brings it back.
 | | |
 |---|---|
 | **W A S D** / arrows | walk, screen-relative |
-| **H** | show/hide the settings panel and counters |
 | **mouse** | aim; the fighter turns toward the point |
-| hold **LMB** | wind up; release — strike |
-| **space** | same, if keyboard feels better |
+| **LMB** | the base side sweep; hold to charge, release to strike |
+| **wheel up / down** | instant overhead slam / rising scoop |
+| **RMB** (hold) | block: a hit slides you back instead of toppling you |
+| **Space** | a soft dash along the move direction |
+| **H** | show/hide the settings panel and counters |
 | **F** | slow motion: shows the arc shape and the moment of contact |
 | **R** | reset the round |
 
 ## On a phone
 
-Opens from the same link, nothing to install. A stick appears on the left,
-a strike button on the right, tapping the arena sets the aim; the widgets only
-show on devices without a mouse.
+Opens from the same link, nothing to install. A move stick appears on the
+left (with a DASH button above it), an aim stick on the right with the strike
+cluster next to it — HIT (hold to charge), ▲ overhead, ▼ rising, and a BLK
+hold button. The widgets only show on devices without a mouse.
 
 The frame fits itself to the screen. `camDistance` was tuned on a wide
 monitor, and in portrait the arena was cropped on every side — while the whole

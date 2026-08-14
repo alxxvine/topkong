@@ -397,11 +397,19 @@ Exactly five actions, no combo systems.
 
 | Input | Strike |
 |---|---|
-| LMB | medium: fast, safe |
-| LMB hold | heavy: long recovery, full commitment |
-| Wheel down | low, at the legs |
-| Wheel up | high, at the head |
+| LMB | the base side sweep; hold to charge |
+| Wheel up | overhead slam |
+| Wheel down | rising scoop |
 | RMB | block |
+| Space | dash |
+
+**Mostly shipped (build 181–182):** the five verbs above are live, on
+touch too (▲/▼/BLK/DASH buttons). Strikes carry per-style hit character
+(the scoop launches, the slam hits flat and hard), a blocked hit slides
+the defender back instead of toppling, the dash is a soft added-velocity
+surge tuned for the game's woozy pace. Still open from the original
+intent: per-style speed/recovery cost (heavy vs poke) and hits aimed at
+body zones — the latter belongs to I3.
 
 **Done when** every strike carries its own weight and reads from the
 wind-up.

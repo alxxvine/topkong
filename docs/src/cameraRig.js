@@ -2,26 +2,27 @@ import * as THREE from 'three';
 import { tuning as T } from 'tk/tuning.js';
 import { clamp01, noiseSigned, DEG } from 'tk/mathx.js';
 
-// Камера изометрическая: ортографическая проекция под фиксированным углом.
+// The camera is isometric: an orthographic projection at a fixed angle.
 //
-// Перспективы здесь больше нет, и это не стилизация ради стилизации.
-// В перспективе одинаковые бойцы в разных концах арены разного размера,
-// а вертикали заваливаются тем сильнее, чем дальше от центра кадра, — и то,
-// и другое мешает читать единственное, что в этой игре решает: кто где стоит
-// относительно края. Ортография показывает всех одинаково.
+// There is no perspective anymore, and it is not stylization for its own
+// sake. In perspective, identical fighters at opposite ends of the arena
+// are different sizes, and verticals keel over harder the farther they are
+// from the frame's center — both interfere with reading the only thing
+// that decides anything in this game: who stands where relative to the
+// edge. Orthography shows everyone the same.
 //
-// Классический изометрический угол — наклон 35.264° и разворот 45°. Первое
-// число не выдумано: это arctg(1/√2), тот самый наклон, при котором три оси
-// куба сходятся на экране под равными 120°. Отсюда и вид «колонны» из трёх
-// граней, каждая своей светлоты.
+// The classic isometric angle — tilt 35.264°, turn 45°. The first number
+// is not invented: it is arctan(1/√2), the exact tilt at which a cube's
+// three axes meet the screen at equal 120°. Hence the look of a "column"
+// with three faces, each its own lightness.
 //
-// Разворот принципиально не меняется во время игры. Позиция прицела берётся
-// лучом из камеры, так что стоит камере повернуться — и «мышь вправо»
-// перестанет означать «удар вправо». Поэтому камера только ездит.
+// The turn deliberately never changes during play. The aim point comes
+// from a camera ray, so the moment the camera turned, "mouse right" would
+// stop meaning "strike right". The camera only travels.
 //
-// Арена маленькая и должна помещаться в кадр целиком, иначе соперник
-// прилетает из ниоткуда. Камера стоит не за игроком, а между центром арены
-// и игроком — доля задаётся camFollowWeight.
+// The arena is small and must fit the frame whole, or opponents arrive out
+// of nowhere. The camera stands not behind the player but between the
+// arena's center and the player — the share is camFollowWeight.
 
 const _desired = new THREE.Vector3();
 const _focus = new THREE.Vector3();
@@ -54,17 +55,17 @@ export class CameraRig {
   }
 
   /**
-   * Экранные оси, спроецированные на настил: по ним WASD привязывается к тому,
-   * что игрок видит, а не к мировым координатам.
+   * Screen axes projected onto the deck: WASD binds to what the player
+   * sees, not to world coordinates.
    *
-   * Знак у right не описка. Unity левосторонняя, three.js правосторонняя,
-   * и камера, стоящая на −Z и смотрящая на +Z, показывает мировой +X
-   * в этих двух системах по разные стороны экрана. Формула, перенесённая
-   * из Unity дословно, давала зеркальные A и D.
+   * The sign on `right` is not a typo. Unity is left-handed, three.js is
+   * right-handed, and a camera standing on −Z looking at +Z shows world +X
+   * on opposite sides of the screen in the two systems. The formula
+   * carried over from Unity verbatim gave mirrored A and D.
    *
-   * Оси считаются из camYaw, а не читаются с матрицы камеры намеренно:
-   * в матрице живёт ещё и тряска, и на каждом попадании управление
-   * подкручивалось бы вместе с кадром.
+   * The axes are computed from camYaw rather than read off the camera
+   * matrix on purpose: the matrix also carries the shake, and the controls
+   * would get nudged along with the frame on every hit.
    */
   groundBasis(out) {
     const yaw = T.camYaw * DEG;
@@ -74,15 +75,16 @@ export class CameraRig {
   }
 
   /**
-   * Рамка кадра, в которую арена влезает целиком.
+   * The frame bounds that fit the whole arena.
    *
-   * У ортографии нет отъезда: расстояние ничего не меняет, размер кадра
-   * задаётся рамкой напрямую. Поэтому вместо «куда отъехать» считается
-   * «какой ширины взять кадр».
+   * Orthography has no dolly: distance changes nothing, the frame size is
+   * set directly by its bounds. So instead of "how far to pull back" the
+   * question is "how wide a frame to take".
    *
-   * По вертикали диск сплющен наклоном, и требуется меньше — но ровно
-   * настолько, насколько наклонена камера. Плюс запас сверху под рост
-   * бойца: диск влезает, а голова торчит за кадр, если про неё забыть.
+   * Vertically the disc is flattened by the tilt and needs less — but
+   * exactly as much less as the camera is tilted. Plus headroom above for
+   * the fighter's height: forget it and the disc fits while the head pokes
+   * out of frame.
    */
   applyFrustum(aspect) {
     if (aspect) this.aspect = aspect;
@@ -90,8 +92,8 @@ export class CameraRig {
     const r = T.arenaRadius * T.camFitMargin;
     const tall = r * Math.sin(T.camPitch * DEG) + T.camHeadroom;
 
-    // Кадр обязан вместить и ширину, и высоту: берём то, что больше,
-    // и растягиваем недостающую сторону по соотношению экрана.
+    // The frame must hold both the width and the height: take whichever is
+    // larger and stretch the other side by the screen's aspect.
     const halfH = Math.max(tall, r / a);
     const halfW = halfH * a;
 
@@ -104,20 +106,21 @@ export class CameraRig {
   desiredPosition(focus, out) {
     _euler.set(T.camPitch * DEG, T.camYaw * DEG, 0);
     _quat.setFromEuler(_euler);
-    // Камера смотрит вниз-вперёд, значит стоит она позади и выше точки внимания.
+    // The camera looks down-forward, so it stands behind and above the
+    // point of attention.
     _dir.set(0, 0, 1).applyQuaternion(_quat);
-    // Расстояние у ортографии на картинку не влияет вовсе — важно лишь,
-    // чтобы всё осталось между near и far. Берём с запасом.
+    // Distance changes nothing in an orthographic image — it only matters
+    // that everything stays between near and far. Taken with margin.
     return out.copy(focus).addScaledVector(_dir, -T.camDistance);
   }
 
   /**
-   * dt здесь нарочно нескалированный: в замедленном режиме камера должна
-   * оставаться отзывчивой, иначе кадр «уезжает» вслед за игроком с задержкой.
+   * dt here is deliberately unscaled: in slow motion the camera must stay
+   * responsive, or the frame trails the player with a lag.
    */
   tick(dt, target) {
-    // Радиус арены и наклон крутятся ползунками на ходу, а от них зависит
-    // рамка кадра.
+    // The arena radius and the tilt are live sliders, and the frame bounds
+    // depend on them.
     this.applyFrustum();
 
     _focus.copy(this.center);
@@ -128,8 +131,9 @@ export class CameraRig {
 
     this.desiredPosition(_focus, _desired);
 
-    // Критически задемпфированное сглаживание — тот же SmoothDamp, что в Unity:
-    // камера догоняет без перелёта, и на резком развороте кадр не хлещет.
+    // Critically damped smoothing — the same SmoothDamp as Unity's: the
+    // camera catches up without overshoot, and a sharp turn does not whip
+    // the frame.
     const smooth = Math.max(0.0001, T.camSmooth);
     const omega = 2 / smooth;
     const x = omega * dt;

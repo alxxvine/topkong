@@ -3,28 +3,32 @@ import { tuning as T } from 'tk/tuning.js';
 import { P } from 'tk/body.js';
 import { clamp, lerp } from 'tk/mathx.js';
 
-// Бойцы наконец занимают место.
+// Fighters finally occupy space.
 //
-// До сих пор тела проходили друг сквозь друга насквозь, и «невидимая стена»,
-// в которую упирались соперники, была ровно этим: стены не было вовсе.
-// Бот держит дистанцию сам (bot.js), и со стороны это читалось как упор
-// в пустоту — подходит, останавливается, дальше не идёт.
+// Until this file, bodies passed clean through each other, and the
+// "invisible wall" opponents seemed to hit was exactly that: there was no
+// wall at all. The bot keeps its distance by itself (bot.js), and from the
+// outside that read as leaning on nothing — walks up, stops, goes no
+// further.
 //
-// Правил здесь три, и они разные не для красоты, а потому что стоящий
-// и лежащий — разные препятствия:
+// There are three rules, and they differ not for variety's sake but
+// because a standing body and a downed one are different obstacles:
 //
-//   стоящий ↔ стоящий   расталкиваются и обмениваются ходом. Отсюда толчок
-//                       плечом: идёшь в соперника — двигаешь его перед собой,
-//                       и до кромки доводится телом, без всякого оружия.
-//   стоящий → лежачий   НЕ упирается. Тряпку он катит перед собой: подошёл,
-//                       поддел, спихнул. Будь тут стена, лежачий превратился
-//                       бы в столб посреди арены — а жаловались как раз
-//                       на невозможность через него пройти.
-//   лежачий ↔ лежачий   ничего. Две тряпки, которые толкают друг друга,
-//                       умеют только дрожать вдвоём.
+//   standing ↔ standing   push apart and trade momentum. This is the
+//                         shoulder shove: walk into an opponent and you
+//                         drive them ahead of you — all the way to the rim,
+//                         no weapon needed.
+//   standing → downed     does NOT collide. A ragdoll is rolled ahead:
+//                         walk up, scoop, shove off. Were there a wall
+//                         here, a downed body would become a pillar in the
+//                         middle of the arena — and the complaint was
+//                         precisely about not being able to walk past one.
+//   downed ↔ downed       nothing. Two ragdolls pushing each other can
+//                         only tremble in unison.
 //
-// Считается это ДО тика бойцов: тик ставит таз туда, куда указывает корень,
-// и правку положения обязан увидеть он, а не следующий кадр.
+// This runs BEFORE the fighters' ticks: a tick puts the pelvis where the
+// root points, so a position correction must be seen by the tick, not by
+// the next frame.
 
 const _n = new THREE.Vector3();
 
@@ -36,7 +40,7 @@ export function resolveContacts(fighters, dt) {
   }
 }
 
-/** Лежачий ли: тот же порог, по которому боец теряет управление. */
+/** Is this one down: the same threshold at which a fighter loses control. */
 function isDown(f) {
   return f.body.strength < T.controlStrength;
 }
@@ -52,24 +56,17 @@ function pair(a, b, dt) {
 }
 
 /**
- * Двое на ногах: расталкивание плюс обмен ходом вдоль нормали.
+ * Ram pressure: the victim is being CARRIED faster than they want to go.
  *
- * Обмен именно неупругий, к общей скорости. Упругий отскок читался бы
- * бильярдом, а нужно противоположное: боец, который идёт вперёд, ДАВИТ,
- * и соперник едет перед ним ровно пока тот идёт. Ручка shoveTransfer —
- * доля этого обмена: на нуле тела просто не проходят сквозь друг друга.
- */
-/**
- * Напор: жертву ВЕЗУТ быстрее, чем она сама хочет ехать.
+ * That is exactly what tells a ram from two people running together. The
+ * fighter's velocity along the line from the opponent is compared with
+ * their own ORDERED velocity the same way: whoever runs by choice gets
+ * nothing, whoever is carried against their will gets rattled. Below the
+ * speed threshold pressure does not accrue at all, so propping an opponent
+ * with a shoulder is possible while toppling them with a step is not.
  *
- * Именно так отличается таран от совместного бега. Скорость бойца вдоль
- * линии от соперника сравнивается с его же ЗАКАЗАННОЙ скоростью в ту же
- * сторону: кто бежит сам — тому ничего, кого везут против воли — тот
- * расшатывается. Ниже порога скорости напор не считается вовсе, поэтому
- * подпереть соперника плечом можно, а уронить шагом — нет.
- *
- * Дошедшая до предела расшатка отпускает мышцы: боец падает ПО ХОДУ
- * тарана. Это и есть «таранить до конца».
+ * Rattle at its limit releases the muscles: the fighter falls ALONG the
+ * ram. That is what "ram them to the end" means.
  */
 function ramPressure(f, attacker, nx, nz, dt) {
   const l = f.locomotion;
@@ -78,15 +75,16 @@ function ramPressure(f, attacker, nx, nz, dt) {
   const press = v - want - T.shoveStaggerAt;
   if (press <= 0) return;
   f.stagger = Math.min(1, f.stagger + press * T.shoveStaggerRate * dt);
-  // Куда валит — запоминается для позы: жертва наклоняется ТУДА, куда
-  // её толкают, и падает уже из наклона, а не из ровной стойки.
+  // Where the fall is heading is remembered for the pose: the victim leans
+  // WHERE they are being pushed and falls out of the lean, not out of an
+  // upright stance.
   const k = Math.min(1, 10 * dt);
   f.staggerDirX += (nx - f.staggerDirX) * k;
   f.staggerDirZ += (nz - f.staggerDirZ) * k;
   if (f.stagger >= 1) {
-    // Толчок скромный. Тело к этому моменту уже наклонено по ходу тарана,
-    // и ему достаточно отпустить мышцы: большой импульс читался
-    // «отлетел», а нужен «подкосился».
+    // A modest push. By this moment the body is already leaning along the
+    // ram, and releasing the muscles is enough: a big impulse read as
+    // "sent flying", and the need is "buckled".
     _n.set(nx * T.shoveTopple, T.shoveTopple * 0.35, nz * T.shoveTopple);
     f.takeHit(_n, dt);
     f.credit(attacker);
@@ -94,6 +92,15 @@ function ramPressure(f, attacker, nx, nz, dt) {
   }
 }
 
+/**
+ * Two on their feet: separation plus a momentum trade along the normal.
+ *
+ * The trade is deliberately inelastic, toward the shared velocity. An
+ * elastic bounce would read as billiards, and the need is the opposite:
+ * the fighter walking forward PRESSES, and the opponent rides ahead of him
+ * exactly as long as he keeps walking. The shoveTransfer knob is the share
+ * of that trade: at zero the bodies merely refuse to interpenetrate.
+ */
 function block(a, b, dt) {
   const r = T.bodyRadius;
   let dx = b.position.x - a.position.x;
@@ -102,7 +109,8 @@ function block(a, b, dt) {
   const gap = r * 2;
   if (d >= gap) return;
 
-  // Ровно друг в друге — расталкиваем в любую сторону, лишь бы разошлись.
+  // Exactly inside each other — push apart in any direction, so long as
+  // they separate.
   if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
   const nx = dx / d;
   const nz = dz / d;
@@ -117,7 +125,7 @@ function block(a, b, dt) {
   const lb = b.locomotion;
   const va = la.velX * nx + la.velZ * nz;
   const vb = lb.velX * nx + lb.velZ * nz;
-  // Расходятся — цепляться не за что.
+  // Moving apart — nothing to catch on.
   if (va - vb <= 0) return;
 
   const shared = (va + vb) * 0.5;
@@ -128,18 +136,19 @@ function block(a, b, dt) {
   lb.velX += nx * tb;
   lb.velZ += nz * tb;
 
-  // После обмена оба едут почти вместе — и у каждого проверяется,
-  // не везут ли его. Нормаль у каждого своя: «от соперника».
+  // After the trade both ride almost together — and each is checked for
+  // being carried. Each gets his own normal: "away from the opponent".
   ramPressure(a, b, -nx, -nz, dt);
   ramPressure(b, a, nx, nz, dt);
 
-  // Задевание вскользь — реакция ТЕЛОМ, а не невидимым полем.
+  // A glancing graze — a reaction of the BODY, not of an invisible field.
   //
-  // Когда один проходит мимо и цепляет другого плечом, у столкновения
-  // есть КАСАТЕЛЬНАЯ составляющая — скольжение контакта вбок. Она
-  // проворачивает обоих вокруг точки касания (задетый стоя доворачивается
-  // за проходящим) и коротко качает задетого. Ровно так читается
-  // «задели плечом»: не стена, а человек, которого крутануло.
+  // When one passes by and clips the other with a shoulder, the collision
+  // has a TANGENTIAL component — the contact sliding sideways. It turns
+  // both around the contact point (the clipped one, standing, is dragged
+  // around after the passer-by) and briefly rocks the clipped one. That is
+  // exactly how "clipped by a shoulder" reads: not a wall, but a person
+  // who got spun.
   const tx = -nz;
   const tz = nx;
   const relT = (la.velX - lb.velX) * tx + (la.velZ - lb.velZ) * tz;
@@ -147,14 +156,15 @@ function block(a, b, dt) {
     const spin = relT * T.grazeSpin * dt;
     a.yaw += spin;
     b.yaw += spin;
-    // Корневой доворот контроллер взгляда выправит за доли секунды — и это
-    // правильно, «пошатнулся и вернулся». А вот СКРУТ ПЛЕЧ живёт в позе:
-    // плечи крутануло за проходящим, и они сами отыгрывают обратно.
+    // The facing controller will straighten the root turn within a fraction
+    // of a second — rightly so, "staggered and recovered". The SHOULDER
+    // TWIST though lives in the pose: the shoulders got spun after the
+    // passer-by, and they play themselves back.
     const jolt = relT * T.grazeTwist * dt;
     if (a.poseDriver) a.poseDriver.grazeJolt = clamp(a.poseDriver.grazeJolt + jolt, -40, 40);
     if (b.poseDriver) b.poseDriver.grazeJolt = clamp(b.poseDriver.grazeJolt + jolt, -40, 40);
-    // Лёгкая встряска задетому — тому, кто движется МЕДЛЕННЕЕ: его качнуло.
-    // Потолок ниже падения: от задевания шатает, но не роняет.
+    // A light shake for the clipped one — whoever moves SLOWER: he is the
+    // one rocked. The cap is below toppling: a graze rattles, never fells.
     const slower = Math.hypot(la.velX, la.velZ) < Math.hypot(lb.velX, lb.velZ) ? a : b;
     if (slower.stagger < 0.35) {
       slower.stagger = Math.min(0.35, slower.stagger + Math.abs(relT) * 0.6 * dt);
@@ -165,23 +175,23 @@ function block(a, b, dt) {
     }
   }
 
-  // Обоюдного износа в клинче НЕТ, и это решение по игре, а не пропуск.
-  // Пробовал: упор, в котором оба давят навстречу, изматывал обоих
-  // поровну — и оба падали в один момент. Выглядело абсурдом: падать
-  // должен только тот, кого везут, а лоб в лоб — честный тупик. Выход
-  // из него — зайти сбоку, и боты так и делают.
+  // There is NO mutual clinch wear, and that is a game decision, not an
+  // omission. Tried it: a stalemate where both press head-on wore both
+  // down equally — and both fell at the same instant. It looked absurd:
+  // only the one being carried should fall, and head-to-head is an honest
+  // deadlock. The way out is to come in from the side, and the bots do.
 }
 
 /**
- * Стоящий катит лежачего.
+ * A standing fighter rolls a downed one.
  *
- * Толкается не таз, а ТА ЧАСТЬ ТЕЛА, до которой достали: наехал на ноги —
- * развернуло ноги. Иначе лежачий ездил бы плашмя, как коробка, и тряпки
- * в нём не осталось бы вовсе.
+ * What gets pushed is not the pelvis but THE PART that was reached: run
+ * into the legs and the legs get turned. Otherwise the downed body would
+ * slide flat like a crate, with no ragdoll left in it at all.
  *
- * Силы толчка хватает ровно на то, чтобы катить, — не на то, чтобы
- * запустить. Спихнуть с арены телом можно, но придётся дойти до края
- * вместе с ним, а это время, за которое успевают ответить.
+ * The push is strong enough to roll — not to launch. Shoving somebody off
+ * the arena with the body works, but you must walk them to the edge, and
+ * that is time enough to be answered.
  */
 function roll(mover, downed, dt) {
   const speed = Math.hypot(mover.locomotion.velX, mover.locomotion.velZ);
@@ -198,17 +208,17 @@ function roll(mover, downed, dt) {
     const dz = p.z - mover.position.z;
     const d = Math.hypot(dx, dz);
     if (d >= reach) continue;
-    // Толкаем ВДОЛЬ ХОДА толкающего, а не от него врозь: иначе лежачего
-    // разбрасывает во все стороны и он крутится на месте вместо того,
-    // чтобы ехать перед ногами.
+    // Push ALONG the mover's travel, not radially away: pushed apart, the
+    // downed body scatters and spins in place instead of riding ahead of
+    // the feet.
     _n.set(mover.locomotion.velX / speed, 0, mover.locomotion.velZ / speed);
-    // Ближе к толкающему — сильнее: так тело поворачивается вокруг
-    // дальнего конца, а не едет плашмя.
+    // Closer to the mover — stronger: the body pivots around its far end
+    // instead of sliding flat.
     const bite = 1 - d / reach;
     body.push(i, _n.multiplyScalar(power * bite), dt);
     touched = true;
   }
-  // Rolling a downed body toward the edge is «driving them to the fall»:
+  // Rolling a downed body toward the edge is "driving them to the fall":
   // the credit refreshes for as long as the pushing actually lands.
   if (touched) downed.credit(mover);
 }
