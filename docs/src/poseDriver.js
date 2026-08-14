@@ -66,6 +66,9 @@ export class PoseDriver {
     this.menuLook = 0;
     this.lookExtra = 0;
     this.headBase = 0;
+    /** Vertical gaze: head pitch in radians, same contract. */
+    this.menuLookPitch = 0;
+    this.lookPitch = 0;
 
     this.pose = Rig.makePose();
   }
@@ -265,6 +268,7 @@ export class PoseDriver {
     // here so the head tracks, never snaps.
     this.lookExtra = lerp(this.lookExtra, this.menuLook, clamp01(8 * dt));
     this.headTurn = this.headBase + this.lookExtra;
+    this.lookPitch = lerp(this.lookPitch, this.menuLookPitch, clamp01(8 * dt));
   }
 
   /**
@@ -485,6 +489,8 @@ export class PoseDriver {
     this.menuLook = 0;
     this.lookExtra = 0;
     this.headBase = 0;
+    this.menuLookPitch = 0;
+    this.lookPitch = 0;
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
     this.twist = 0;

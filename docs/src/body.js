@@ -71,6 +71,7 @@ const LINK_LIMIT = S.linkLimit;
 
 const _v = new THREE.Vector3();
 const _side = new THREE.Vector3();
+const _tilt = new THREE.Vector3();
 const _center = new THREE.Vector3();
 const _rot = new THREE.Quaternion();
 const _dir = new THREE.Vector3();
@@ -821,7 +822,7 @@ export class Body {
    * одна точка, а у точки нет разворота, поэтому доворот лица приходится
    * задавать снаружи. Всё остальное по-прежнему выводится из тела.
    */
-  writeBones(bones, headTurn = 0) {
+  writeBones(bones, headTurn = 0, headPitch = 0) {
     const p = this.pos;
 
     // Поперечная ось таза — линия бёдер, груди — линия плеч. Отсюда
@@ -856,6 +857,15 @@ export class Body {
       const x = _side.x * c + _side.z * s;
       _side.z = -_side.x * s + _side.z * c;
       _side.x = x;
+    }
+    // Vertical gaze: the head's up axis tilts around the shoulder line,
+    // so the face pitches up and down (the menu points it at the cursor).
+    if (headPitch !== 0) {
+      if (_v.lengthSq() > 1e-9) _v.normalize();
+      _tilt.copy(_side).normalize().cross(_v);
+      const s = Math.sin(headPitch);
+      const c = Math.cos(headPitch);
+      _v.multiplyScalar(c).addScaledVector(_tilt, s);
     }
     Rig.orient(_v, _side, _rot);
     bones.head.position.copy(p[P.Head]);

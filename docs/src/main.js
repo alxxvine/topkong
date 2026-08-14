@@ -244,6 +244,7 @@ export async function start() {
       player.facingTarget.copy(input.aim).sub(player.position);
       player.facingTarget.y = 0;
       player.poseDriver.menuLook = 0;
+      player.poseDriver.menuLookPitch = 0;
     } else {
       // In the menu the mouse steers only the GAZE. The body holds its
       // pose toward the camera (or the walk direction while testing the
@@ -257,12 +258,18 @@ export async function start() {
       }
       // The gaze comes from SCREEN space: at the menu's flat camera tilt
       // a deck raycast is degenerate — upper-half rays graze the plane
-      // and land kilometers out. The cursor's screen X alone is enough,
+      // and land kilometers out. The cursor's screen X/Y are enough,
       // taken window-level so the head keeps tracking over the UI too.
       const nx = input.hasScreen
         ? Math.max(-1, Math.min(1, (input.screenX / innerWidth) * 2 - 1))
         : 0;
+      const ny = input.hasScreen
+        ? Math.max(-1, Math.min(1, (input.screenY / innerHeight) * 2 - 1))
+        : 0;
       player.poseDriver.menuLook = nx * 0.9;
+      // Cursor high — chin up, cursor low — eyes down. Shallower range
+      // than the yaw: necks nod less than they turn.
+      player.poseDriver.menuLookPitch = ny * 0.4;
     }
 
     // Блок (ПКМ): пока держится — ударов нет, дубина поперёк корпуса,
@@ -400,6 +407,16 @@ export async function start() {
     if (!setupState.done) {
       if (match.phase === 'ready') match.timer = Math.max(match.timer, 1.5);
       if (!player.alive && player.deadTime > 0.7) player.spawn(0, 0, Math.PI * 0.25);
+      // The hero poses on the CAMERA-NEAR side of the deck: from the
+      // center the far rim cut across the backdrop right behind his
+      // head, from here twelve meters of deck run out past the frame.
+      // Catches every center placement — boot, placeRound, respawn.
+      if (player.state === BodyState.Standing
+          && player.moveInput.lengthSq() < 0.01
+          && player.position.x * player.position.x
+            + player.position.z * player.position.z < 0.4) {
+        player.spawn(-3.2, -3.2, -Math.PI * 0.75);
+      }
       // Photobomber patrol: a no-op scan once everyone is parked wide.
       parkDummies();
     }
@@ -463,7 +480,9 @@ export async function start() {
       lastOverField = overField;
       document.body.classList.toggle('offfield', !overField);
     }
-    aim.setVisible(overField);
+    // The menu has no aim: the cursor drives the gaze there, and the
+    // world ring floating in the close-up read as a stray UI ornament.
+    aim.setVisible(overField && setupState.done);
     aim.update(input.aim, player);
     scene.userData.camQuat = camera.quaternion;
     fx.tick(real);
