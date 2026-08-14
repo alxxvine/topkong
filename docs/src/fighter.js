@@ -411,7 +411,12 @@ export class Fighter {
     this.deadTime = 0;
     this.deaths++;
     // A posthumous kill still counts: taking each other down is two kills.
-    if (this.killCredit > 0 && this.lastAttacker) this.lastAttacker.kills++;
+    if (this.killCredit > 0 && this.lastAttacker) {
+      this.lastAttacker.kills++;
+      // The kill feed listens here — the one place every credited
+      // knock-off passes through. main installs the listener.
+      Fighter.onKill?.(this.lastAttacker, this);
+    }
     this.lastAttacker = null;
     this.killCredit = 0;
     this.group.visible = false;

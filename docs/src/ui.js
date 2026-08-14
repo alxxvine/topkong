@@ -132,44 +132,10 @@ const QUICK = [
     get: () => 1 / Math.max(0.1, T.risingTime),
     set: (v) => { T.risingTime = 1 / Math.max(0.1, v); },
   },
-  // The fists are their own weapon and get their own tempo knobs.
-  {
-    group: 'Fists',
-    label: 'Jab windup',
-    min: 0.2, max: 8, step: 0.1, unit: '×',
-    get: () => T.jabWind,
-    set: (v) => { T.jabWind = v; },
-  },
-  {
-    label: 'Jab blow',
-    min: 0.4, max: 3, step: 0.05, unit: '×',
-    get: () => 1 / Math.max(0.1, T.jabTime),
-    set: (v) => { T.jabTime = 1 / Math.max(0.1, v); },
-  },
-  {
-    label: 'Overhand windup',
-    min: 0.2, max: 8, step: 0.1, unit: '×',
-    get: () => T.overhandWind,
-    set: (v) => { T.overhandWind = v; },
-  },
-  {
-    label: 'Overhand blow',
-    min: 0.4, max: 3, step: 0.05, unit: '×',
-    get: () => 1 / Math.max(0.1, T.overhandTime),
-    set: (v) => { T.overhandTime = 1 / Math.max(0.1, v); },
-  },
-  {
-    label: 'Uppercut windup',
-    min: 0.2, max: 8, step: 0.1, unit: '×',
-    get: () => T.uppercutWind,
-    set: (v) => { T.uppercutWind = v; },
-  },
-  {
-    label: 'Uppercut blow',
-    min: 0.4, max: 3, step: 0.05, unit: '×',
-    get: () => 1 / Math.max(0.1, T.uppercutTime),
-    set: (v) => { T.uppercutTime = 1 / Math.max(0.1, v); },
-  },
+  // The fists' pacing knobs live in the big Settings panel only: the
+  // player always swings the club now, and the quick panel shows what
+  // the demo actually uses. (Unarmed roster bots still punch — their
+  // tempo is tunable from Settings → Swing.)
   // Stamina: the price list of the aggressive verbs.
   {
     group: 'Stamina',

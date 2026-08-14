@@ -6,7 +6,6 @@ import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
 import { Fighter, BodyState } from 'tk/fighter.js';
 import { Bot, BOT_ROSTER } from 'tk/bot.js';
-import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
 import { P } from 'tk/body.js';
@@ -167,6 +166,39 @@ export async function start() {
   let prevSwingHeld = false;
   const stamEl = document.getElementById('stam');
   const stamBar = document.getElementById('stamBar');
+
+  // The shooter chrome: a kill feed and a live scoreboard. The feed
+  // hangs off the one place every credited knock-off passes through
+  // (Fighter.eliminate); the scoreboard re-renders only when the
+  // standings actually change.
+  const feedEl = document.getElementById('feed');
+  const scoreEl = document.getElementById('score');
+  let scoreSig = '';
+  Fighter.onKill = (attacker, victim) => {
+    if (!feedEl || !setupState.done || setupState.practice) return;
+    const row = document.createElement('div');
+    const name = (f) => `<b${f.isPlayer ? ' class="me"' : ''}>${f.name}</b>`;
+    row.innerHTML = `${name(attacker)} 🔨 ${name(victim)}`;
+    feedEl.prepend(row);
+    while (feedEl.children.length > 5) feedEl.lastChild.remove();
+    setTimeout(() => row.classList.add('out'), 3800);
+    setTimeout(() => row.remove(), 4400);
+  };
+  const updateScore = (on) => {
+    if (!scoreEl) return;
+    scoreEl.classList.toggle('on', on);
+    if (!on) { scoreSig = ''; return; }
+    const rows = [...fighters]
+      .filter((f) => f.kills > 0 || f.isPlayer)
+      .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
+      .slice(0, 5);
+    const sig = rows.map((f) => `${f.name}:${f.kills}:${f.deaths}`).join('|');
+    if (sig === scoreSig) return;
+    scoreSig = sig;
+    scoreEl.innerHTML = rows.map((f) =>
+      `<div${f.isPlayer ? ' class="me"' : ''}><b>${f.name}</b><span>${f.kills}</span></div>`
+    ).join('');
+  };
 
   ui.onPauseToggle = () => {
     paused = !paused;
@@ -510,6 +542,7 @@ export async function start() {
         T.staminaOn && setupState.done && player.stamina < 0.97);
       stamEl.classList.toggle('low', blockBroken || player.stamina < T.staminaFloor);
     }
+    updateScore(inGame);
     ui.setHud(hudText(player, arena, fps, input, match));
     ui.setBanner(inGame ? match.banner : null);
     // The combat buttons stay up bare-handed too: fists punch now, and
@@ -556,34 +589,33 @@ function initSetup(player, aim, match, telem, prog) {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('tk-player') || '{}'); } catch { /* fresh */ }
 
-  const nameEl = document.getElementById('setupName');
-  nameEl.value = typeof saved.name === 'string' ? saved.name : '';
-
-  // Палитра общая с базой ботов по духу — приглушённая пастель — но своя.
-  // Дальше идут НАГРАДНЫЕ цвета из достижений: закрытый показывается
-  // с замком, скрытый — тёмным «?», и что за ним, меню не говорит.
-  const FREE_COLORS = [0xff8a5c, 0xe4533f, 0xdcb64a, 0x4fbf8b,
-                       0x4bc4c4, 0x5b8def, 0x8b7ee0, 0xc46fb0];
+  // The demo character is a COLOR and a CLUB SKIN, nothing else: no name,
+  // no bodies, no weapon choice — everyone swings the same club, and the
+  // skins are trophies from achievements. Fewer knobs, cleaner screen.
+  const FREE_COLORS = [0xff8a5c, 0xe4533f, 0x4fbf8b, 0x5b8def, 0xc46fb0];
   const rewardOf = (kind) => ACHIEVEMENTS.filter((a) => a.reward && a.reward[kind]);
 
-  const WEAPONS = [
-    { id: 'club',   label: 'Club',  skin: 'classic' },
-    { id: 'fists',  label: 'Fists', skin: 'classic' },
+  const SKINS = [
+    { id: 'classic', label: 'Classic' },
     ...rewardOf('club').map((a) => ({
-      id: a.reward.club, label: a.reward.label, skin: a.reward.club, ach: a,
+      id: a.reward.club, label: a.reward.label, ach: a,
     })),
   ];
 
-  const colorOk = (c) => FREE_COLORS.includes(c) || prog.colorUnlocked(c);
-  const weaponOk = (w) => {
-    const def = WEAPONS.find((x) => x.id === w);
+  const colorKnown = (c) => FREE_COLORS.includes(c)
+    || rewardOf('color').some((a) => a.reward.color === c);
+  const skinOk = (sk) => {
+    const def = SKINS.find((x) => x.id === sk);
     return !!def && (!def.ach || prog.has(def.ach.id));
   };
 
-  let color = colorOk(saved.color) && (FREE_COLORS.includes(saved.color)
-    || rewardOf('color').some((a) => a.reward.color === saved.color))
+  let color = colorKnown(saved.color) && prog.colorUnlocked(saved.color)
     ? saved.color : FREE_COLORS[0];
-  let weapon = weaponOk(saved.weapon) ? saved.weapon : 'club';
+  // Migration: builds up to 189 stored a `weapon`; a picked skin rode in
+  // it ('gilded'/'void'), everything else maps to the classic club.
+  let skin = skinOk(saved.skin) ? saved.skin
+    : skinOk(saved.weapon) && saved.weapon !== 'club' && saved.weapon !== 'fists'
+      ? saved.weapon : 'classic';
 
   const applyColor = (c) => {
     color = c;
@@ -593,18 +625,19 @@ function initSetup(player, aim, match, telem, prog) {
       b.classList.toggle('sel', +b.dataset.c === c);
     }
   };
-  const applyWeapon = (w) => {
-    weapon = w;
-    const def = WEAPONS.find((x) => x.id === w) || WEAPONS[0];
-    player.armed = w !== 'fists';
-    player.setClubSkin(def.skin);
-    for (const b of document.querySelectorAll('#setupWeapon button')) {
-      b.classList.toggle('sel', b.dataset.w === w);
+  const applySkin = (sk) => {
+    skin = sk;
+    player.armed = true;
+    player.setClubSkin(sk);
+    for (const b of document.querySelectorAll('#setupSkins button')) {
+      b.classList.toggle('sel', b.dataset.s === sk);
     }
   };
 
   // Пикеры перерисовываемые: достижение может открыться прямо во время
-  // пробы в меню, и замок обязан отпереться на глазах.
+  // пробы в меню, и замок обязан отпереться на глазах. Every locked
+  // reward SAYS what it takes — hover the lock and read the recipe;
+  // the mystery "?" slots are gone along with hidden achievements.
   const buildPickers = () => {
     const colorsEl = document.getElementById('setupColors');
     colorsEl.innerHTML = '';
@@ -612,22 +645,14 @@ function initSetup(player, aim, match, telem, prog) {
       const b = document.createElement('button');
       b.type = 'button';
       b.dataset.c = c;
-      const open = !ach || prog.has(ach.id);
-      if (open) {
-        b.style.background = '#' + c.toString(16).padStart(6, '0');
+      b.style.background = '#' + c.toString(16).padStart(6, '0');
+      if (!ach || prog.has(ach.id)) {
         b.addEventListener('click', () => applyColor(c));
         if (ach) b.title = ach.reward.label;
-      } else if (ach.hidden) {
-        // Супер-редкое даже не показывается: тёмный «?», и всё.
-        b.className = 'mystery';
-        b.textContent = '?';
-        b.title = '???';
-        b.disabled = true;
       } else {
         b.className = 'lock';
-        b.style.background = '#' + c.toString(16).padStart(6, '0');
         b.textContent = '🔒';
-        b.title = `${ach.reward.label} — ${ach.desc}`;
+        b.title = `${ach.reward.label} — ${ach.name}: ${ach.desc}`;
         b.disabled = true;
       }
       colorsEl.appendChild(b);
@@ -635,39 +660,34 @@ function initSetup(player, aim, match, telem, prog) {
     for (const c of FREE_COLORS) addSwatch(c, null);
     for (const a of rewardOf('color')) addSwatch(a.reward.color, a);
 
-    const weaponEl = document.getElementById('setupWeapon');
-    weaponEl.innerHTML = '';
-    for (const def of WEAPONS) {
+    const skinsEl = document.getElementById('setupSkins');
+    skinsEl.innerHTML = '';
+    for (const def of SKINS) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.dataset.w = def.id;
-      const open = !def.ach || prog.has(def.ach.id);
-      if (open) {
+      b.dataset.s = def.id;
+      if (!def.ach || prog.has(def.ach.id)) {
         b.textContent = def.label;
-        b.addEventListener('click', () => applyWeapon(def.id));
-      } else if (def.ach.hidden) {
-        b.textContent = '?';
-        b.title = '???';
-        b.disabled = true;
+        b.addEventListener('click', () => applySkin(def.id));
       } else {
         b.textContent = '🔒 ' + def.label;
-        b.title = def.ach.desc;
+        b.title = `${def.ach.name}: ${def.ach.desc}`;
         b.disabled = true;
       }
-      weaponEl.appendChild(b);
+      skinsEl.appendChild(b);
     }
 
     renderAch();
 
     applyColor(color);
-    applyWeapon(weapon);
+    applySkin(skin);
   };
 
   // The achievements live in a pop-up now: cards with an icon, the
   // requirement and a progress bar, over a blurred scene — the dry text
   // list read as debug output. Hidden ones stay a dark "???" until won.
   const ACH_ICONS = {
-    first: '🩸', gold: '💪', ink: '🛡️', snow: '👊',
+    first: '🩸', gold: '💪', ink: '🛡️',
     gild: '⏱️', century: '💯', void: '🌌',
   };
   const renderAch = () => {
@@ -677,24 +697,24 @@ function initSetup(player, aim, match, telem, prog) {
     for (const a of ACHIEVEMENTS) {
       const got = prog.has(a.id);
       const card = document.createElement('div');
-      card.className = 'ach' + (got ? ' got' : a.hidden ? ' hid' : '');
+      card.className = 'ach' + (got ? ' got' : '');
       const ico = document.createElement('div');
       ico.className = 'ico';
-      ico.textContent = !got && a.hidden ? '❓' : (ACH_ICONS[a.id] || '🏆');
+      ico.textContent = ACH_ICONS[a.id] || '🏆';
       const bd = document.createElement('div');
       bd.className = 'bd';
       const nm = document.createElement('b');
-      nm.textContent = !got && a.hidden ? '???' : a.name;
+      nm.textContent = a.name;
       const ds = document.createElement('span');
       ds.textContent = got
         ? (a.reward ? `${a.desc} — ${a.reward.label} unlocked` : a.desc)
-        : a.hidden ? 'Hidden — keep playing' : a.desc;
+        : a.reward ? `${a.desc} — unlocks ${a.reward.label}` : a.desc;
       bd.append(nm, ds);
       card.append(ico, bd);
       const em = document.createElement('em');
       if (got) {
         em.textContent = '✓';
-      } else if (!a.hidden) {
+      } else {
         const cur = Math.min(a.need, Math.floor(a.of(prog.p)));
         const bar = document.createElement('i');
         bar.className = 'bar';
@@ -727,56 +747,31 @@ function initSetup(player, aim, match, telem, prog) {
   buildPickers();
   state.refresh = buildPickers;
 
-  // Телосложение меняет длины связей и панели — страница перезагружается
-  // (так устроен выбор тела и в панели настроек). Выбор экрана переживает
-  // перезагрузку через localStorage, так что это безопасно посреди setup.
-  const bodyEl = document.getElementById('setupBody');
-  for (const key of bodyNames) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = BODIES[key].title;
-    if (key === currentBody) b.classList.add('sel');
-    b.addEventListener('click', () => chooseBody(key));
-    bodyEl.appendChild(b);
-  }
-
   applyColor(color);
-  applyWeapon(weapon);
+  applySkin(skin);
   // Лицом к камере, в центре: экран персонажа должен показывать персонажа.
   player.spawn(0, 0, Math.PI * 0.25);
 
   const menuBtn = document.getElementById('menu');
 
-  // FIGHT and PRACTICE share the commit: apply the character, close the
-  // menu, start the round. Practice differs only in the flag — main
-  // holds the countdown forever, bots stand as mannequins, nothing
-  // counts. A place to feel the strikes out, not a mode to win.
-  const commit = (practice) => {
-    player.name = (nameEl.value || '').trim().slice(0, 12) || 'You';
+  document.getElementById('setupGo').addEventListener('click', () => {
+    player.name = 'You';
     try {
-      localStorage.setItem('tk-player',
-        JSON.stringify({ name: player.name === 'You' ? '' : player.name, color, weapon }));
+      localStorage.setItem('tk-player', JSON.stringify({ color, skin }));
     } catch { /* private mode */ }
     root.classList.add('gone');
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
-    state.practice = practice;
-    if (!practice) {
-      telem.fight({
-        name: player.name,
-        weapon,
-        color: color.toString(16).padStart(6, '0'),
-        body: currentBody,
-      });
-    }
+    state.practice = false;
+    telem.fight({
+      skin,
+      color: color.toString(16).padStart(6, '0'),
+    });
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }
     match.begin();
-  };
-  document.getElementById('setupGo').addEventListener('click', () => commit(false));
-  const testBtn = document.getElementById('setupTest');
-  if (testBtn) testBtn.addEventListener('click', () => commit(true));
+  });
 
   /** Вернуться с поля в меню: карточка открывается, бой встаёт у отсчёта. */
   state.open = () => {

@@ -3,16 +3,16 @@
 // character menu. Everything lives in localStorage, like the rest of the
 // player's identity — no server, no accounts.
 //
-// The catalog is deliberately small and the ladder deliberately human:
-// the first unlock lands in the first session, the last ones take real
-// dedication. Hidden entries are the point, not an afterthought — a "?"
-// slot the menu refuses to explain is what makes people keep knocking.
+// Deliberately a CLEAN demo ladder: every achievement is visible and its
+// requirement spelled out — hover a locked reward and the menu tells you
+// exactly what to do. No hidden entries, no mystery slots; that layer of
+// intrigue was cut to keep the demo honest and legible.
 
 const KEY = 'tk-progress';
 
 // Reward types: { color: 0x??????, label } unlocks a swatch in the menu;
 // { club: 'skinName', label } unlocks a club skin (see CLUB_SKINS in
-// fighter.js). `hidden` entries show as ??? until they unlock.
+// fighter.js).
 export const ACHIEVEMENTS = [
   { id: 'first',   name: 'First Blood',  desc: 'Knock somebody off',
     need: 1, of: (p) => p.kills },
@@ -22,17 +22,14 @@ export const ACHIEVEMENTS = [
   { id: 'ink',     name: 'Untouchable',  desc: '10 kills without dying once',
     need: 10, of: (p) => p.bestStreak,
     reward: { color: 0x23262e, label: 'Ink' } },
-  { id: 'snow',    name: 'Bare-handed',  desc: '10 kills with fists',
-    need: 10, of: (p) => p.fistKills,
-    reward: { color: 0xf4f5f7, label: 'Snow' } },
   { id: 'gild',    name: 'Marathon',     desc: '30 minutes in the arena',
     need: 1800, of: (p) => p.timePlayed, time: true,
     reward: { club: 'gilded', label: 'Gilded club' } },
   { id: 'century', name: 'Century',      desc: '100 knock-offs',
-    need: 100, of: (p) => p.kills, hidden: true,
+    need: 100, of: (p) => p.kills,
     reward: { color: 0xff2d75, label: 'Magma' } },
-  { id: 'void',    name: 'Collector',    desc: 'Keep knocking…',
-    need: 250, of: (p) => p.kills, hidden: true,
+  { id: 'void',    name: 'Collector',    desc: '250 knock-offs',
+    need: 250, of: (p) => p.kills,
     reward: { club: 'void', label: 'Void club' } },
 ];
 
