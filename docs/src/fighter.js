@@ -26,6 +26,15 @@ export const BodyState = {
 
 const TRAIL_POINTS = 26;
 
+// Club skins — progression rewards. Classic is the scene-toned ash and
+// graphite; the unlockables get to be louder on purpose: a trophy that
+// nobody can tell from the default is not a trophy.
+export const CLUB_SKINS = {
+  classic: { wood: 0xd8c3a5, woodR: 0.72, metal: 0x9ba1ab, metalR: 0.38, metalM: 0.55 },
+  gilded:  { wood: 0xc9a54f, woodR: 0.45, metal: 0xf3d05e, metalR: 0.22, metalM: 0.9 },
+  void:    { wood: 0x2b2438, woodR: 0.6,  metal: 0x8b5cf6, metalR: 0.3,  metalM: 0.7 },
+};
+
 const _v = new THREE.Vector3();
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
@@ -399,6 +408,22 @@ export class Fighter {
    */
   get hasClub() {
     return T.withClub && this.armed && (this.isPlayer || T.botsArmed);
+  }
+
+  /**
+   * Reskin the club. Same shared-material discipline as setColor: meshes
+   * move onto materials of the new palette. The shaft is the only capsule
+   * in the club group; everything else (head, spikes) is metal.
+   */
+  setClubSkin(name) {
+    const skin = CLUB_SKINS[name] || CLUB_SKINS.classic;
+    this.clubSkin = CLUB_SKINS[name] ? name : 'classic';
+    const wood = mat(new THREE.Color(skin.wood), skin.woodR);
+    const metal = mat(new THREE.Color(skin.metal), skin.metalR, skin.metalM);
+    for (const o of this.bones.club.children) {
+      if (!o.isMesh) continue;
+      o.material = o.geometry.type === 'CapsuleGeometry' ? wood : metal;
+    }
   }
 
   /**

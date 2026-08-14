@@ -14,6 +14,7 @@ import { Input } from 'tk/input.js';
 import { Ui } from 'tk/ui.js';
 import { Sound } from 'tk/sound.js';
 import { Telemetry } from 'tk/telemetry.js';
+import { Progress, ACHIEVEMENTS } from 'tk/progress.js';
 import { SWING_STYLES } from 'tk/swingAction.js';
 
 // Точка сборки: сцена, цикл, спавн и всё, что связывает модули между собой.
@@ -62,6 +63,9 @@ export async function start() {
   // Телеметрия локальная: Pages статический, слать события некуда.
   // Дашборд — metrics.html; чужие данные приезжают кодом с паузы.
   const telem = new Telemetry(globalThis.TK_BUILD);
+  // Прогресс: пожизненные счётчики, достижения и замки в меню персонажа.
+  // Смысл бесконечного deathmatch живёт здесь.
+  const prog = new Progress();
   // Browsers keep AudioContext suspended until a user gesture; unlock is
   // idempotent, so it simply rides on every input the page gets anyway.
   addEventListener('pointerdown', () => sound.unlock(), { passive: true });
@@ -101,7 +105,7 @@ export async function start() {
 
   // Экран персонажа. Пока он открыт, отсчёт матча не заканчивается;
   // кнопка FIGHT применяет выбор, прячет экран и начинает бой заново.
-  const setupState = initSetup(player, aim, match, telem);
+  const setupState = initSetup(player, aim, match, telem, prog);
 
   resize();
   addEventListener('resize', resize);
@@ -156,6 +160,7 @@ export async function start() {
     }
     fps = lerp(fps, 1 / Math.max(1e-4, real), 0.08);
     telem.beat(real);
+    prog.beat(real);
 
     arena.tick();
     if (dummies.length !== Math.round(T.dummyCount)) {
@@ -283,10 +288,20 @@ export async function start() {
     if (player.kills > sndKills) {
       sound.kill();
       telem.add('kills', player.kills - sndKills);
+      for (let n = player.kills - sndKills; n > 0; n--) prog.kill(player.hasClub);
     }
     sndKills = player.kills;
-    if (player.deaths > prevDeaths) telem.add('deaths', player.deaths - prevDeaths);
+    if (player.deaths > prevDeaths) {
+      telem.add('deaths', player.deaths - prevDeaths);
+      prog.death();
+    }
     prevDeaths = player.deaths;
+    // Достижения проверяются каждый кадр (их семь, это дёшево); свежие
+    // объявляются тостом, и меню — если открыто — тут же перерисовывает замки.
+    for (const a of prog.check()) {
+      toast(`Achievement: ${a.name}${a.reward ? ' — ' + a.reward.label + ' unlocked' : ''}`);
+      setupState.refresh?.();
+    }
     // Хвост накопителя не копится бесконечно: после долгого залипания вкладки
     // иначе прилетает пачка шагов и всё разлетается.
     if (accumulator > STEP * MAX_STEPS) accumulator = 0;
@@ -317,9 +332,23 @@ export async function start() {
   requestAnimationFrame(frame);
 
   // Пригодится из консоли браузера и из автотеста.
-  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, sound, telemetry: telem, tuning: T };
+  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, sound, telemetry: telem, progress: prog, tuning: T };
   globalThis.TopKong = api;
   return api;
+}
+
+// ---------------------------------------------------------------------- тост
+
+let _toastTimer = 0;
+
+/** Плашка на пару секунд: достижения объявляют себя сами. */
+function toast(text) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('on'), 4200);
 }
 
 // ------------------------------------------------------------- экран персонажа
@@ -331,7 +360,7 @@ export async function start() {
  * is the game itself, not a mockup. FIGHT hides the card and restarts
  * the match countdown. Choices persist in localStorage.
  */
-function initSetup(player, aim, match, telem) {
+function initSetup(player, aim, match, telem, prog) {
   const root = document.getElementById('setup');
   const state = { done: !root };
   if (!root) return state;
@@ -342,43 +371,131 @@ function initSetup(player, aim, match, telem) {
   const nameEl = document.getElementById('setupName');
   nameEl.value = typeof saved.name === 'string' ? saved.name : '';
 
-  // Палитра общая с базой ботов по духу — приглушённая пастель — но своя:
-  // цвет игрока не обязан быть уникальным, совпадение с ботом не ломает
-  // ничего, а свобода выбора дороже.
-  const COLORS = [0xff8a5c, 0xe4533f, 0xdcb64a, 0x4fbf8b,
-                  0x4bc4c4, 0x5b8def, 0x8b7ee0, 0xc46fb0];
-  let color = COLORS.includes(saved.color) ? saved.color : COLORS[0];
-  let weapon = saved.weapon === 'fists' ? 'fists' : 'club';
+  // Палитра общая с базой ботов по духу — приглушённая пастель — но своя.
+  // Дальше идут НАГРАДНЫЕ цвета из достижений: закрытый показывается
+  // с замком, скрытый — тёмным «?», и что за ним, меню не говорит.
+  const FREE_COLORS = [0xff8a5c, 0xe4533f, 0xdcb64a, 0x4fbf8b,
+                       0x4bc4c4, 0x5b8def, 0x8b7ee0, 0xc46fb0];
+  const rewardOf = (kind) => ACHIEVEMENTS.filter((a) => a.reward && a.reward[kind]);
+
+  const WEAPONS = [
+    { id: 'club',   label: 'Club',  skin: 'classic' },
+    { id: 'fists',  label: 'Fists', skin: 'classic' },
+    ...rewardOf('club').map((a) => ({
+      id: a.reward.club, label: a.reward.label, skin: a.reward.club, ach: a,
+    })),
+  ];
+
+  const colorOk = (c) => FREE_COLORS.includes(c) || prog.colorUnlocked(c);
+  const weaponOk = (w) => {
+    const def = WEAPONS.find((x) => x.id === w);
+    return !!def && (!def.ach || prog.has(def.ach.id));
+  };
+
+  let color = colorOk(saved.color) && (FREE_COLORS.includes(saved.color)
+    || rewardOf('color').some((a) => a.reward.color === saved.color))
+    ? saved.color : FREE_COLORS[0];
+  let weapon = weaponOk(saved.weapon) ? saved.weapon : 'club';
 
   const applyColor = (c) => {
     color = c;
     player.setColor(c);
     aim.setColor(c);
-    for (const b of colorBtns) {
+    for (const b of document.querySelectorAll('#setupColors button')) {
       b.classList.toggle('sel', +b.dataset.c === c);
     }
   };
   const applyWeapon = (w) => {
     weapon = w;
-    player.armed = w === 'club';
-    for (const b of weaponBtns) b.classList.toggle('sel', b.dataset.w === w);
+    const def = WEAPONS.find((x) => x.id === w) || WEAPONS[0];
+    player.armed = w !== 'fists';
+    player.setClubSkin(def.skin);
+    for (const b of document.querySelectorAll('#setupWeapon button')) {
+      b.classList.toggle('sel', b.dataset.w === w);
+    }
   };
 
-  const colorsEl = document.getElementById('setupColors');
-  const colorBtns = COLORS.map((c) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.dataset.c = c;
-    b.style.background = '#' + c.toString(16).padStart(6, '0');
-    b.addEventListener('click', () => applyColor(c));
-    colorsEl.appendChild(b);
-    return b;
-  });
+  // Пикеры перерисовываемые: достижение может открыться прямо во время
+  // пробы в меню, и замок обязан отпереться на глазах.
+  const buildPickers = () => {
+    const colorsEl = document.getElementById('setupColors');
+    colorsEl.innerHTML = '';
+    const addSwatch = (c, ach) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.c = c;
+      const open = !ach || prog.has(ach.id);
+      if (open) {
+        b.style.background = '#' + c.toString(16).padStart(6, '0');
+        b.addEventListener('click', () => applyColor(c));
+        if (ach) b.title = ach.reward.label;
+      } else if (ach.hidden) {
+        // Супер-редкое даже не показывается: тёмный «?», и всё.
+        b.className = 'mystery';
+        b.textContent = '?';
+        b.title = '???';
+        b.disabled = true;
+      } else {
+        b.className = 'lock';
+        b.style.background = '#' + c.toString(16).padStart(6, '0');
+        b.textContent = '🔒';
+        b.title = `${ach.reward.label} — ${ach.desc}`;
+        b.disabled = true;
+      }
+      colorsEl.appendChild(b);
+    };
+    for (const c of FREE_COLORS) addSwatch(c, null);
+    for (const a of rewardOf('color')) addSwatch(a.reward.color, a);
 
-  const weaponBtns = [...document.querySelectorAll('#setupWeapon button')];
-  for (const b of weaponBtns) {
-    b.addEventListener('click', () => applyWeapon(b.dataset.w));
-  }
+    const weaponEl = document.getElementById('setupWeapon');
+    weaponEl.innerHTML = '';
+    for (const def of WEAPONS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.w = def.id;
+      const open = !def.ach || prog.has(def.ach.id);
+      if (open) {
+        b.textContent = def.label;
+        b.addEventListener('click', () => applyWeapon(def.id));
+      } else if (def.ach.hidden) {
+        b.textContent = '?';
+        b.title = '???';
+        b.disabled = true;
+      } else {
+        b.textContent = '🔒 ' + def.label;
+        b.title = def.ach.desc;
+        b.disabled = true;
+      }
+      weaponEl.appendChild(b);
+    }
+
+    // Прогресс: открытые с галкой, видимые — с числами, скрытые — «???».
+    const progEl = document.getElementById('setupProg');
+    progEl.innerHTML = '';
+    for (const a of ACHIEVEMENTS) {
+      const row = document.createElement('div');
+      const got = prog.has(a.id);
+      if (got) {
+        row.className = 'got';
+        row.textContent = `✓ ${a.name}${a.reward ? ' — ' + a.reward.label : ''}`;
+      } else if (a.hidden) {
+        row.className = 'hid';
+        row.textContent = '??? — hidden';
+      } else {
+        const cur = Math.min(a.need, Math.floor(a.of(prog.p)));
+        const show = a.time
+          ? `${Math.floor(cur / 60)}/${Math.floor(a.need / 60)}m`
+          : `${cur}/${a.need}`;
+        row.textContent = `${a.name} · ${a.desc} · ${show}`;
+      }
+      progEl.appendChild(row);
+    }
+
+    applyColor(color);
+    applyWeapon(weapon);
+  };
+  buildPickers();
+  state.refresh = buildPickers;
 
   // Телосложение меняет длины связей и панели — страница перезагружается
   // (так устроен выбор тела и в панели настроек). Выбор экрана переживает
