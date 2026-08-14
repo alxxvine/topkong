@@ -509,12 +509,12 @@ export const tuning = {
   // name and falls back to the style's own fields — the punch styles
   // keep their constants). These are dev knobs: once the tempo feels
   // right the winning numbers get baked in as the defaults.
-  sideWind: 1,
-  sideTime: 1,
-  overheadWind: 4.2,
-  overheadTime: 0.9,
-  risingWind: 4.6,
-  risingTime: 0.9,
+  sideWind: 1.8,
+  sideTime: 0.85,
+  overheadWind: 5.5,
+  overheadTime: 0.8,
+  risingWind: 5.5,
+  risingTime: 0.8,
   // The fists are their own weapon with their own tempo.
   jabWind: 0.7,
   jabTime: 0.55,

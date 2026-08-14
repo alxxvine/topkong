@@ -918,6 +918,8 @@
   body.insetup #hint, body.insetup #stam, body.insetup #hud,
   body.insetup #tune, body.insetup #quick, body.insetup #pause,
   body.insetup #score, body.insetup #feed { display: none; }
+  /* On a phone the touch cluster used to bleed through the menu buttons. */
+  body.insetup #touch { display: none !important; }
 
   /* Тост достижения: сверху по центру, поверх всего, кликов не ловит. */
   #toast {
@@ -1120,33 +1122,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "191";</script>
+<script>window.TK_BUILD = "192";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=191",
-    "tk/main.js":         "./src/main.js?v=191",
-    "tk/tuning.js":       "./src/tuning.js?v=191",
-    "tk/mathx.js":        "./src/mathx.js?v=191",
-    "tk/arena.js":        "./src/arena.js?v=191",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=191",
-    "tk/balance.js":      "./src/balance.js?v=191",
-    "tk/skeleton.js":     "./src/skeleton.js?v=191",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=191",
-    "tk/gait.js":         "./src/gait.js?v=191",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=191",
-    "tk/swingAction.js":  "./src/swingAction.js?v=191",
-    "tk/locomotion.js":   "./src/locomotion.js?v=191",
-    "tk/body.js":         "./src/body.js?v=191",
-    "tk/bot.js":          "./src/bot.js?v=191",
-    "tk/contact.js":      "./src/contact.js?v=191",
-    "tk/match.js":        "./src/match.js?v=191",
-    "tk/fighter.js":      "./src/fighter.js?v=191",
-    "tk/input.js":        "./src/input.js?v=191",
-    "tk/ui.js":           "./src/ui.js?v=191",
-    "tk/sound.js":        "./src/sound.js?v=191",
-    "tk/telemetry.js":    "./src/telemetry.js?v=191",
-    "tk/progress.js":     "./src/progress.js?v=191"
+    "three":              "./vendor/three.module.js?v=192",
+    "tk/main.js":         "./src/main.js?v=192",
+    "tk/tuning.js":       "./src/tuning.js?v=192",
+    "tk/mathx.js":        "./src/mathx.js?v=192",
+    "tk/arena.js":        "./src/arena.js?v=192",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=192",
+    "tk/balance.js":      "./src/balance.js?v=192",
+    "tk/skeleton.js":     "./src/skeleton.js?v=192",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=192",
+    "tk/gait.js":         "./src/gait.js?v=192",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=192",
+    "tk/swingAction.js":  "./src/swingAction.js?v=192",
+    "tk/locomotion.js":   "./src/locomotion.js?v=192",
+    "tk/body.js":         "./src/body.js?v=192",
+    "tk/bot.js":          "./src/bot.js?v=192",
+    "tk/contact.js":      "./src/contact.js?v=192",
+    "tk/match.js":        "./src/match.js?v=192",
+    "tk/fighter.js":      "./src/fighter.js?v=192",
+    "tk/input.js":        "./src/input.js?v=192",
+    "tk/ui.js":           "./src/ui.js?v=192",
+    "tk/sound.js":        "./src/sound.js?v=192",
+    "tk/telemetry.js":    "./src/telemetry.js?v=192",
+    "tk/progress.js":     "./src/progress.js?v=192"
   }
 }
 </script>

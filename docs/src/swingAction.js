@@ -47,16 +47,18 @@ export const SwingState = {
 // of a raise, then a strike in slow motion.
 export const SWING_STYLES = [
   { name: 'side',     aFrom: [1, 25], aTo: [-1, 0],  wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
-  { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 0.9, wind: 4.2 },
+  { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 0.8, wind: 5.5, windMin: 0.24 },
   // The rising scoop winds BACK-AND-DOWN past the hip — an underhand
   // throw, not a raise — and rips forward-up in one diagonal sweep,
-  // finishing tip-up in front of the face. Two earlier cuts both failed:
-  // a wide horizontal arc read as a tilted side swing, and a windup IN
-  // FRONT of the body read as a lift before the lifting hit — the strike
-  // stuttered upward twice. The vertical travel dominates the arc
-  // (0.85 of height against ~55° of turn), which is what keeps it a
-  // scoop and not a side hit.
-  { name: 'rising',   aFrom: [0.55, 5], aTo: [0, -10], wH: -0.3, wP: 70, hF: -0.3, hT: 0.55, pF: 65, pT: -60, up: 3.2, pow: 1.15, time: 0.9, wind: 4.6 },
+  // finishing tip-up in front of the face. Its chamber sits close to the
+  // carry pose, so the pull used to finish in a flicker and the strike
+  // read as having no windup at all: `windMin` (seconds) is the floor
+  // under the pull, the guaranteed visible "hand draws back" beat. The
+  // chamber also dips DEEPER than the carry (hF below carryDrop) so the
+  // draw-back is a real motion, not a timer.
+  // (A wider back-arc chamber was tried and missed: by the time the club
+  // crossed the front it was already above head height.)
+  { name: 'rising',   aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55, pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.8, wind: 5.5, windMin: 0.3 },
 ];
 
 // The bare-knuckle set — same machine, same slots (LMB 0, wheel up 1,
@@ -219,8 +221,11 @@ export class SwingAction {
           const gapP = Math.abs(this.pitch - st.pF) / 320;
           // The style's `wind` stretches the pull: on a heavy vertical
           // strike the raise must READ as a windup, not flicker past.
-          this.pullTime = Math.min(0.35, Math.max(gapA, gapH, gapP))
-            * T.swingStrikeTime * styleWind(st);
+          // `windMin` is a floor in seconds — some chambers sit so close
+          // to the carry pose that the gap-derived pull was one frame.
+          this.pullTime = Math.max(st.windMin || 0,
+            Math.min(0.35, Math.max(gapA, gapH, gapP))
+              * T.swingStrikeTime * styleWind(st));
           this.state = SwingState.Strike;
           this.timer = 0;
           this.power = lerp(T.swingWeakestPower, 1, this.charge);
