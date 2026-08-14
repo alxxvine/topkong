@@ -16,164 +16,71 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // Последнее пришлось делать руками: вставание и удар хранятся временем,
 // то есть ползунок «скорость», сползающий влево при ускорении, читался бы
 // сломанным. Поэтому у каждой строки своё чтение и своя запись.
+// Presets. The tuning stage is over for the player-facing panel: instead
+// of two dozen sliders there are five flavors per system, tap and feel.
+// Each preset is a complete bundle — applying one overwrites every knob
+// it owns, so presets never half-mix. The raw sliders live on in the big
+// Settings panel for surgery; the winners get baked in as defaults.
+const PRESETS = {
+  Movement: [
+    { name: 'Drunk', hint: 'slow, swaying, lazy dash',
+      set: { maxRunSpeed: 1.0, strafeSpeed: 0.45, backSpeed: 0.5, turnSpeed: 160,
+             dashPower: 1.4, dashCooldown: 1.1, leanAmount: 1.3, drunk: 0.25 } },
+    { name: 'Classic', hint: 'the build you know',
+      set: { maxRunSpeed: 1.3, strafeSpeed: 0.5, backSpeed: 0.55, turnSpeed: 220,
+             dashPower: 1.9, dashCooldown: 0.9, leanAmount: 1.0, drunk: 0 } },
+    { name: 'Brisk', hint: 'a step quicker everywhere',
+      set: { maxRunSpeed: 1.6, strafeSpeed: 0.55, backSpeed: 0.6, turnSpeed: 280,
+             dashPower: 2.2, dashCooldown: 0.8, leanAmount: 1.1, drunk: 0 } },
+    { name: 'Nimble', hint: 'fast feet, sharp turns',
+      set: { maxRunSpeed: 1.9, strafeSpeed: 0.65, backSpeed: 0.7, turnSpeed: 340,
+             dashPower: 2.6, dashCooldown: 0.7, leanAmount: 1.2, drunk: 0 } },
+    { name: 'Turbo', hint: 'arcade speed',
+      set: { maxRunSpeed: 2.3, strafeSpeed: 0.7, backSpeed: 0.75, turnSpeed: 420,
+             dashPower: 3.2, dashCooldown: 0.6, leanAmount: 1.3, drunk: 0 } },
+  ],
+  Strike: [
+    { name: 'Heavy', hint: 'long raise, weighty blow',
+      set: { swingSpeed: 0.85, swingChargeTime: 0.6, swingRecoverTime: 0.22, swingCooldown: 0.18,
+             sideWind: 1.4, sideTime: 1.15, overheadWind: 5.5, overheadTime: 1,
+             risingWind: 5.5, risingTime: 1 } },
+    { name: 'Classic', hint: 'the build you know',
+      set: { swingSpeed: 1, swingChargeTime: 0.5, swingRecoverTime: 0.16, swingCooldown: 0.12,
+             sideWind: 1, sideTime: 1, overheadWind: 4.2, overheadTime: 0.9,
+             risingWind: 4.6, risingTime: 0.9 } },
+    { name: 'Snappy', hint: 'shorter raise, quicker blow',
+      set: { swingSpeed: 1.15, swingChargeTime: 0.42, swingRecoverTime: 0.13, swingCooldown: 0.1,
+             sideWind: 0.8, sideTime: 0.85, overheadWind: 3.2, overheadTime: 0.8,
+             risingWind: 3.4, risingTime: 0.8 } },
+    { name: 'Frenzy', hint: 'everything fast, little telegraph',
+      set: { swingSpeed: 1.3, swingChargeTime: 0.35, swingRecoverTime: 0.1, swingCooldown: 0.07,
+             sideWind: 0.6, sideTime: 0.7, overheadWind: 2.2, overheadTime: 0.7,
+             risingWind: 2.4, risingTime: 0.7 } },
+    { name: 'Telegraph', hint: 'huge windups, fast punishes',
+      set: { swingSpeed: 1, swingChargeTime: 0.55, swingRecoverTime: 0.18, swingCooldown: 0.14,
+             sideWind: 2.5, sideTime: 0.8, overheadWind: 6.5, overheadTime: 0.8,
+             risingWind: 6.5, risingTime: 0.8 } },
+  ],
+  Stamina: [
+    { name: 'Off', hint: 'infinite everything',
+      set: { staminaOn: false } },
+    { name: 'Light', hint: 'barely noticeable',
+      set: { staminaOn: true, staminaRegen: 0.7, staminaClubCost: 0.22,
+             staminaPunchCost: 0.08, staminaDashCost: 0.3, staminaBlockDrain: 0.15 } },
+    { name: 'Classic', hint: 'the build you know',
+      set: { staminaOn: true, staminaRegen: 0.45, staminaClubCost: 0.32,
+             staminaPunchCost: 0.11, staminaDashCost: 0.42, staminaBlockDrain: 0.22 } },
+    { name: 'Strict', hint: 'every swing counts',
+      set: { staminaOn: true, staminaRegen: 0.35, staminaClubCost: 0.42,
+             staminaPunchCost: 0.15, staminaDashCost: 0.55, staminaBlockDrain: 0.3 } },
+    { name: 'Hardcore', hint: 'two swings and a nap',
+      set: { staminaOn: true, staminaRegen: 0.25, staminaClubCost: 0.5,
+             staminaPunchCost: 0.18, staminaDashCost: 0.7, staminaBlockDrain: 0.4 } },
+  ],
+};
+
 const QUICK = [
-  {
-    group: 'Movement',
-    label: 'Walk',
-    min: 0.3, max: 3.5, step: 0.05, unit: ' m/s',
-    get: () => T.maxRunSpeed,
-    set: (v) => { T.maxRunSpeed = v; },
-  },
-  {
-    // Ход вбок и назад — ДОЛЯ от ходьбы, и ползунок выше её уже
-    // масштабирует: замерено, при потолке 0.9 выходит 0.87 вперёд,
-    // 0.48 назад и 0.45 вбок, при 2.4 — 2.32 / 1.27 / 1.18. Но доли эти
-    // зажаты в половину, и потому кажется, что потолок на них не влияет.
-    // Здесь они правятся напрямую. Назад чуть свободнее вбок, как и было.
-    label: 'Strafe & back',
-    min: 0.15, max: 1, step: 0.05, unit: '×',
-    get: () => T.strafeSpeed,
-    set: (v) => { T.strafeSpeed = v; T.backSpeed = Math.min(1, v * 1.1); },
-  },
-  {
-    label: 'Turn',
-    min: 60, max: 700, step: 10, unit: '°/s',
-    get: () => T.turnSpeed,
-    set: (v) => { T.turnSpeed = v; },
-  },
-  {
-    // Рывок мягкий по замыслу: прибавка к скорости, не телепорт.
-    label: 'Dash',
-    min: 0, max: 6, step: 0.1, unit: ' m/s',
-    get: () => T.dashPower,
-    set: (v) => { T.dashPower = v; },
-  },
-  {
-    label: 'Get up',
-    min: 0.3, max: 6, step: 0.1, unit: '×',
-    // Хранится время подъёма, показывается скорость.
-    get: () => 1 / Math.max(0.05, T.standUpTime),
-    set: (v) => { T.standUpTime = 1 / Math.max(0.05, v); },
-  },
-  {
-    // Наклон в сторону хода. Он и делает походку походкой: без него
-    // боец едет стоймя, и это читается роботом, сколько ни качай его
-    // случайным шумом.
-    label: 'Lean',
-    min: 0, max: 3, step: 0.05, unit: '×',
-    get: () => T.leanAmount,
-    set: (v) => { T.leanAmount = v; },
-  },
-  {
-    label: 'Wobble',
-    min: 0, max: 1, step: 0.02, unit: '',
-    get: () => T.drunk,
-    set: (v) => { T.drunk = v; },
-  },
-  {
-    group: 'Strike',
-    label: 'Swing',
-    min: 0.3, max: 3, step: 0.05, unit: '×',
-    get: () => T.swingSpeed,
-    set: (v) => { T.swingSpeed = v; },
-  },
-  {
-    label: 'Swing return',
-    min: 1, max: 12, step: 0.2, unit: '×',
-    get: () => 1 / Math.max(0.02, T.swingRecoverTime),
-    set: (v) => { T.swingRecoverTime = 1 / Math.max(0.02, v); },
-  },
-  {
-    // Темп, а не откат: ползунок обязан ехать вправо = быстрее, как все
-    // остальные. Чтобы удары нельзя было спамить, эту ручку тянут ВЛЕВО.
-    label: 'Swing rate',
-    min: 0.5, max: 14, step: 0.2, unit: '/s',
-    get: () => 1 / Math.max(0.02, T.swingCooldown),
-    set: (v) => { T.swingCooldown = 1 / Math.max(0.02, v); },
-  },
-  // Per-strike pacing. `windup` is how much the pull-in stretches (right
-  // = longer, more readable raise); `blow` is the speed of the strike
-  // itself (right = faster, matching every other slider). These are dev
-  // knobs for dialing the tempo per style — the winners get baked in as
-  // defaults later.
-  {
-    label: 'Side windup',
-    min: 0.2, max: 8, step: 0.1, unit: '×',
-    get: () => T.sideWind,
-    set: (v) => { T.sideWind = v; },
-  },
-  {
-    label: 'Side blow',
-    min: 0.4, max: 2.5, step: 0.05, unit: '×',
-    get: () => 1 / Math.max(0.1, T.sideTime),
-    set: (v) => { T.sideTime = 1 / Math.max(0.1, v); },
-  },
-  {
-    label: 'Overhead windup',
-    min: 0.2, max: 8, step: 0.1, unit: '×',
-    get: () => T.overheadWind,
-    set: (v) => { T.overheadWind = v; },
-  },
-  {
-    label: 'Overhead blow',
-    min: 0.4, max: 2.5, step: 0.05, unit: '×',
-    get: () => 1 / Math.max(0.1, T.overheadTime),
-    set: (v) => { T.overheadTime = 1 / Math.max(0.1, v); },
-  },
-  {
-    label: 'Rising windup',
-    min: 0.2, max: 8, step: 0.1, unit: '×',
-    get: () => T.risingWind,
-    set: (v) => { T.risingWind = v; },
-  },
-  {
-    label: 'Rising blow',
-    min: 0.4, max: 2.5, step: 0.05, unit: '×',
-    get: () => 1 / Math.max(0.1, T.risingTime),
-    set: (v) => { T.risingTime = 1 / Math.max(0.1, v); },
-  },
-  // The fists' pacing knobs live in the big Settings panel only: the
-  // player always swings the club now, and the quick panel shows what
-  // the demo actually uses. (Unarmed roster bots still punch — their
-  // tempo is tunable from Settings → Swing.)
-  // Stamina: the price list of the aggressive verbs.
-  {
-    group: 'Stamina',
-    label: 'Stamina',
-    bool: true,
-    get: () => !!T.staminaOn,
-    set: (v) => { T.staminaOn = v; },
-  },
-  {
-    label: 'Regen',
-    min: 0.05, max: 2, step: 0.05, unit: '/s',
-    get: () => T.staminaRegen,
-    set: (v) => { T.staminaRegen = v; },
-  },
-  {
-    label: 'Club hit cost',
-    min: 0, max: 1, step: 0.02,
-    get: () => T.staminaClubCost,
-    set: (v) => { T.staminaClubCost = v; },
-  },
-  {
-    label: 'Punch cost',
-    min: 0, max: 0.6, step: 0.01,
-    get: () => T.staminaPunchCost,
-    set: (v) => { T.staminaPunchCost = v; },
-  },
-  {
-    label: 'Dash cost',
-    min: 0, max: 1, step: 0.02,
-    get: () => T.staminaDashCost,
-    set: (v) => { T.staminaDashCost = v; },
-  },
-  {
-    label: 'Block drain',
-    min: 0, max: 1, step: 0.02, unit: '/s',
-    get: () => T.staminaBlockDrain,
-    set: (v) => { T.staminaBlockDrain = v; },
-  },
+  // The fight-test switches stay raw: they help testing, not tuning.
   {
     // Оружие меняет игру целиком — с ним бой про удар, без него про толчок
     // телом, — и переключать это надо на ходу, а не искать в отладочной
@@ -249,6 +156,45 @@ export class Ui {
     this.quickBody.appendChild(this.quickTabs);
     this.quickSections = new Map();
     this.quickSection = null;
+
+    // The preset tabs come first: five flavors per system, one tap each.
+    for (const [group, list] of Object.entries(PRESETS)) {
+      const section = document.createElement('div');
+      section.className = 'qsec';
+      this.quickBody.appendChild(section);
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.textContent = group;
+      tab.addEventListener('click', () => this.showQuickTab(group));
+      this.quickTabs.appendChild(tab);
+      this.quickSections.set(group, { section, tab });
+
+      let picked = null;
+      try { picked = localStorage.getItem('tk-preset-' + group); } catch { /* private */ }
+      for (const preset of list) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'preset';
+        const nm = document.createElement('b');
+        nm.textContent = preset.name;
+        const hint = document.createElement('small');
+        hint.textContent = preset.hint;
+        b.append(nm, hint);
+        if (preset.name === (picked || 'Classic')) b.classList.add('sel');
+        b.addEventListener('click', () => {
+          for (const [k, v] of Object.entries(preset.set)) T[k] = v;
+          saveTuning();
+          try { localStorage.setItem('tk-preset-' + group, preset.name); } catch { /* private */ }
+          for (const other of section.children) other.classList.remove('sel');
+          b.classList.add('sel');
+          // The big panel's sliders must re-read the values just written.
+          for (const r of this.rows) r.show();
+          this.onTuned?.();
+        });
+        section.appendChild(b);
+      }
+    }
+
     for (const item of QUICK) {
       if (item.group) {
         const section = document.createElement('div');

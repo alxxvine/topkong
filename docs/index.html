@@ -595,6 +595,28 @@
   .qsec { display: none; }
   .qsec.on { display: block; }
 
+  /* Preset pills: a name and a one-line flavor, the picked one filled. */
+  .qsec .preset {
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .qsec .preset b { display: block; font-size: 12.5px; font-weight: 700; }
+  .qsec .preset small { display: block; font-size: 10.5px; color: var(--dim); }
+  .qsec .preset.sel {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .qsec .preset.sel b, .qsec .preset.sel small { color: #fff; }
+
   /* Панель настроек — тоже справа сверху; уступает место быстрой. */
   #tune { top: calc(62px + env(safe-area-inset-top, 0px)); }
 
@@ -1098,33 +1120,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "190";</script>
+<script>window.TK_BUILD = "191";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=190",
-    "tk/main.js":         "./src/main.js?v=190",
-    "tk/tuning.js":       "./src/tuning.js?v=190",
-    "tk/mathx.js":        "./src/mathx.js?v=190",
-    "tk/arena.js":        "./src/arena.js?v=190",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=190",
-    "tk/balance.js":      "./src/balance.js?v=190",
-    "tk/skeleton.js":     "./src/skeleton.js?v=190",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=190",
-    "tk/gait.js":         "./src/gait.js?v=190",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=190",
-    "tk/swingAction.js":  "./src/swingAction.js?v=190",
-    "tk/locomotion.js":   "./src/locomotion.js?v=190",
-    "tk/body.js":         "./src/body.js?v=190",
-    "tk/bot.js":          "./src/bot.js?v=190",
-    "tk/contact.js":      "./src/contact.js?v=190",
-    "tk/match.js":        "./src/match.js?v=190",
-    "tk/fighter.js":      "./src/fighter.js?v=190",
-    "tk/input.js":        "./src/input.js?v=190",
-    "tk/ui.js":           "./src/ui.js?v=190",
-    "tk/sound.js":        "./src/sound.js?v=190",
-    "tk/telemetry.js":    "./src/telemetry.js?v=190",
-    "tk/progress.js":     "./src/progress.js?v=190"
+    "three":              "./vendor/three.module.js?v=191",
+    "tk/main.js":         "./src/main.js?v=191",
+    "tk/tuning.js":       "./src/tuning.js?v=191",
+    "tk/mathx.js":        "./src/mathx.js?v=191",
+    "tk/arena.js":        "./src/arena.js?v=191",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=191",
+    "tk/balance.js":      "./src/balance.js?v=191",
+    "tk/skeleton.js":     "./src/skeleton.js?v=191",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=191",
+    "tk/gait.js":         "./src/gait.js?v=191",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=191",
+    "tk/swingAction.js":  "./src/swingAction.js?v=191",
+    "tk/locomotion.js":   "./src/locomotion.js?v=191",
+    "tk/body.js":         "./src/body.js?v=191",
+    "tk/bot.js":          "./src/bot.js?v=191",
+    "tk/contact.js":      "./src/contact.js?v=191",
+    "tk/match.js":        "./src/match.js?v=191",
+    "tk/fighter.js":      "./src/fighter.js?v=191",
+    "tk/input.js":        "./src/input.js?v=191",
+    "tk/ui.js":           "./src/ui.js?v=191",
+    "tk/sound.js":        "./src/sound.js?v=191",
+    "tk/telemetry.js":    "./src/telemetry.js?v=191",
+    "tk/progress.js":     "./src/progress.js?v=191"
   }
 }
 </script>
