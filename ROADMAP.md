@@ -1,517 +1,557 @@
-# TOPKONG — бой и геймплей
+# TOPKONG — combat and gameplay
 
-## Замысел
+## The vision
 
-TopKong — не очередная физическая пати-игра.
+TopKong is not yet another physics party game.
 
-Цель — бой, в котором дерутся весом тела, инерцией, равновесием и позицией,
-а не полосками здоровья и связками анимаций. Ощущение где-то между:
+The goal is combat fought with body weight, inertia, balance and position —
+not with health bars and animation chains. The feel sits somewhere between:
 
-- **UFC** — тайминг, наказание, цена вложения в удар;
-- **Chivalry** — читаемый ближний бой;
-- **Party Animals** — смешное физическое тело;
-- **Gang Beasts** — ситуации, которые никто не писал.
+- **UFC** — timing, punishment, the price of committing to a strike;
+- **Chivalry** — readable melee;
+- **Party Animals** — a funny physical body;
+- **Gang Beasts** — situations nobody scripted.
 
-При этом мастерства должно быть больше, чем в Party Animals, а порог входа
-остаться низким. Игрок должен чувствовать, что управляет живым тяжёлым
-существом, а не проигрывает анимации.
+There should be more mastery in it than in Party Animals while the entry
+barrier stays low. The player must feel they are steering a living, heavy
+creature — not losing to an animation.
 
-Простое управление. Глубокие физические взаимодействия. Никаких комбо-вводов.
-Глубина берётся из тайминга, позиции и физики.
+Simple controls. Deep physical interactions. No combo inputs. Depth comes
+from timing, position and physics.
 
 ---
 
-## Основа: тело на мышцах
+## The foundation: a body on muscles
 
-Решение принято сознательно и меняет архитектуру: **тело симулируется всегда**,
-активным ragdoll'ом. Ровно это мы уже пробовали в Unity и ушли от этого —
-там управление воевало с физикой. Но причины той неудачи были конкретные
-и здесь не воспроизводятся.
+The decision is deliberate and it shapes the architecture: **the body is
+simulated at all times**, as an active ragdoll. We tried exactly this in
+Unity and walked away — the controls fought the physics there. But that
+failure had specific causes, and they do not reproduce here.
 
-В Unity пружины дрались с `ConfigurableJoint` от PhysX: замкнутая петля
-двуручного хвата, стабильность решателя вне моего контроля, отдельный
-корень-капсула поверх тряпки — две конкурирующие правды об одном теле.
+In Unity the springs fought PhysX's `ConfigurableJoint`: the closed loop of
+a two-handed grip, solver stability outside my control, a separate root
+capsule above the ragdoll — two competing truths about one body.
 
-Здесь солвер свой (`docs/src/ragdoll.js`, Верле со связями по расстоянию),
-хват одноручный, а поза уже считается формулами. Поэтому схема другая:
+Here the solver is ours (Verlet with distance links), the grip is
+one-handed, and the pose is already computed by formulas. So the scheme is
+different:
 
-> **`computePose` перестаёт писать кости и становится ЦЕЛЬЮ. Частицы тянутся
-> к ней «мышцами» — пружинами с настраиваемой силой. Тело физическое всегда;
-> вопрос только в том, насколько сильно мышцы держат позу.**
+> **`computePose` stops writing bones and becomes the TARGET. Particles are
+> pulled toward it by "muscles" — springs of adjustable strength. The body
+> is physical at all times; the only question is how firmly the muscles hold
+> the pose.**
 
-Из одной этой механики вырастает половина роадмапа:
+Half of the roadmap grows out of this single mechanism:
 
-| Механика игры | Чем оказывается в коде |
+| Game mechanic | What it turns out to be in code |
 |---|---|
-| Баланс | общая сила мышц |
-| Реакция по месту попадания | импульс в частицу, мышцы борются локально |
-| Урон по частям тела | сила мышц отдельной конечности |
-| Усталость | скорость восстановления силы мышц |
-| Падение | сила мышц дошла до нуля |
+| Balance | overall muscle strength |
+| Reaction by hit location | impulse into a particle, muscles fight locally |
+| Per-limb damage | that limb's muscle strength |
+| Fatigue | muscle strength recovery rate |
+| Falling | strength that reached zero |
 
-**Что защищает управление.** Корень остаётся авторитетным: ввод мгновенно
-двигает *цель* — куда боец хочет встать и куда смотрит, — а физическое тело
-её догоняет. Это и есть требование «отзывчиво, но не роботно; тело чуть
-отстаёт от направления». Если управление окажется вязким, ручка силы мышц
-доводит его до жёсткого без переписывания.
+**What protects the controls.** The root stays authoritative: input instantly
+moves the *target* — where the fighter wants to stand and where he looks —
+and the physical body catches up. That is the "responsive but not robotic;
+the body slightly lags the direction" requirement. If the controls turn out
+viscous, the muscle-strength knob takes them to rigid without a rewrite.
 
-Побочно исчезает целый класс багов вроде тела, мелькающего в центре арены:
-он существовал только потому, что тело переключалось между двумя
-представлениями. Представление становится одно.
+As a side effect a whole class of bugs disappears — like the body flashing at
+the arena's center: it only existed because the body switched between two
+representations. The representation becomes one.
 
 ---
 
-## Итерации
+## Iterations
 
-Идём строго по одной. Следующая не начинается, пока предыдущая не ощущается
-нормально.
+Strictly one at a time. The next one does not start until the previous one
+feels right.
 
-### И1 — Физическое тело
+### I1 — The physical body
 
-Чтобы было интересно ещё до того, как появился бой.
+So that it is interesting before there is any combat.
 
-- Верле-тело симулируется всегда; деление на «под управлением» и «тряпка»
-  исчезает.
-- `poseDriver` выдаёт целевую позу вместо того, чтобы писать кости.
-  Желейные пружины удаляются — мышцы делают то же самое, но честно.
-- Мышцы: пружина на частицу к её цели, сила своя у каждого сустава.
-- Ввод ведёт цель таза и цель разворота, тело догоняет.
-- Инерция разворота: сейчас это плоские 420°/с без разгона.
-- Дубина становится настоящей массой в цепи и сама тянет корпус.
-- Стопы: постоянный контакт с настилом и трение.
+- The Verlet body is simulated at all times; the "controlled" vs "ragdoll"
+  split disappears.
+- `poseDriver` outputs the target pose instead of writing bones. The jelly
+  springs are removed — the muscles do the same thing, honestly.
+- Muscles: a spring per particle toward its target, per-joint strength.
+- Input drives the pelvis target and the facing target; the body catches up.
+- Turn inertia: currently a flat 420°/s with no ramp-up.
+- The club becomes real mass in the chain and visibly drags the torso.
+- Feet: constant deck contact and friction.
 
-**Готово, когда** бег не выглядит анимацией, тело отстаёт от направления,
-разворот имеет разгон, тяжёлое оружие видно тянет корпус — и управление
-при этом не стало вязким.
+**Done when** running stops looking like an animation, the body lags the
+direction, the turn has a ramp-up, the heavy weapon visibly drags the torso —
+and the controls have not turned viscous.
 
-#### И1 доделывается на чистом теле, без оружия
+#### I1 is finished on a clean body, without the weapon
 
-Первый прогон показал деревянное тело, и разбор нашёл причины, которых
-в исходном списке не было вовсе:
+The first playthrough showed a wooden body, and the investigation found
+causes that were not on the original list at all:
 
-- Плечи и голова **не разворачивались вместе с телом при отрисовке**. Поворот
-  кости брался из `aim(голова − грудь)`, то есть из почти вертикального
-  вектора, и разворот вокруг него оставался никаким. Замерено: расхождение
-  морды с направлением бойца равнялось углу его разворота один в один, до 180°.
-- **Скрута корпуса не существовало** как степени свободы: все частицы
-  разворачивались на один угол, а цели плеч и тазобедренных суставов были
-  константами.
-- **Жёсткость мышцы отвечала сразу за две вещи** — за желейность и за рост
-  бойца. Мягкая пружина уравновешивает вес ниже цели, и тело вместе
-  с мягкостью получало сутулость.
-- **Поза стойки была «руки по швам»** — человек в очереди, а не боец.
+- Shoulders and head **did not turn with the body in rendering**. Bone
+  rotation came from `aim(head − chest)` — a nearly vertical vector — so
+  rotation around it stayed undefined. Measured: the face's divergence from
+  the fighter's heading equaled his turn angle one-to-one, up to 180°.
+- **Torso twist did not exist** as a degree of freedom: all particles turned
+  by one angle, and the shoulder and hip targets were constants.
+- **One muscle stiffness answered for two things** — jelly and the fighter's
+  height. A soft spring settles below its target under weight, so softness
+  came bundled with a slouch.
+- **The guard stance was "arms at the seams"** — a man in a queue, not
+  a fighter.
 
-Вторым прогоном добавилось главное: **стопы не стояли на земле**. Их цель
-считалась в системе таза, значит опоры не существовало и походка была
-скольжением с наложенным сверху циклом шага. Это переписано целиком
-(`docs/src/gait.js`), проскальзывание с 87% упало до 17%.
+The second playthrough added the main one: **the feet did not stand on the
+ground.** Their target was computed in the pelvis frame, so support did not
+exist and the gait was sliding with a step cycle painted on. That was
+rewritten whole (`docs/src/gait.js`); slippage fell from 87% to 17%.
 
-Поэтому дубина снята переключателем `withClub`, и походка, развороты
-и желейность настраиваются на чистом теле. Девять килограммов на правой
-кисти перекашивают ровно то, что мы пытаемся оценить. Оружие возвращается
-одной галкой — ни поза, ни скелет от этого не пересобираются, — и тогда же
-доделывается пункт «дубина видно тянет корпус».
+That is why the club is removed with the `withClub` toggle, and the gait,
+turns and jelly are tuned on a clean body. Nine kilograms on the right wrist
+skew exactly what we are trying to judge. The weapon returns with one
+checkbox — neither the pose nor the skeleton get rebuilt — and that is when
+"the club visibly drags the torso" gets finished.
 
-#### Четыре итерации физики тела
+#### Four iterations of body physics
 
-Тело переписывалось четырежды, и каждая версия осталась в истории — их можно
-достать и сравнить, а не только вспоминать.
+The body was rewritten four times, and every version stayed in history —
+they can be pulled out and compared, not just remembered.
 
-| | что это | где взять |
+| | what it is | where to get it |
 |---|---|---|
-| **1. Кинематическое** | поза пишет кости напрямую, ragdoll включается только после удара | коммит `401d802` |
-| **2. Мышцы** | поза стала целью, частицы тянутся к ней пружинами; из этой механики растут баланс, урон по частям тела и усталость | коммит `00a6c7e` |
-| **3. Панели на верёвках** | корпус держится крепко, локти и кисти почти отпущены; связи нерастяжимые. Конечности двухзвенные, с IK | `bodyMode: 3`, коммит `5043394` |
-| **4. Цельные кости** | текущая. Рука и нога — по одной детали, как на выкройке. Гнуться им негде, и из этого одного вырастает вся походка | ветка `claude/solid-limbs` |
+| **1. Kinematic** | the pose writes bones directly, the ragdoll engages only after a hit | commit `401d802` |
+| **2. Muscles** | the pose became a target, particles chase it on springs; balance, per-limb damage and fatigue grow from this | commit `00a6c7e` |
+| **3. Panels on strings** | the torso holds firm, elbows and wrists nearly released; links inextensible. Two-segment limbs with IK | `bodyMode: 3`, commit `5043394` |
+| **4. Solid bones** | current. Arm and leg are one part each, as on the pattern sheet. They cannot bend, and the whole gait grows out of that | branch `claude/solid-limbs` |
 
-`bodyMode` в настройках переключает 2 и 3 на ходу; цельные кости живут
-в геометрии и на ходу не переключаются.
+`bodyMode` in the settings switches 2 and 3 live; solid bones live in the
+geometry and do not switch on the fly.
 
-#### Четвёртая итерация: цельная кость
+#### The fourth iteration: the solid bone
 
-Правило одно: **конец кости всегда ровно на её длину от корня.** Не
-«примерно», не «подтянуть к границе досягаемости» — ровно. Всё остальное
-из него выведено.
+One rule: **the end of a bone is always exactly its length from the root.**
+Not "roughly", not "pulled to the edge of reach" — exactly. Everything else
+is derived from it.
 
-Оказалось, что до этого цельной кости в теле не было вовсе. Длины связей
-снимались с опорной стойки, а стойку расставляла двухзвенная IK, и она
-честно сгибала ногу под ту цель, которую ей давали: половинки по 0.360,
-а связь бедро↔стопа 0.672 при выкройке 0.720. Три связи такой длины —
-это не отрезок, а жёсткий треугольник с намертво согнутым на 13 см коленом
-и двумя зеркальными решениями, между которыми он щёлкает.
+It turned out there had been no solid bone in the body at all. Link lengths
+were taken from the reference stance, and the stance was laid out by two-bone
+IK, which dutifully bent the leg toward whatever target it was given: halves
+of 0.360, but a hip↔foot link of 0.672 against the sheet's 0.720. Three
+links of those lengths are not a segment but a rigid triangle with the knee
+locked bent by 13 cm, plus two mirror solutions it clicks between.
 
-**Высоту таза задаёт опорная нога.** Расстояние от бедра до стопы задано
-намертво, значит потребовать от таза произвольной высоты нельзя: решатель
-начнёт каждый кадр выталкивать таз по сфере вокруг прибитой стопы, а у
-выталкивания по сфере есть боковая составляющая, и она копится. Отсюда
-брался самоход. Теперь высота считается из геометрии, и вертикальная
-раскачка ходьбы получается даром — таз поднимается над опорой и проседает
-на разножке.
+**The support leg sets the pelvis height.** The hip-to-foot distance is
+fixed, so an arbitrary pelvis height cannot be demanded: the solver would
+shove the pelvis around the sphere of the nailed foot every frame, spherical
+shoving has a sideways component, and it accumulates. That was where the
+self-propulsion came from. The height is now computed from geometry, and the
+vertical bob of walking comes free — the pelvis rises over the support and
+dips at mid-stride.
 
-**Перекос таза не выбирается, а вычисляется.** Каждая нога требует своей
-высоты бедра, требования разные, а таз один — значит он обязан встать
-накосо, и ровно так, чтобы оба требования выполнились разом. Высота есть
-среднее требований, перекос — их разность. Из этих двух строчек берётся
-и переваливание на опорную ногу: маховой ноге нечем подобраться, и просвет
-над настилом даёт только наклон таза.
+**Pelvis tilt is computed, not chosen.** Each leg demands its own hip height,
+the demands differ, the pelvis is one — so it must stand tilted, exactly so
+both demands hold at once. Height is the mean of the demands, tilt is their
+difference. Those two lines also give the heel-over onto the support leg:
+the swing leg has no way to tuck, and only pelvis tilt gives it clearance.
 
-**Шаг начинается от намерения, а не от отставания опоры.** Пока на настиле
-обе стопы, две жёсткие ноги к двум прибитым точкам не оставляют тазу ни
-одной степени свободы по горизонтали: вбок он проезжает восемь сантиметров
-и упирается намертво. Порог отрыва при этом не наступает никогда, и боец
-застревает на месте, честно пытаясь идти. У человека ровно так же — сперва
-решаешь шагнуть, и только потом падаешь в шаг.
+**A step starts from intent, not from anchor lag.** With both feet planted,
+two rigid legs to two nailed points leave the pelvis zero horizontal freedom:
+it slides eight centimeters sideways and jams. The lift threshold never
+arrives, and the fighter stands stuck, honestly trying to walk. Humans work
+the same way — first you decide to step, and only then you fall into the
+step.
 
-**Мышца маховой ноги — внутренняя.** Мышца тянет частицу к мировой цели,
-то есть сила у неё внешняя, взятая ниоткуда. Пока нога гнулась, эту силу
-съедало колено; цельная нога передаёт её прямо в таз, и боец едет от
-собственного маха. У ноги в воздухе опоры нет и толкаться ей не от чего,
-поэтому её импульс возвращается в бедро.
+**The swing leg's muscle is internal.** A muscle pulls a particle toward
+a world target, so its force is external, taken from nowhere. While the leg
+bent, the knee ate that force; a solid leg passes it straight into the
+pelvis, and the fighter rode his own swing. A leg in the air has no support
+and nothing to push from, so its momentum returns into the hip.
 
-Чем это меряется:
+How it is measured:
 
-| | было (сборка 63) | стало |
+| | before (build 63) | after |
 |---|---|---|
-| связь бедро↔стопа | 0.672 при выкройке 0.720 | 0.720 |
-| самоход стоя | 0.14 м за 4 с | 0.01 м |
-| расхождение позы с ногой стоя | 7.7 см | 0.0 см |
-| самоход при ходьбе | 5.7 м за 6 с | нет |
-| подскоки корпуса | до 14 м | 5 см |
-| ход вперёд / назад | — | 1.5 из 1.7 / 0.90 из 0.94 м/с |
+| hip↔foot link | 0.672 against the sheet's 0.720 | 0.720 |
+| standing self-drive | 0.14 m per 4 s | 0.01 m |
+| standing pose-vs-leg mismatch | 7.7 cm | 0.0 cm |
+| walking self-drive | 5.7 m per 6 s | none |
+| body hops | up to 14 m | 5 cm |
+| forward / backward speed | — | 1.5 of 1.7 / 0.90 of 0.94 m/s |
 
-Чего цельная кость стоит: вбок боец не ходит, а переминается — около трети
-метра в секунду вместо заказанных 0.85. Приставным шагом отстающая нога
-обязана подойти под тело, а ближе средней линии ей нельзя, панели войдут
-друг в друга. Коленей нет — это ровно то, чем за них платят.
+What the solid bone costs: the fighter does not walk sideways, he shuffles —
+about a third of a meter per second against the ordered 0.85. In a side-step
+the trailing leg must come under the body, and it may not cross the midline —
+the panels would clip. No knees, and this is exactly their price.
 
-#### Скелет отдельно от тела
+#### The skeleton apart from the body
 
-Тело стало таблицей чисел (`docs/src/skeleton.js`), а всё остальное из неё
-выводится: высоты, массы, радиусы, длины связей, ширина шага, опорная стойка.
-Чтобы наложить новое телосложение, достаточно дописать строчку в `BODIES` —
-если пришлось тронуть что-то ещё, разделение не состоялось.
+The body became a table of numbers (`docs/src/skeleton.js`), and everything
+else derives from it: heights, masses, radii, link lengths, step width, the
+reference stance. To fit a new build it must be enough to add a row to
+`BODIES` — if anything else had to be touched, the separation failed.
 
-Три тела в комплекте не для красоты, а как проверка: они нарочно разные
-по тому, что для походки и равновесия важнее всего — по длине ноги и по тому,
-где центр тяжести.
+The three bundled bodies are not decoration but a test: they differ on
+purpose in what matters most to gait and balance — leg length and where the
+center of mass sits.
 
-| | нога | рука | рост | вес | голова |
+| | leg | arm | height | weight | head |
 |---|---|---|---|---|---|
-| Картонная кукла | 0.72 | 0.54 | 1.81 | 70 кг | 21 кг |
-| Каланча | 1.02 | 0.43 | 1.99 | 45 кг | 9 кг |
-| Коротышка | 0.45 | 0.80 | 1.80 | 109 кг | 38 кг |
+| Cardboard doll | 0.72 | 0.54 | 1.81 | 70 kg | 21 kg |
+| Beanpole | 1.02 | 0.43 | 1.99 | 45 kg | 9 kg |
+| Shorty | 0.45 | 0.80 | 1.80 | 109 kg | 38 kg |
 
-Безразмерными пришлось сделать расстояния походки (в долях длины ноги),
-стойку рук (направление от плеча, а не точка) и массы (по площади панели,
-а не по объёму — панель полая). Общими для всех тел остались сила мышц
-по суставам и доли, в которых масса делится между частицами конечности:
-это роли, а не размеры.
+Gait distances had to become dimensionless (fractions of leg length), the
+arm stance a direction from the shoulder rather than a point, and masses by
+panel area rather than volume — a panel is hollow. What stayed shared across
+bodies is per-joint muscle strength and the fractions splitting a limb's mass
+across its particles: those are roles, not sizes.
 
-#### Равновесие вместо марионетки
+#### Balance instead of a marionette
 
-`docs/src/balance.js`. Считается точка перехвата — куда центр тяжести придёт
-по инерции, — и сравнивается с опорой под ним: отрезком между СТОЯЩИМИ
-стопами. Внутри опоры хватает доводки корпусом, за её краем нужен шаг,
-и шаг именно туда, куда валит. Одной этой парой закрываются толчок в спину,
-остановка с разбега, стойка на краю и покачивание в покое.
+`docs/src/balance.js`. It computes the capture point — where the center of
+mass will coast to by inertia — and compares it with the support beneath:
+the segment between STANDING feet. Inside the support, torso correction is
+enough; past its edge a step is needed, and a step exactly where the fall is
+heading. This one pair covers a shove in the back, stopping from a run,
+standing at the edge and the idle sway.
 
-Ни одна формула не знает размеров тела — все они берутся из скелета,
-поэтому баланс лёг на все три тела без подгонки: стоят неподвижно (уезд
-1–3 см за четыре секунды), ходят все.
+No formula knows the body's dimensions — they all come from the skeleton, so
+balance dropped onto all three bodies without adjustment: all stand still
+(1–3 cm drift over four seconds), all walk.
 
-Что осталось: разворот на месте уводит бойца на 0.6–1.2 м за восемь полных
-оборотов. Это блуждание, а не снос — направление от запуска к запуску разное.
+What remains: turning in place walks the fighter off by 0.6–1.2 m per eight
+full turns. It is wandering, not drift — the direction differs run to run.
 
-#### Колено: одна кость снаружи, две внутри
+#### The knee: one bone outside, two inside
 
-Конечность снова из двух половинок, но выглядит цельной: трапеция разрезана
-посередине и раздвинута на зазор, в просвете видна нить.
+A limb is again two halves but reads as one piece: the trapezoid is cut in
+the middle and spread by a gap, with the thread showing in the slot.
 
-Противоречие между «нога должна стоять как распорка» и «нога должна гнуться
-на ступеньке» разрешает связь-предел: длиннее нельзя, короче сколько угодно.
-Стоя боец распрямлён и нога держит как одна кость (замерено: 0.0 см
-от прямой); стопа выше настила — связь отпускает, колено гнётся (при 20 см
-подъёма до 7.5 см); назад не выгибается никогда.
+The contradiction between "the leg must stand as a strut" and "the leg must
+bend on a step" is resolved by a limit link: longer is forbidden, shorter is
+free. Standing, the fighter is straight and the leg holds as one bone
+(measured: 0.0 cm from straight); the foot above the deck — the link lets
+go, the knee bends (7.5 cm at a 20 cm rise); it never bends backwards.
 
-Настоящих ступенек на арене ещё нет — проверялось поднятием мировой точки
-опоры.
+There are no real steps on the arena yet — tested by raising a world anchor
+point.
 
-#### Плавность
+#### Smoothness
 
-Первый прогон с коленом показал тряску и семенение. Разобрано на числа:
-качание корпуса упало с 20° на 2.5 Гц до 7–10° на 0.7–1.1 Гц, рывок на метр
-скорости со 122 до 41, частота шага с 7.7 до 5–6 при большей скорости,
-отставание рук на развороте с 2.9 до 1.3 см.
+The first run with the knee showed shaking and mincing. Decomposed into
+numbers: torso rocking fell from 20° at 2.5 Hz to 7–10° at 0.7–1.1 Hz, jerk
+per meter of speed from 122 to 41, step rate from 7.7 to 5–6 at higher
+speed, arm lag on turns from 2.9 to 1.3 cm.
 
-Главное из найденного: перекос таза, которым раньше проносили маховую ногу,
-с коленом стал не нужен вовсе; передача опоры между ногами обязана быть
-непрерывной, иначе цель таза скачет и мышца отвечает рывком; семенение
-лечится длиной шага, а не скоростью.
+The main findings: the pelvis tilt that used to carry the swing leg became
+unnecessary with the knee; the support handover between legs must be
+continuous, or the pelvis target jumps and the muscle answers with a jerk;
+mincing is cured by step length, not speed.
 
-Третья итерация — не «мышцы, но жёстче». У неё другой замысел, прямо из того,
-как склеена картонная кукла: **панель не гнётся и не мнётся, гнутся только
-суставы, и держит их верёвка.** Отсюда три следствия, каждое из которых
-пришлось сделать явно:
+The third iteration is not "muscles, but stiffer". It has a different idea,
+straight from how a cardboard doll is glued: **a panel does not bend or
+crumple; only the joints bend, and a string holds them.** Three consequences,
+each of which had to be made explicit:
 
-- **Связи нерастяжимые** (`linkStiffness` игнорируется). Вся податливость
-  тела живёт в углах суставов, а не в длинах панелей.
-- **Дальние концы конечностей почти отпущены** — локоть и кисть висят
-  на верёвке. Именно это и даёт болтанку от ходьбы, разворота и удара.
-- **Руки не пускаются внутрь корпуса** геометрически. Мышца этого удержать
-  не может — её тут почти нет, в том и смысл, — поэтому запрет отдельный:
-  ближе `torsoClearance` к оси таз↔грудь рука не подходит.
+- **Links are inextensible** (`linkStiffness` is ignored). All of the body's
+  give lives in joint angles, not panel lengths.
+- **The far ends of the limbs are nearly released** — elbow and wrist hang
+  on the string. That is exactly what gives the dangle from walking, turning
+  and striking.
+- **Arms are kept out of the torso** geometrically. The muscle cannot hold
+  them out — there is barely any, that is the point — so the ban is
+  separate: an arm does not come closer than `torsoClearance` to the
+  pelvis↔chest axis.
 
-Колену немного силы всё же оставлено: совсем свободное, оно выгибается
-назад, потому что цепь бедро→стопа одинаково хорошо складывается в обе
-стороны.
+The knee keeps a little strength after all: fully free, it bends backwards,
+because the hip→foot chain folds equally well either way.
 
-### И1.5 — Пульт: полный и предсказуемый контроль над телом
+### I1.5 — The console: full, predictable control over the body
 
-Вставлена перед И2 намеренно. Настраивать баланс и удары, не имея власти
-над телом и не видя последствий своих ручек, — значит крутить вслепую.
+Inserted before I2 deliberately. Tuning balance and strikes without power
+over the body and without seeing what the knobs do is turning them blind.
 
-**Цель:** форму и повадку бойца задаёт рука человека, а не правка кода.
-Разные телосложения — большие, малые, коротконогие, длиннорукие — собираются
-ползунками и ведут себя сообразно своей форме.
+**Goal:** the fighter's shape and manner are set by a human hand, not a code
+edit. Different builds — big, small, short-legged, long-armed — are
+assembled with sliders and behave according to their shape.
 
-#### Чего сейчас нельзя, и почему
+#### What is impossible today, and why
 
-Не «не сделано», а устроено иначе — поэтому перечисляю отдельно.
+Not "not done yet" — built differently, hence listed separately.
 
-1. **Поза симметрична по построению.** `guardOut` и `guardForward` одни
-   на обе руки, шаговые пределы одни на обе ноги. Раздельные настройки
-   некуда положить: в формуле позы нет места, где левое отличается
-   от правого.
-2. **Сила мышц по суставам в панель не выведена вовсе.** Она живёт
-   константами в `skeleton.js`, а это ровно та ручка, которой в этой
-   итерации чинилась болтанка конечностей: локтю подняли, колену забыли,
-   и ноги мотало ещё три сборки.
-3. **Вес на осанку не влияет НИКАК.** `muscleLift` компенсирует тяжесть
-   на сто процентов, поэтому тяжёлое тело стоит ровно так же прямо, как
-   лёгкое. Просадки под весом нет как явления — её нельзя настроить,
-   её надо сначала завести.
-4. **Пропорции меняются только правкой кода** — таблицей `BODIES`.
-5. **Ползунков уже девяносто два, и половина взаимодействует.** Эта
-   итерация показала, чем это кончается: длина шага меняет частоту, частота
-   меняет двойную опору, потолок скорости ломает чередование ног — и ничего
-   из этого на ползунке не написано. Ещё сорок ручек без обратной связи
-   дадут меньше предсказуемости, а не больше.
+1. **The pose is symmetric by construction.** `guardOut` and `guardForward`
+   are shared by both arms, step limits by both legs. Separate settings have
+   nowhere to go: the pose formula has no place where left differs from
+   right.
+2. **Per-joint muscle strength is not exposed at all.** It lives as
+   constants in `skeleton.js` — and that is exactly the knob that fixed limb
+   dangle this iteration: the elbow was raised, the knee forgotten, and the
+   legs flailed for three more builds.
+3. **Weight does not affect posture AT ALL.** `muscleLift` compensates
+   gravity one hundred percent, so a heavy body stands exactly as straight
+   as a light one. Sagging under load does not exist as a phenomenon — it
+   cannot be tuned, it must first be introduced.
+4. **Proportions change only by editing code** — the `BODIES` table.
+5. **There are ninety-two sliders already, and half of them interact.** This
+   iteration showed where that leads: step length changes frequency,
+   frequency changes double support, the speed cap breaks leg alternation —
+   and none of it is written on the slider. Forty more knobs without
+   feedback will bring less predictability, not more.
 
-#### Работа
+#### The work
 
-**1. Обратная связь. Делается первой.**
+**1. Feedback. Built first.**
 
-Живой раздел в панели с числами цикла: шагов в секунду, доля двойной опоры,
-доля полёта, чередование ног, качка таза, отставание каждой конечности
-от своей цели, запас устойчивости, вес и просадка. Крутишь ручку — сразу
-видишь, что стало с походкой.
+A live panel section with the cycle's numbers: steps per second, double
+support share, flight share, leg alternation, pelvis bob, each limb's lag
+behind its target, stability margin, weight and sag. Turn a knob — see
+immediately what happened to the gait.
 
-Первой потому, что без неё все остальные пункты — это ручки вслепую.
-Все эти величины уже считаются в замерочных скриптах; работа в том, чтобы
-вывести их в кадр.
+First, because without it every other item is a blind knob. All of these
+quantities are already computed in the measurement scripts; the work is
+bringing them into the frame.
 
-**2. Панель по частям тела.**
+**2. A panel organized by body part.**
 
-Группы: Ходьба · Разворот · Корпус · Голова · Левая рука · Правая рука ·
-Левая нога · Правая нога · Вес · Равновесие. Сворачивание групп, кнопка
-«зеркалить Л↔П», именованные наборы настроек рядом с уже существующим
-«скопировать JSON».
+Groups: Walking · Turning · Torso · Head · Left arm · Right arm · Left leg ·
+Right leg · Weight · Balance. Collapsible groups, a "mirror L↔R" button,
+named setting presets next to the existing "Copy JSON".
 
-**3. Раздельные конечности.**
+**3. Separate limbs.**
 
-Таблица на четыре конечности вместо общих полей. У каждой своя: наклон
-и вынос от сустава, сила мышц по трём суставам, а у ног ещё и шаговые
-пределы. Симметрия становится кнопкой, а не свойством кода.
+A table of four limbs instead of shared fields. Each gets its own: tilt and
+offset from the joint, muscle strength for its three joints, and legs also
+their step limits. Symmetry becomes a button, not a property of the code.
 
-Это самая дорогая часть: `computePose` придётся переписать так, чтобы обе
-руки и обе ноги считались по одной функции с параметром стороны.
+This is the most expensive part: `computePose` will have to be rewritten so
+both arms and both legs run through one function with a side parameter.
 
-**4. Вес и просадка.**
+**4. Weight and sag.**
 
-Параметр «сколько нога держит». Мышца компенсирует тяжесть не полностью,
-а до предела: `muscleLift` перестаёт быть долей и становится
-грузоподъёмностью. Перегруз — таз садится ровно на столько, сколько ноги
-не вытянули.
+A "how much the leg can carry" parameter. The muscle compensates gravity not
+fully but up to a limit: `muscleLift` stops being a fraction and becomes
+load capacity. Overload — the pelvis settles by exactly what the legs could
+not lift.
 
-Отсюда даром получается многое: большая голова даёт сутулость, длинные
-тонкие ноги подгибаются, а «баланс — это сила мышц» из основы роадмапа
-впервые получает физический смысл, потому что упавшая сила означает
-упавшую грузоподъёмность.
+Much comes free from this: a big head gives a slouch, long thin legs buckle,
+and "balance is muscle strength" from the roadmap's foundation gains
+a physical meaning for the first time, because lost strength means lost
+carrying capacity.
 
-**5. Редактор пропорций.**
+**5. A proportions editor.**
 
-Те же клетки выкройки ползунками: голова, грудь, таз, длина и ширина руки
-и ноги, толщина панели, общий масштаб. Пересборка бойца по кнопке —
-менять связи посреди кадра незачем.
+The same pattern-sheet cells as sliders: head, chest, pelvis, arm and leg
+length and width, panel thickness, overall scale. Rebuild by button —
+swapping links mid-frame serves nobody.
 
-#### Готово, когда
+#### Done when
 
-За пять минут ползунками собирается великан с короткими ногами и заморыш
-с длинными руками; оба стоят неподвижно и ходят; и по числам в панели видно,
-чем именно их походки отличаются — не на глаз, а цифрами.
+In five minutes of sliders you can assemble a short-legged giant and
+a long-armed weakling; both stand still and both walk; and the panel's
+numbers show what exactly distinguishes their gaits — in digits, not by eye.
 
-#### Чего в этой итерации не будет
+#### What this iteration will NOT include
 
-**Ручек на то, что выводится из другого.** Длина шага уже задана в долях
-длины ноги — отдельной ручки «шаг в метрах» не появится, иначе они
-разъедутся, и предсказуемость, ради которой всё затевается, пропадёт первой.
-Если какое-то число хочется крутить напрямую, а оно выводится, — это повод
-пересмотреть вывод, а не добавить второй источник правды.
+**Knobs for things derived from other things.** Step length is already
+defined in fractions of leg length — a separate "step in meters" knob will
+not appear, or the two will drift apart and the predictability this is all
+for dies first. If some derived number begs to be turned directly, that is
+a reason to revisit the derivation, not to add a second source of truth.
 
-### И2 — Баланс вместо мгновенной тряпки
+### I2 — Balance instead of an instant ragdoll
 
-Никаких полосок здоровья. Вместо них — равновесие.
+No health bars. Balance instead.
 
-- Баланс 0..1, скрытый: читается по телу, а не по интерфейсу.
-- Тратится на полученные удары, промах тяжёлым, блок тяжёлого, бег,
-  повторные рывки. Медленно восстанавливается при аккуратной игре.
-- Ноль — мышцы выключены, боец падает. Подъём стоит баланса.
-- **Спарринг-партнёр:** бот подходит и бьёт по таймеру. Переиспользует
-  существующие `SwingAction` и `Locomotion`, своей боевой логики пока не имеет.
+- Balance 0..1, hidden: read off the body, not off the UI.
+- Spent on taking hits, missing with a heavy strike, blocking a heavy one,
+  running, repeated dashes. Recovers slowly under careful play.
+- Zero — muscles off, the fighter falls. Getting up costs balance.
+- **A sparring partner:** a bot that approaches and strikes on a timer.
+  Reuses the existing `SwingAction` and `Locomotion`; no combat logic of its
+  own yet.
 
-Бот здесь не для галочки: пока никто не бьёт в ответ, баланс невозможно щупать.
+The bot is not a checkbox item: until somebody hits back, balance cannot be
+felt out.
 
-**Готово, когда** серия слабых ударов расшатывает, но не роняет; один сильный
-роняет; по походке видно, что боец плывёт.
+**Done when** a series of light hits rattles but does not topple; one heavy
+hit topples; and the gait visibly swims.
 
-### И3 — Реакции по месту попадания
+### I3 — Reactions by hit location
 
-Удар действует на ту часть тела, в которую пришёл.
+A strike acts on the body part it landed on.
 
-- Нога — подгибается, тело теряет опору, можно споткнуться.
-- Рука — отбита в сторону, удар сорван.
-- Голова — тело встряхивает, временная неустойчивость.
-- Корпус — отбрасывает назад, баланс проседает.
+- Leg — buckles, the body loses support, tripping is possible.
+- Arm — knocked aside, the strike is broken.
+- Head — the body is shaken, brief instability.
+- Torso — knocked back, balance dips.
 
-Тело никогда не улетает целиком: сила расходится по связям.
+The body never flies off as a whole: force spreads through the links.
 
-**Готово, когда** по одному взгляду понятно, куда пришёлся удар.
+**Done when** one glance tells where the hit landed.
 
-### И4 — Арсенал ударов
+### I4 — The strike arsenal
 
-Ровно пять действий, без комбо-систем.
+Exactly five actions, no combo systems.
 
-| Ввод | Удар |
+| Input | Strike |
 |---|---|
-| ЛКМ | средний: быстрый, безопасный |
-| ЛКМ удержание | тяжёлый: долгий откат, полное вложение |
-| Колесо вниз | нижний, по ногам |
-| Колесо вверх | верхний, по голове |
-| ПКМ | блок |
+| LMB | medium: fast, safe |
+| LMB hold | heavy: long recovery, full commitment |
+| Wheel down | low, at the legs |
+| Wheel up | high, at the head |
+| RMB | block |
 
-**Готово, когда** каждый удар весит по-своему и читается по замаху.
+**Done when** every strike carries its own weight and reads from the
+wind-up.
 
-### И5 — Цена промаха и тайминг
+**Groundwork from the styles (build 173+):** three random manners already
+exist, all from the right side — side, overhead, rising — with the pull-back
+mechanic (an uncharged wind-up finishes inside the strike, so a click swings
+the full arc with no arm teleport) and per-style hit character (the rising
+scoop launches, the overhead slams harder). Shelved ideas to return to here:
 
-- У каждого удара своя категория: тычок (быстрый, слабый, безопасный, хорош
-  для срыва) и вложение (медленный, мощный, опасный при промахе).
-- Промах тяжёлым открывает настоящее окно наказания. Спамить тяжёлым нельзя.
-- Быстрый удар в чужой замах даёт срыв, микростан и потерю баланса. Это не
-  случайный крит — только следствие правильного тайминга.
-- Бот учится и тыкать, и вкладываться.
+- **The combo chain — tried, postponed.** A working
+  "horizontal → backhand → overhead" chain with a 0.75 s window lives in git
+  history (commit `2acfee2`, removed in `1cf3694`): too complex for the
+  current pace. A candidate for heavy weapons (I7), where a slow tempo begs
+  for sequences.
+- **The backhand** exists only as part of a chain — opening with it from the
+  stance reads unnatural (play-tested).
 
-**Готово, когда** попадание в момент чужого замаха ощущается как заслуженное.
+### I5 — The price of a miss, and timing
 
-### И6 — Износ тела вместо здоровья
+- Every strike has a category: the poke (fast, weak, safe, good for
+  interrupting) and the commitment (slow, powerful, dangerous on a miss).
+- A missed heavy opens a real punishment window. Heavy spam must not work.
+- A fast hit into someone's wind-up interrupts, micro-stuns and drains
+  balance. Not a random crit — only a consequence of correct timing.
+- The bot learns both to poke and to commit.
 
-Состояние каждой части тела — это сила её мышц.
+**Done when** landing a hit into someone's wind-up feels earned.
 
-- Нога — медленнее ход и рывки.
-- Рабочая рука — медленнее и слабее удары.
-- Корпус — легче терять баланс.
-- Голова — медленнее восстановление, неустойчивое движение.
+### I6 — Body wear instead of health
 
-Плюс общая усталость: свежий → уставший → вымотанный. Драться можно в любом
-состоянии, просто всё даётся тяжелее. Здоровье не кончается — кончается
-боеспособность.
+The condition of every body part is its muscle strength.
 
-**Готово, когда** к концу боя видно, что боец разбит, без единой цифры.
+- Leg — slower movement and dashes.
+- Working arm — slower and weaker strikes.
+- Torso — balance is easier to lose.
+- Head — slower recovery, unsteady movement.
 
-### И7 — Оружие
+Plus overall fatigue: fresh → tired → exhausted. Fighting is possible in any
+state — everything just costs more. Health never runs out; fighting capacity
+does.
 
-Начинаем с кулаков, оружие лежит на арене. Оружие меняет стиль, а не силу:
+**Done when** by the end of a fight the fighter is visibly wrecked, without
+a single number.
 
-| Оружие | Стиль |
+### I7 — Weapons
+
+Start with fists; weapons lie on the arena. A weapon changes style, not
+power:
+
+| Weapon | Style |
 |---|---|
-| Дубина | сбалансированная |
-| Молот | огромное вложение, чудовищный снос |
-| Топор | быстрее, легче сорвать |
-| Копьё | дистанция, беспомощность вблизи |
+| Club | balanced |
+| Hammer | enormous commitment, monstrous knockback |
+| Axe | faster, easier to interrupt |
+| Spear | range, helplessness up close |
 
-Удар по кисти обезоруживает, оружие физически улетает.
+A hit on the wrist disarms; the weapon physically flies away.
 
-> Старт с кулаков меняет личность персонажа — игра начиналась с «рука-дубина».
-> Подтвердить, когда дойдём.
+> Starting with fists changes the character's identity — the game began with
+> "the arm-club". To be confirmed when we get there.
 
-### И8 — Движение как часть боя
+### I8 — Movement as part of combat
 
-- **Shift** — бег: быстрее, но больше инерции, хуже развороты, больнее промах.
-- **Space** — рывок по направлению ввода (W+Space вперёд, A+Space влево).
-  Тратит выносливость и сажает баланс при спаме.
+- **Shift** — run: faster, but more inertia, worse turns, a costlier miss.
+- **Space** — a dash along the input direction (W+Space forward, A+Space
+  left). Spends stamina and drains balance when spammed.
 
-### И9 — Матч
+### I9 — The match
 
-Несколько ботов, раунды, условие победы, выбывание. Без этого всё предыдущее
-остаётся песочницей.
+Several bots, rounds, a victory condition, elimination. Without it
+everything above stays a sandbox.
 
-### И10 — Камера и звук
+**Done and extended (build 174):** two modes behind one toggle.
 
-- Камера дальше, пока живых много; ближе к финалу; кинематографично в дуэли.
-- Реагирует на тяжёлые попадания, контры, падения, дальние сносы — усиливая
-  удар, но не отвлекая.
-- Звук: удар, шаги, свист проноса, падение. Половина ощущения веса — это он.
-  Можно вытащить раньше, если тяжести не хватит уже на И1.
+- **Rounds** — the classic last-one-standing, a win/loss score.
+- **Deathmatch** — Chivalry-style: death does not eliminate, the fighter
+  respawns after a couple of seconds at a clear spot, the game is endless,
+  the score is the goal.
+- **CS-style kills** in both modes: down someone or drive them to the fall
+  (a club hit, a ram topple, rolling a downed body to the edge) — the kill
+  goes to whoever acted last within the credit window.
+
+### I10 — Camera and sound
+
+- The camera sits farther while many are alive, closer toward the finale,
+  cinematic in a duel.
+- It reacts to heavy hits, counters, falls and long knockbacks — amplifying
+  the blow without distracting.
+- Sound: impact, footsteps, sweep whoosh, the fall. Half the feeling of
+  weight is sound. Can be pulled forward if weight is lacking as early
+  as I1.
+
+**Sound is pulled forward and done (build 176):** six effects synthesized in
+Web Audio — sweep whoosh, impact, ram-topple thud, the drop whistle, respawn
+blips, the kill ding. No files: the mixer watches the simulation and fires on
+state edges.
 
 ---
 
-## Приёмка
+## Acceptance
 
-Не итерация, а критерий готовности всего. Бой должен сам собой складываться
-в такую историю, без единой скриптовой сцены:
+Not an iteration — the readiness bar for everything. A fight must fold
+itself into a story like this, without a single scripted scene:
 
-> A промахивается тяжёлым → теряет баланс → B бьёт по руке → оружие улетает →
-> B подсекает ногу → A падает → B сталкивает его с арены.
+> A misses with a heavy → loses balance → B strikes the arm → the weapon
+> flies away → B sweeps the leg → A falls → B shoves him off the arena.
 
-## Принципы
+## Principles
 
-1. Никаких полосок здоровья.
-2. Баланс важнее урона.
-3. Тайминг бьёт закликивание.
-4. Промах опасен.
-5. Части тела имеют значение.
-6. У каждого оружия свой вес.
-7. Мастерство рождает физика, а не случайность.
-8. Простое управление, глубокие взаимодействия.
-9. Смешное возникает само, из симуляции.
-10. Достаточно соревновательно, чтобы расти, и достаточно понятно,
-    чтобы играть с ходу.
+1. No health bars.
+2. Balance over damage.
+3. Timing beats clicking.
+4. A miss is dangerous.
+5. Body parts matter.
+6. Every weapon has its own weight.
+7. Mastery comes from physics, not randomness.
+8. Simple controls, deep interactions.
+9. The funny emerges by itself, out of simulation.
+10. Competitive enough to grow in, clear enough to play at once.
 
 ---
 
-## Как ведётся работа
+## How the work is done
 
-Весь роадмап делается в браузере. Unity — отдельная задача переноса, когда
-игра целиком играется.
+The whole roadmap is built in the browser. Unity is a separate porting task
+for when the game plays end to end.
 
-На каждой итерации: игра гоняется в Chromium, поведение замеряется числами,
-а не оценивается на глаз, скриншоты отправляются до того, как правка уедет.
-Номер сборки поднимается через `docs/bump-build.sh` — по нему в углу экрана
-видно, дошла ли правка до браузера.
+Each iteration: the game is run in Chromium, behavior is measured in numbers
+rather than eyeballed, screenshots are sent before a change ships. The build
+number is bumped via `docs/bump-build.sh` — the tag at the bottom of the
+screen shows whether the change reached the browser.
 
-## Отличия от первой редакции документа
+## Differences from the first edition of this document
 
-Порядок пересобран, потому что часть пунктов опиралась на то, чего в коде нет.
+The order was reassembled because some items relied on code that did not
+exist.
 
-- **Баланс поднят с 4-й позиции на 2-ю.** Реакции по частям тела бессмысленны,
-  пока между «цел» и «тряпка» нет промежуточного состояния. Баланс и есть оно.
-- **Спарринг-бот добавлен в И2.** В исходном списке его не было вовсе,
-  а без того, кто бьёт в ответ, баланс не пощупать.
-- **«Вложение против тычка» и «контр-тайминг» слиты.** Одно задаёт окно
-  наказания, другое — чем наказывать; порознь не настраиваются.
-- **«Урон по частям тела» и «усталость» слиты.** Это один механизм —
-  деградация силы мышц, локальная и общая.
-- **Матч добавлен.** В исходном списке нет ни раундов, ни победы, хотя
-  итерация про камеру уже опиралась на «сколько игроков осталось».
-- **Звук добавлен.** Половина ощущения тяжести — звук, а его не было нигде.
-- **«Эмерджентный бой» убран из итераций.** Это не шаг, а приёмка всего
-  остального.
+- **Balance moved from 4th place to 2nd.** Per-part reactions are
+  meaningless while there is no state between "intact" and "ragdoll".
+  Balance is that state.
+- **The sparring bot was added to I2.** The original list had none, and
+  without someone hitting back, balance cannot be felt out.
+- **"Commitment vs poke" and "counter timing" were merged.** One defines the
+  punishment window, the other what punishes; they cannot be tuned apart.
+- **"Per-part damage" and "fatigue" were merged.** They are one mechanism —
+  muscle strength degradation, local and global.
+- **The match was added.** The original list had neither rounds nor victory,
+  though the camera iteration already relied on "how many players remain".
+- **Sound was added.** Half the feeling of weight is sound, and it was
+  nowhere.
+- **"Emergent combat" was removed from the iterations.** It is not a step —
+  it is the acceptance bar for everything else.
