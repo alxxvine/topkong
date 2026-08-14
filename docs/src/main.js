@@ -127,6 +127,7 @@ export async function start() {
   let lastOverField = null;
   let sndKills = 0;
   let prevDeaths = 0;
+  let dashCd = 0;
 
   ui.onPauseToggle = () => {
     paused = !paused;
@@ -200,7 +201,40 @@ export async function start() {
     // На экране персонажа игрок УЖЕ управляем: походить, помахать, послушать
     // звук — всё пробуется прямо в меню, на стоящих вокруг ботах, а не в бою.
     const playerFree = match.controlEnabled || !setupState.done;
-    player.swing.held = input.swingHeld && playerFree;
+
+    // Блок (ПКМ): пока держится — ударов нет, дубина поперёк корпуса,
+    // а принятый удар отталкивает, но не роняет (см. checkHits).
+    player.blocking = input.blockHeld && playerFree
+      && player.state === BodyState.Standing;
+    player.swing.blockPose = player.blocking && player.hasClub;
+
+    // Удары целиком на мыши: ЛКМ — боковой (держи для заряда), колесо
+    // вверх/вниз — рубящий сверху / черпающий снизу одним тиком.
+    player.swing.held = input.swingHeld && playerFree && !player.blocking;
+    if (player.swing.held && player.swing.state === 'guard') {
+      player.swing.wantStyle = 0;
+    }
+    const wheel = input.consumeWheelStrike();
+    if (wheel && playerFree && !player.blocking && player.hasClub) {
+      player.swing.cast(wheel === 'overhead' ? 1 : 2);
+    }
+
+    // Рывок (пробел): мягкая прибавка скорости по направлению хода —
+    // темп игры вязкий, и телепорт-дэш из него выпадал бы. Без ввода
+    // хода рывок идёт туда, куда боец смотрит.
+    dashCd = Math.max(0, dashCd - real);
+    if (input.consumeDash() && playerFree && dashCd <= 0
+        && player.state === BodyState.Standing) {
+      let dx = player.moveInput.x;
+      let dz = player.moveInput.y;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.1) { dx = Math.sin(player.yaw); dz = Math.cos(player.yaw); }
+      else { dx /= len; dz /= len; }
+      player.locomotion.shove(dx * T.dashPower, dz * T.dashPower);
+      dashCd = T.dashCooldown;
+      sound.whoosh(0.45);
+    }
+
     if (!playerFree) player.moveInput.set(0, 0);
 
     if (input.consumeReset()) match.begin();
@@ -238,12 +272,15 @@ export async function start() {
       }
 
       for (const f of fighters) {
-        f.checkHits(fighters, STEP, now, (attacker, victim, point, strength) => {
+        f.checkHits(fighters, STEP, now, (attacker, victim, point, strength, blocked) => {
           fx.spawn(point, strength);
-          rig.addShake(0.25 + strength * 0.75 * T.shakeMul);
-          hitStop = T.hitStopMax * (0.4 + strength * 0.6);
-          sound.impact(strength);
-          if (attacker === player) telem.add('hits');
+          rig.addShake((blocked ? 0.15 : 0.25) + strength * 0.75 * T.shakeMul);
+          hitStop = T.hitStopMax * (blocked ? 0.2 : 0.4 + strength * 0.6);
+          if (blocked) sound.block();
+          else {
+            sound.impact(strength);
+            if (attacker === player) telem.add('hits');
+          }
           // Remember when the hit sounded, so the fall that follows the
           // same blow does not add a second, duplicate thud.
           victim.sndHitAt = now;

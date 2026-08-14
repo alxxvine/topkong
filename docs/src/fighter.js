@@ -53,6 +53,9 @@ export class Fighter {
     /** Whether THIS fighter carries a club. Set per fighter: the player
      *  picks a weapon on the setup screen, bots get theirs from the roster. */
     this.armed = options.armed !== false;
+    /** Блок держится прямо сейчас (ПКМ у игрока). Принятый на блок удар
+     *  не роняет, а отталкивает — см. checkHits. */
+    this.blocking = false;
     this.color = new THREE.Color(options.color !== undefined ? options.color : 0xe0a267);
 
     this.position = new THREE.Vector3();
@@ -720,6 +723,25 @@ export class Fighter {
 
       const strength = inverseLerp(T.minImpactSpeed, T.maxImpactSpeed, this.swingSpeed)
         * this.swing.power;
+
+      // Блок: удар не роняет, а отталкивает. Толчок уходит в скорость
+      // ЛОКОМОЦИИ, а не в частицы: стоящий боец кинематичен, его тело
+      // и так сядет в позу, — он просто отъезжает назад, оставаясь
+      // на ногах. Лёгкая расшатка остаётся: блок держит, но не бесплатен.
+      if (victim.blocking) {
+        _impulse.copy(victim.position).sub(this.position);
+        _impulse.y = 0;
+        if (_impulse.lengthSq() < 1e-4) _impulse.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        _impulse.normalize();
+        const push = T.blockPushback * (0.5 + 0.5 * clamp01(strength));
+        victim.locomotion.shove(_impulse.x * push, _impulse.z * push);
+        victim.stagger = Math.min(0.75, victim.stagger + 0.2);
+        victim.staggerDirX = _impulse.x;
+        victim.staggerDirZ = _impulse.z;
+        victim.credit(this);
+        if (onHit) onHit(this, victim, this.clubHead, clamp01(strength) * 0.5, true);
+        continue;
+      }
 
       // The style shapes the hit: the rising scoop launches upward, the
       // overhead slam hits flatter and harder. See SWING_STYLES.

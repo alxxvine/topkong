@@ -25,6 +25,11 @@ export class Locomotion {
     /** Скорость кинематического корня. */
     this.velX = 0;
     this.velZ = 0;
+    /** Внешний толчок ПОВЕРХ управляемой скорости: рывок, принятый
+     *  на блок удар. Живёт своим затуханием — пройди он через
+     *  moveTowards, разгон управления съел бы его за пару кадров. */
+    this.pushX = 0;
+    this.pushZ = 0;
     /** Градусов в секунду. Хранится отдельно, чтобы у разворота был разгон. */
     this.yawSpeed = 0;
     /** Своя фаза увода с прямой: одинаковые бойцы шатались бы в такт. */
@@ -68,11 +73,22 @@ export class Locomotion {
       : T.airControl;
     this.velX = moveTowards(this.velX, want.x, rate * dt);
     this.velZ = moveTowards(this.velZ, want.z, rate * dt);
-    f.position.x += this.velX * dt;
-    f.position.z += this.velZ * dt;
-    this.planarSpeed = Math.hypot(this.velX, this.velZ);
+    // Толчок гаснет экспоненциально, за ~полсекунды: мягкий импульс,
+    // а не телепорт — ровно под вязкий темп игры.
+    const keep = Math.max(0, 1 - 2.4 * dt);
+    this.pushX *= keep;
+    this.pushZ *= keep;
+    f.position.x += (this.velX + this.pushX) * dt;
+    f.position.z += (this.velZ + this.pushZ) * dt;
+    this.planarSpeed = Math.hypot(this.velX + this.pushX, this.velZ + this.pushZ);
     this.wantX = want.x;
     this.wantZ = want.z;
+  }
+
+  /** Разовый внешний толчок: рывок игрока, отдача блока. */
+  shove(x, z) {
+    this.pushX += x;
+    this.pushZ += z;
   }
 
   /**
@@ -228,6 +244,8 @@ export class Locomotion {
     this.wantZ = 0;
     this.velX = 0;
     this.velZ = 0;
+    this.pushX = 0;
+    this.pushZ = 0;
     this.grounded = false;
     this.wanderPhase = Math.random() * 100;
   }

@@ -17,7 +17,7 @@ export class Sound {
     this.master = null;
     this.noiseBuf = null;
     /** Per-effect counters, for the test stand: hearing is not automatable. */
-    this.played = { whoosh: 0, impact: 0, thud: 0, fall: 0, respawn: 0, kill: 0 };
+    this.played = { whoosh: 0, impact: 0, thud: 0, fall: 0, respawn: 0, kill: 0, block: 0 };
   }
 
   /** True when the context exists and the toggle is on. */
@@ -93,6 +93,14 @@ export class Sound {
     const s = Math.min(1, strength);
     this.tone('sine', 150 + 60 * s, 55, 0.13 + 0.05 * s, 0.5 + 0.3 * s);
     this.noise('highpass', 1400, 2600, 0.06, 0.18 + 0.15 * s, 0.8);
+  }
+
+  /** A hit lands on a raised guard: a woody clack, no meat in it. */
+  block() {
+    if (!this.on) return;
+    this.played.block++;
+    this.tone('square', 240, 185, 0.07, 0.16);
+    this.noise('highpass', 1800, 3200, 0.05, 0.2, 1);
   }
 
   /** A body goes down without a club: the ram topple, softer than a hit. */

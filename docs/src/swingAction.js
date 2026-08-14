@@ -68,6 +68,14 @@ export class SwingAction {
     /** Какой манерой бьём сейчас. Выбирается заново на каждом замахе. */
     this.styleIndex = 0;
 
+    /** Заказанная манера следующего замаха. Игрок выбирает удар кнопкой
+     *  (ЛКМ — боковой, колесо — сверху/снизу); null — случайная, как у ботов. */
+    this.wantStyle = null;
+    /** Мгновенный удар с колеса: замах не копится, отпускание в тот же тик. */
+    this.castNow = false;
+    /** Стойка блока: дубина поперёк, поза вместо походной. Ставит боец. */
+    this.blockPose = false;
+
     /** Поза в момент отпускания: пронос стартует из неё, а не из
      *  канонической точки манеры. См. комментарий на переходе в Strike. */
     this.strikeFrom = { angle: 0, reach: 0, lean: 0, height: 0, pitch: 0 };
@@ -91,6 +99,16 @@ export class SwingAction {
     return this.timer >= this.pullTime;
   }
 
+  /** Мгновенный удар выбранной манерой (колесо): войти в замах и отпустить
+   *  в том же тике. Подхват внутри проноса дорисует молниеносный замах. */
+  cast(styleIndex) {
+    if (this.state !== SwingState.Guard || this.cooldown > 0) return false;
+    this.wantStyle = styleIndex;
+    this.castNow = true;
+    this.held = true;
+    return true;
+  }
+
   tick(dt) {
     // Скорость удара — одна ручка на весь приём, а не три отдельных времени.
     //
@@ -108,18 +126,25 @@ export class SwingAction {
         if (this.held && this.cooldown <= 0) {
           this.state = SwingState.WindUp;
           this.timer = 0;
-          // Манера выбирается на замахе и никогда не повторяется дважды
-          // подряд: одинаковые удары читаются анимацией по кругу, а разные —
-          // бойцом, который бьёт как придётся.
-          const shift = 1 + Math.floor(Math.random() * (SWING_STYLES.length - 1));
-          this.styleIndex = (this.styleIndex + shift) % SWING_STYLES.length;
+          // Манера: у игрока — заказанная кнопкой, у ботов — случайная
+          // и никогда не повторяющаяся дважды подряд: одинаковые удары
+          // читаются анимацией по кругу, а разные — бойцом, который бьёт
+          // как придётся.
+          if (this.wantStyle !== null) {
+            this.styleIndex = this.wantStyle;
+            this.wantStyle = null;
+          } else {
+            const shift = 1 + Math.floor(Math.random() * (SWING_STYLES.length - 1));
+            this.styleIndex = (this.styleIndex + shift) % SWING_STYLES.length;
+          }
         }
         break;
 
       case SwingState.WindUp:
         this.timer += dt;
         this.charge = Math.min(1, this.timer / Math.max(0.01, T.swingChargeTime));
-        if (!this.held) {
+        if (!this.held || this.castNow) {
+          this.castNow = false;
           // Пронос стартует из ФАКТИЧЕСКОЙ позы, а не из канонической
           // точки манеры: иначе на отпускании рука телепортировалась бы
           // в точку полного замаха — скачок до 150° одним кадром,
@@ -252,13 +277,23 @@ export class SwingAction {
       default:
         // Покой: дубина висит сбоку в опущенной руке. Отдельного «состояния
         // готовности» рисовать не нужно — разница между «несу» и «замахиваюсь»
-        // видна по самой позе.
-        targetAngle = T.carryAngle;
-        targetReach = T.carryReach;
-        targetLean = 0;
-        targetHeight = T.carryDrop;
-        targetPitch = T.carryPitch;
-        blend = 5 * dt;
+        // видна по самой позе. Блок — исключение: дубина поднимается поперёк
+        // корпуса, и по стойке видно, что бить сейчас не будут — будут держать.
+        if (this.blockPose) {
+          targetAngle = -18;
+          targetReach = 0.46;
+          targetLean = -0.15;
+          targetHeight = 0.34;
+          targetPitch = -55;
+          blend = 12 * dt;
+        } else {
+          targetAngle = T.carryAngle;
+          targetReach = T.carryReach;
+          targetLean = 0;
+          targetHeight = T.carryDrop;
+          targetPitch = T.carryPitch;
+          blend = 5 * dt;
+        }
         break;
     }
 
@@ -273,6 +308,9 @@ export class SwingAction {
   reset() {
     this.state = SwingState.Guard;
     this.held = false;
+    this.wantStyle = null;
+    this.castNow = false;
+    this.blockPose = false;
     this.timer = 0;
     this.cooldown = 0;
     this.charge = 0;

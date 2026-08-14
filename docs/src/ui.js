@@ -42,6 +42,13 @@ const QUICK = [
     set: (v) => { T.turnSpeed = v; },
   },
   {
+    // Рывок мягкий по замыслу: прибавка к скорости, не телепорт.
+    label: 'Dash',
+    min: 0, max: 6, step: 0.1, unit: ' m/s',
+    get: () => T.dashPower,
+    set: (v) => { T.dashPower = v; },
+  },
+  {
     label: 'Get up',
     min: 0.3, max: 6, step: 0.1, unit: '×',
     // Хранится время подъёма, показывается скорость.

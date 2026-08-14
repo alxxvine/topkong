@@ -20,6 +20,12 @@ export class Input {
     this.swingHeld = false;
     this.resetPressed = false;
     this.slowMotion = false;
+    /** Блок: держится, пока зажата ПКМ. */
+    this.blockHeld = false;
+    /** Разовый рывок (пробел): съедается consumeDash. */
+    this.dashPressed = false;
+    /** Разовый удар колесом: 'overhead' | 'rising', съедается consume. */
+    this.wheelStrike = null;
 
     this.keys = new Set();
     this.pointer = new THREE.Vector2(0, 0);
@@ -49,18 +55,20 @@ export class Input {
       // Служебный слой — счётчики, подсказка, панель — по умолчанию спрятан:
       // в кадре должна быть игра, а не приборная доска. Возвращается по H.
       if (e.code === 'KeyH') document.body.classList.toggle('bare');
-      if (e.code === 'Space') this.swingHeld = true;
+      // Пробел — рывок по направлению хода. Ударом он был, пока удар
+      // был один; теперь удары живут на мыши целиком.
+      if (e.code === 'Space') this.dashPressed = true;
     });
 
     addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
-      if (e.code === 'Space') this.swingHeld = false;
     });
 
     // Уход со вкладки не должен оставлять зажатыми клавиши.
     addEventListener('blur', () => {
       this.keys.clear();
       this.swingHeld = false;
+      this.blockHeld = false;
       this.stickVector.set(0, 0);
     });
   }
@@ -81,15 +89,25 @@ export class Input {
       if (e.pointerType === 'touch') return;
       onMove(e);
       if (e.button === 0) this.swingHeld = true;
+      if (e.button === 2) this.blockHeld = true;
     });
 
     addEventListener('pointerup', (e) => {
       if (e.pointerType === 'touch') return;
       if (e.button === 0) this.swingHeld = false;
+      if (e.button === 2) this.blockHeld = false;
     });
 
-    // Правая кнопка на арене — это не контекстное меню.
+    // Правая кнопка на арене — это не контекстное меню, это блок.
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Колесо — выбор удара: вверх — рубящий сверху, вниз — черпающий снизу.
+    // Один тик колеса — один удар; между тиками ничего не копится.
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (Math.abs(e.deltaY) < 1) return;
+      this.wheelStrike = e.deltaY < 0 ? 'overhead' : 'rising';
+    }, { passive: false });
   }
 
   bindTouch() {
@@ -205,5 +223,17 @@ export class Input {
     const r = this.resetPressed;
     this.resetPressed = false;
     return r;
+  }
+
+  consumeDash() {
+    const d = this.dashPressed;
+    this.dashPressed = false;
+    return d;
+  }
+
+  consumeWheelStrike() {
+    const w = this.wheelStrike;
+    this.wheelStrike = null;
+    return w;
   }
 }
