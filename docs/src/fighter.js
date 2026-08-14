@@ -4,7 +4,7 @@ import { clamp01, inverseLerp, lerp, RAD } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
 import { PoseDriver } from 'tk/poseDriver.js';
 import { Gait } from 'tk/gait.js';
-import { SwingAction } from 'tk/swingAction.js';
+import { SwingAction, SWING_STYLES } from 'tk/swingAction.js';
 import { Locomotion } from 'tk/locomotion.js';
 import { Balance } from 'tk/balance.js';
 import { Body, P } from 'tk/body.js';
@@ -669,14 +669,18 @@ export class Fighter {
       const strength = inverseLerp(T.minImpactSpeed, T.maxImpactSpeed, this.swingSpeed)
         * this.swing.power;
 
+      // The style shapes the hit: the rising scoop launches upward, the
+      // overhead slam hits flatter and harder. See SWING_STYLES.
+      const st = SWING_STYLES[this.swing.styleIndex] || SWING_STYLES[0];
+
       _impulse.copy(victim.position).sub(this.position);
       _impulse.y = 0;
       if (_impulse.lengthSq() < 1e-4) _impulse.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
       _impulse.normalize();
-      _impulse.y = T.knockUpBias;
+      _impulse.y = T.knockUpBias * (st.up || 1);
       _impulse.normalize();
 
-      const power = lerp(T.minKnockback, T.maxKnockback, clamp01(strength));
+      const power = lerp(T.minKnockback, T.maxKnockback, clamp01(strength)) * (st.pow || 1);
       _impulse.multiplyScalar(power);
 
       // Куда именно пришёлся удар, разберём в отдельной итерации.

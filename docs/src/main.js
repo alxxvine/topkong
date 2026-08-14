@@ -11,6 +11,7 @@ import { Match } from 'tk/match.js';
 import { P } from 'tk/body.js';
 import { Input } from 'tk/input.js';
 import { Ui } from 'tk/ui.js';
+import { Sound } from 'tk/sound.js';
 
 // Точка сборки: сцена, цикл, спавн и всё, что связывает модули между собой.
 //
@@ -50,6 +51,11 @@ export async function start() {
   const input = new Input(canvas);
   const ui = new Ui();
   const fx = new HitFx(scene);
+  const sound = new Sound();
+  // Browsers keep AudioContext suspended until a user gesture; unlock is
+  // idempotent, so it simply rides on every input the page gets anyway.
+  addEventListener('pointerdown', () => sound.unlock(), { passive: true });
+  addEventListener('keydown', () => sound.unlock());
 
   const player = new Fighter(scene, arena, {
     isPlayer: true, name: 'You', color: 0xff8a5c, x: 0, z: -2, yaw: 0,
@@ -86,6 +92,7 @@ export async function start() {
   let fps = 60;
   let paused = false;
   let lastOverField = null;
+  let sndKills = 0;
 
   ui.onPauseToggle = () => {
     paused = !paused;
@@ -185,11 +192,37 @@ export async function start() {
           fx.spawn(point, strength);
           rig.addShake(0.25 + strength * 0.75 * T.shakeMul);
           hitStop = T.hitStopMax * (0.4 + strength * 0.6);
+          sound.impact(strength);
+          // Remember when the hit sounded, so the fall that follows the
+          // same blow does not add a second, duplicate thud.
+          victim.sndHitAt = now;
         });
       }
 
       match.tick(STEP);
     }
+
+    // Sound is edge-triggered off state the simulation already keeps:
+    // no controller tells the mixer anything, the mixer watches the game.
+    for (const f of fighters) {
+      const striking = f.hasClub && f.swing.striking;
+      if (striking && !f.sndStriking) sound.whoosh(f.swing.power);
+      f.sndStriking = striking;
+
+      // A body that went down WITHOUT a club hit in the last quarter
+      // second fell to a ram or a shove — that one gets the soft thud.
+      const downed = f.state === BodyState.Downed;
+      if (downed && !f.sndDowned && now - (f.sndHitAt || -1) > 0.25) sound.thud();
+      f.sndDowned = downed;
+
+      if (!f.alive && f.sndAlive) sound.fall();
+      // The rebirth blip belongs to deathmatch only: in rounds everyone
+      // respawns at once each round and four blips in chorus are noise.
+      if (f.alive && f.sndAlive === false && match.deathmatch) sound.respawn();
+      f.sndAlive = f.alive;
+    }
+    if (player.kills > sndKills) sound.kill();
+    sndKills = player.kills;
     // Хвост накопителя не копится бесконечно: после долгого залипания вкладки
     // иначе прилетает пачка шагов и всё разлетается.
     if (accumulator > STEP * MAX_STEPS) accumulator = 0;
@@ -220,7 +253,7 @@ export async function start() {
   requestAnimationFrame(frame);
 
   // Пригодится из консоли браузера и из автотеста.
-  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, tuning: T };
+  const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, sound, tuning: T };
   globalThis.TopKong = api;
   return api;
 }

@@ -115,6 +115,12 @@ const QUICK = [
     get: () => !!T.deathmatch,
     set: (v) => { T.deathmatch = v; },
   },
+  {
+    label: 'Sound',
+    bool: true,
+    get: () => !!T.sound,
+    set: (v) => { T.sound = v; },
+  },
 ];
 
 export class Ui {

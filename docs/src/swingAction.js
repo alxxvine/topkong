@@ -32,12 +32,17 @@ export const SwingState = {
 // сложнее, чем просит темп игры. Смысл манер не только в картинке:
 // по замаху видно, ОТКУДА прилетит, и от рубящего сверху уклоняются
 // иначе, чем от бокового.
+// Besides the arc, each style carries its hit character: `up` scales the
+// vertical share of the knockback, `pow` its force. The rising scoop
+// LAUNCHES the victim — that is its whole identity (its shorter arc pushes
+// less, so height is what it buys). The overhead slam hits flatter and
+// harder: gravity did half the swing, the victim eats all of it.
 export const SWING_STYLES = [
-  { name: 'side',  aFrom: [1, 25],    aTo: [-1, 0],     wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0 },
-  { name: 'overhead', aFrom: [0, 15],    aTo: [0, -12],    wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28 },
+  { name: 'side',     aFrom: [1, 25],   aTo: [-1, 0],    wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
+  { name: 'overhead', aFrom: [0, 15],   aTo: [0, -12],   wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8 },
   // Снизу — черпающий: дубина опускается к колену остриём вниз
   // и выгребает вверх-влево, к концу проноса глядя остриём вверх.
-  { name: 'rising',  aFrom: [0.8, 10],  aTo: [-0.35, 0],  wH: -0.12, wP: 35,  hF: -0.12, hT: 0.5,   pF: 30,  pT: -40 },
+  { name: 'rising',   aFrom: [0.8, 10], aTo: [-0.35, 0], wH: -0.12, wP: 35,  hF: -0.12, hT: 0.5,   pF: 30,  pT: -40, up: 3.2, pow: 1.15 },
 ];
 
 export class SwingAction {

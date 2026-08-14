@@ -247,6 +247,9 @@ export const tuning = {
   // Deathmatch mode: nobody is ever out — the fallen respawn after a pause
   // and the score (kills) is the game. Off = classic last-man-standing rounds.
   deathmatch: false,
+  // Synthesized sound effects (whoosh, impact, falls). All Web Audio,
+  // no files — see sound.js for why that is a feature and not a workaround.
+  sound: true,
   // How long a fallen fighter stays out before respawning (deathmatch only).
   respawnTime: 2.2,
   // Kill credit window: whoever landed the last hit / shove / roll on the
