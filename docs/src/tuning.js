@@ -245,8 +245,10 @@ export const tuning = {
   // Сколько держится итог раунда, прежде чем начнётся новый.
   matchOverTime: 2.6,
   // Deathmatch mode: nobody is ever out — the fallen respawn after a pause
-  // and the score (kills) is the game. Off = classic last-man-standing rounds.
-  deathmatch: false,
+  // and the score (kills) is the game. This is THE game now: rounds mode is
+  // hidden from the UI (main.js forces this true at load), but its code is
+  // alive — flip from the console to compare.
+  deathmatch: true,
   // Synthesized sound effects (whoosh, impact, falls). All Web Audio,
   // no files — see sound.js for why that is a feature and not a workaround.
   sound: true,

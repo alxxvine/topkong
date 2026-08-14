@@ -18,8 +18,27 @@ import { clamp01, lerp } from 'tk/mathx.js';
 const _to = new THREE.Vector3();
 const _away = new THREE.Vector3();
 
+// The roster. Each session draws its opponents from here at random — same
+// bot brain, different characters. `temper` is aggression: hot heads rest
+// less between swings and release early pokes, patient ones wind up heavy
+// hits. `fear` is edge caution: cowards turn back far from the rim, the
+// reckless fight with their heels over it. club: false makes a rammer who
+// only fights with the body.
+export const BOT_ROSTER = [
+  { name: 'Boulder', color: 0x5b8def, club: true,  temper: 0.35, fear: 0.5 },
+  { name: 'Pepper',  color: 0xc46fb0, club: true,  temper: 0.9,  fear: 0.3 },
+  { name: 'Moose',   color: 0x4fbf8b, club: false, temper: 0.55, fear: 0.2 },
+  { name: 'Whisper', color: 0x8b7ee0, club: true,  temper: 0.5,  fear: 0.85 },
+  { name: 'Sparky',  color: 0xdcb64a, club: true,  temper: 0.95, fear: 0.45 },
+  { name: 'Anvil',   color: 0x4bc4c4, club: true,  temper: 0.25, fear: 0.35 },
+  { name: 'Button',  color: 0xe58f6f, club: true,  temper: 0.4,  fear: 0.7 },
+  { name: 'Grudge',  color: 0x9aa56b, club: false, temper: 0.75, fear: 0.15 },
+  { name: 'Tiptoe',  color: 0x6fa8dc, club: true,  temper: 0.6,  fear: 0.9 },
+  { name: 'Rhubarb', color: 0xa06fd6, club: true,  temper: 0.7,  fear: 0.55 },
+];
+
 export class Bot {
-  constructor(fighter, arena) {
+  constructor(fighter, arena, persona = null) {
     this.f = fighter;
     this.arena = arena;
     /** Своя задержка реакции: одинаковые боты выглядят одним ботом в трёх лицах. */
@@ -35,6 +54,16 @@ export class Bot {
     this.backoff = 0;
     this.side = 1;
     this.clinchLimit = 0.5 + Math.random() * 0.8;
+
+    // Character. Neutral defaults when no persona is given (test dummies).
+    const temper = persona ? persona.temper : 0.5;
+    const fear = persona ? persona.fear : 0.5;
+    /** Rest between own swings: hot heads barely pause. */
+    this.restMul = 1.7 - 1.2 * temper;
+    /** Skews the charge draw: >1 favors quick pokes, <1 heavy wind-ups. */
+    this.chargePow = 0.6 + 1.2 * temper;
+    /** Added to the edge-fear radius: cowards bail out early. */
+    this.fearBias = -0.10 + 0.22 * fear;
   }
 
   reset() {
@@ -76,8 +105,9 @@ export class Bot {
     // и довести её до кромки безопаснее, чем кажется. Без этой поправки
     // бот бросал добычу на подходе к краю, и та спокойно вставала:
     // замерено, докатывал до радиуса 5.6 из 7.5 и разворачивался.
-    const pushingOut = victim && (victimDown || !(T.withClub && T.botsArmed)) && victimEdge > myEdge + 0.03;
-    const fearAt = pushingOut ? 0.93 : T.botEdgeFear;
+    const pushingOut = victim && (victimDown || !f.hasClub) && victimEdge > myEdge + 0.03;
+    const fearAt = pushingOut ? 0.93
+      : Math.min(0.92, Math.max(0.4, T.botEdgeFear + this.fearBias));
     if (myEdge > fearAt) {
       _away.set(-f.position.x, 0, -f.position.z).normalize();
       f.moveInput.set(_away.x, _away.z);
@@ -95,8 +125,8 @@ export class Bot {
       return;
     }
 
-    // Вооружён ли ЭТОТ бот: общая ручка оружия плюс отдельная для ботов.
-    const armed = T.withClub && T.botsArmed;
+    // Вооружён ли ЭТОТ бот: его собственный выбор из базы плюс общие ручки.
+    const armed = f.hasClub;
 
     _to.copy(victim.position).sub(f.position);
     _to.y = 0;
@@ -184,13 +214,15 @@ export class Bot {
     if (!f.swing.held && f.swing.state === 'guard') {
       f.swing.held = true;
       // Сколько копить в этот раз. Разброс намеренный: бот с постоянным
-      // зарядом читается как метроном.
-      this.wantSwing = lerp(T.botChargeMin, T.botChargeMax, Math.random());
+      // зарядом читается как метроном. Степень — характер: горячие боты
+      // тянут жребий к быстрым тычкам, терпеливые — к полным замахам.
+      this.wantSwing = lerp(T.botChargeMin, T.botChargeMax,
+        Math.pow(Math.random(), this.chargePow));
     }
 
     if (f.swing.held && f.swing.charge >= this.wantSwing) {
       f.swing.held = false;
-      this.rest = T.botRest;
+      this.rest = T.botRest * this.restMul;
     }
   }
 

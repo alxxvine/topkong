@@ -5,7 +5,8 @@ import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
 import { Fighter, BodyState } from 'tk/fighter.js';
-import { Bot } from 'tk/bot.js';
+import { Bot, BOT_ROSTER } from 'tk/bot.js';
+import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
 import { P } from 'tk/body.js';
@@ -28,6 +29,10 @@ const _basis = { forward: new THREE.Vector3(), right: new THREE.Vector3() };
 
 export async function start() {
   loadTuning();
+  // Deathmatch is THE game for now. Rounds mode is hidden from the UI but
+  // its code is alive — flip TopKong.tuning.deathmatch from the console
+  // to compare. Forced here so a stale saved value can't resurrect rounds.
+  T.deathmatch = true;
 
   const canvas = document.getElementById('view');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -73,6 +78,10 @@ export async function start() {
   const match = new Match(fighters, player,
     () => placeRound(fighters, arena),
     (f) => respawnOne(f, fighters, arena));
+
+  // Экран персонажа. Пока он открыт, отсчёт матча не заканчивается;
+  // кнопка FIGHT применяет выбор, прячет экран и начинает бой заново.
+  const setupState = initSetup(player, aim, match);
 
   resize();
   addEventListener('resize', resize);
@@ -201,6 +210,11 @@ export async function start() {
 
       match.tick(STEP);
     }
+    // The character screen holds the match at the countdown's door: the
+    // timer never runs out while the player is still picking a color.
+    if (!setupState.done && match.phase === 'ready') {
+      match.timer = Math.max(match.timer, 1.5);
+    }
 
     // Sound is edge-triggered off state the simulation already keeps:
     // no controller tells the mixer anything, the mixer watches the game.
@@ -245,8 +259,8 @@ export async function start() {
     rig.tick(real, player.alive ? player.position : null);
 
     ui.setHud(hudText(player, arena, fps, input, match));
-    ui.setBanner(match.banner);
-    if (ui.swingButton) ui.swingButton.style.display = T.withClub ? '' : 'none';
+    ui.setBanner(setupState.done ? match.banner : null);
+    if (ui.swingButton) ui.swingButton.style.display = player.hasClub ? '' : 'none';
     renderer.render(scene, camera);
   }
 
@@ -256,6 +270,96 @@ export async function start() {
   const api = { scene, camera, renderer, arena, rig, player, fighters, dummies, input, match, ui, sound, tuning: T };
   globalThis.TopKong = api;
   return api;
+}
+
+// ------------------------------------------------------------- экран персонажа
+
+/**
+ * Character setup. Shown once at load: the arena with the fighters is
+ * already live behind it, the player stands centered facing the camera,
+ * and every choice applies INSTANTLY to the real fighter — the preview
+ * is the game itself, not a mockup. FIGHT hides the card and restarts
+ * the match countdown. Choices persist in localStorage.
+ */
+function initSetup(player, aim, match) {
+  const root = document.getElementById('setup');
+  const state = { done: !root };
+  if (!root) return state;
+
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('tk-player') || '{}'); } catch { /* fresh */ }
+
+  const nameEl = document.getElementById('setupName');
+  nameEl.value = typeof saved.name === 'string' ? saved.name : '';
+
+  // Палитра общая с базой ботов по духу — приглушённая пастель — но своя:
+  // цвет игрока не обязан быть уникальным, совпадение с ботом не ломает
+  // ничего, а свобода выбора дороже.
+  const COLORS = [0xff8a5c, 0xe4533f, 0xdcb64a, 0x4fbf8b,
+                  0x4bc4c4, 0x5b8def, 0x8b7ee0, 0xc46fb0];
+  let color = COLORS.includes(saved.color) ? saved.color : COLORS[0];
+  let weapon = saved.weapon === 'fists' ? 'fists' : 'club';
+
+  const applyColor = (c) => {
+    color = c;
+    player.setColor(c);
+    aim.setColor(c);
+    for (const b of colorBtns) {
+      b.classList.toggle('sel', +b.dataset.c === c);
+    }
+  };
+  const applyWeapon = (w) => {
+    weapon = w;
+    player.armed = w === 'club';
+    for (const b of weaponBtns) b.classList.toggle('sel', b.dataset.w === w);
+  };
+
+  const colorsEl = document.getElementById('setupColors');
+  const colorBtns = COLORS.map((c) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.c = c;
+    b.style.background = '#' + c.toString(16).padStart(6, '0');
+    b.addEventListener('click', () => applyColor(c));
+    colorsEl.appendChild(b);
+    return b;
+  });
+
+  const weaponBtns = [...document.querySelectorAll('#setupWeapon button')];
+  for (const b of weaponBtns) {
+    b.addEventListener('click', () => applyWeapon(b.dataset.w));
+  }
+
+  // Телосложение меняет длины связей и панели — страница перезагружается
+  // (так устроен выбор тела и в панели настроек). Выбор экрана переживает
+  // перезагрузку через localStorage, так что это безопасно посреди setup.
+  const bodyEl = document.getElementById('setupBody');
+  for (const key of bodyNames) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = BODIES[key].title;
+    if (key === currentBody) b.classList.add('sel');
+    b.addEventListener('click', () => chooseBody(key));
+    bodyEl.appendChild(b);
+  }
+
+  applyColor(color);
+  applyWeapon(weapon);
+  // Лицом к камере, в центре: экран персонажа должен показывать персонажа.
+  player.spawn(0, 0, Math.PI * 0.25);
+
+  document.getElementById('setupGo').addEventListener('click', () => {
+    player.name = (nameEl.value || '').trim().slice(0, 12) || 'You';
+    try {
+      localStorage.setItem('tk-player',
+        JSON.stringify({ name: player.name === 'You' ? '' : player.name, color, weapon }));
+    } catch { /* private mode */ }
+    root.classList.add('gone');
+    state.done = true;
+    match.begin();
+  });
+
+  return state;
 }
 
 // ------------------------------------------------------------------ манекены
@@ -271,18 +375,30 @@ function syncDummies(scene, arena, dummies, fighters) {
 
   while (dummies.length < want) {
     const index = dummies.length;
+    // Соперники — из базы характеров, своя случайная раздача на сессию:
+    // каждая игра встречает другим составом. Колода тасуется один раз,
+    // добавленные позже боты продолжают ту же раздачу.
+    const p = drawPersona(index);
     const d = new Fighter(scene, arena, {
-      name: 'Bot ' + (index + 1),
-      // Приглушённая пастель: на светлой сцене насыщенные цвета кричат,
-      // а фигуры должны отличаться друг от друга, а не спорить с фоном.
-      color: [0x5b8def, 0x4fbf8b, 0xc46fb0, 0xdcb64a, 0x4bc4c4, 0x8b7ee0][index % 6],
+      name: p.name, color: p.color, armed: p.club,
     });
-    d.bot = new Bot(d, arena);
+    d.bot = new Bot(d, arena, p);
     dummies.push(d);
     fighters.push(d);
   }
 
   placeRound(fighters, arena);
+}
+
+function drawPersona(index) {
+  if (!drawPersona.deck) {
+    drawPersona.deck = [...BOT_ROSTER];
+    for (let i = drawPersona.deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [drawPersona.deck[i], drawPersona.deck[j]] = [drawPersona.deck[j], drawPersona.deck[i]];
+    }
+  }
+  return drawPersona.deck[index % drawPersona.deck.length];
 }
 
 /**
@@ -418,6 +534,13 @@ class AimCursor {
     if (!on) this.link.visible = false;
   }
 
+  /** Прицел принадлежит бойцу и перекрашивается вместе с ним. */
+  setColor(c) {
+    this.ring.material.color.set(c);
+    this.ghost.material.color.set(c);
+    this.link.material.color.set(c);
+  }
+
   update(point, player) {
     if (!this.ring.visible) return;
     this.ring.position.set(point.x, 0.02, point.z);
@@ -512,9 +635,9 @@ function hudText(player, arena, fps, input, match) {
     `balance   ${(player.balance.margin * 100).toFixed(0)}%   tilt ${player.balance.tilt.toFixed(0)}°`,
     // Без дубины строки про неё нет вовсе: пустое «несёт» на экране
     // сбивает с толку сильнее, чем отсутствие строки.
-    T.withClub ? `club      ${swing}` : 'club      off (settings)',
+    player.hasClub ? `club      ${swing}` : 'club      none (fists)',
     `speed     ${player.locomotion.planarSpeed.toFixed(2)} m/s`,
-    ...(T.withClub ? [`club head ${player.swingSpeed.toFixed(1)} m/s`] : []),
+    ...(player.hasClub ? [`club head ${player.swingSpeed.toFixed(1)} m/s`] : []),
     `twist     ${player.poseDriver.twist.toFixed(0)}°   bend ${(bend * 100).toFixed(1)} cm`,
     `to edge   ${edge.toFixed(2)} m    stretch ${(player.body.maxStretch * 100).toFixed(1)} cm`,
   ].join('\n');

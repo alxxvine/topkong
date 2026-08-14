@@ -18,6 +18,7 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // сломанным. Поэтому у каждой строки своё чтение и своя запись.
 const QUICK = [
   {
+    group: 'Movement',
     label: 'Walk',
     min: 0.3, max: 3.5, step: 0.05, unit: ' m/s',
     get: () => T.maxRunSpeed,
@@ -39,26 +40,6 @@ const QUICK = [
     min: 60, max: 700, step: 10, unit: '°/s',
     get: () => T.turnSpeed,
     set: (v) => { T.turnSpeed = v; },
-  },
-  {
-    label: 'Swing',
-    min: 0.3, max: 3, step: 0.05, unit: '×',
-    get: () => T.swingSpeed,
-    set: (v) => { T.swingSpeed = v; },
-  },
-  {
-    label: 'Swing return',
-    min: 1, max: 12, step: 0.2, unit: '×',
-    get: () => 1 / Math.max(0.02, T.swingRecoverTime),
-    set: (v) => { T.swingRecoverTime = 1 / Math.max(0.02, v); },
-  },
-  {
-    // Темп, а не откат: ползунок обязан ехать вправо = быстрее, как все
-    // остальные. Чтобы удары нельзя было спамить, эту ручку тянут ВЛЕВО.
-    label: 'Swing rate',
-    min: 0.5, max: 14, step: 0.2, unit: '/s',
-    get: () => 1 / Math.max(0.02, T.swingCooldown),
-    set: (v) => { T.swingCooldown = 1 / Math.max(0.02, v); },
   },
   {
     label: 'Get up',
@@ -83,9 +64,31 @@ const QUICK = [
     set: (v) => { T.drunk = v; },
   },
   {
+    group: 'Strike',
+    label: 'Swing',
+    min: 0.3, max: 3, step: 0.05, unit: '×',
+    get: () => T.swingSpeed,
+    set: (v) => { T.swingSpeed = v; },
+  },
+  {
+    label: 'Swing return',
+    min: 1, max: 12, step: 0.2, unit: '×',
+    get: () => 1 / Math.max(0.02, T.swingRecoverTime),
+    set: (v) => { T.swingRecoverTime = 1 / Math.max(0.02, v); },
+  },
+  {
+    // Темп, а не откат: ползунок обязан ехать вправо = быстрее, как все
+    // остальные. Чтобы удары нельзя было спамить, эту ручку тянут ВЛЕВО.
+    label: 'Swing rate',
+    min: 0.5, max: 14, step: 0.2, unit: '/s',
+    get: () => 1 / Math.max(0.02, T.swingCooldown),
+    set: (v) => { T.swingCooldown = 1 / Math.max(0.02, v); },
+  },
+  {
     // Оружие меняет игру целиком — с ним бой про удар, без него про толчок
     // телом, — и переключать это надо на ходу, а не искать в отладочной
     // панели.
+    group: 'Match',
     label: 'Clubs',
     bool: true,
     get: () => !!T.withClub,
@@ -104,16 +107,6 @@ const QUICK = [
     bool: true,
     get: () => !!T.botsArmed,
     set: (v) => { T.botsArmed = v; },
-  },
-  {
-    // Two games in one toggle: last-man-standing rounds, or an endless
-    // deathmatch where the fallen respawn and kills are the score.
-    // Match watches the flag and resets scores when it flips — kills
-    // from rounds and kills from an endless brawl mean different things.
-    label: 'Deathmatch',
-    bool: true,
-    get: () => !!T.deathmatch,
-    set: (v) => { T.deathmatch = v; },
   },
   {
     label: 'Sound',
@@ -157,7 +150,17 @@ export class Ui {
 
   buildQuick() {
     if (!this.quickBody) return;
-    for (const item of QUICK) this.addQuickRow(item);
+    for (const item of QUICK) {
+      // Секции: движение, удар, матч. Ходьба и удар просились в разные
+      // кучки — без заголовков панель читалась одной простынёй.
+      if (item.group) {
+        const h = document.createElement('div');
+        h.className = 'grp';
+        h.textContent = item.group;
+        this.quickBody.appendChild(h);
+      }
+      this.addQuickRow(item);
+    }
 
     const head = document.getElementById('quickHead');
     // На телефоне панель начинается свёрнутой: девять строк занимают

@@ -452,6 +452,108 @@
   body.paused #paused .big { transform: scale(1); }
   #paused .small { font-size: 13px; color: var(--dim); }
 
+  /* Экран персонажа: карточка у левого края, боец живой в центре кадра.
+     Затемнять сцену нельзя — сцена и есть предпросмотр. */
+  #setup {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: max(4vw, 12px);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  #setup.gone { display: none; }
+
+  #setupCard {
+    pointer-events: auto;
+    width: 252px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #setupCard .h { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+
+  #setupCard .l {
+    margin-top: 4px;
+    color: var(--dim);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  #setupName {
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-solid);
+    font: inherit;
+    color: var(--text);
+    outline: none;
+  }
+
+  #setupColors { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  #setupColors button {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  #setupColors button.sel { border-color: var(--text); }
+
+  #setupWeapon, #setupBody { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  #setupWeapon button, #setupBody button {
+    flex: 1;
+    padding: 7px 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-solid);
+    font: inherit;
+    font-size: 12px;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #setupWeapon button.sel, #setupBody button.sel {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  #setupGo {
+    margin-top: 8px;
+    padding: 11px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+  }
+
   /* Метка сборки: по центру низа, поверх завесы паузы, кликов не ловит.
      Внизу по центру пусто и в бою, и на телефоне — стик и прицел живут
      по углам. */
@@ -552,6 +654,27 @@
     <div class="small">Click to resume</div>
   </div>
 
+  <!-- Character screen: shown once at load. The card sits to the side and
+       the arena stays live behind it — the player stands centered facing
+       the camera, and every choice repaints the REAL fighter, so the
+       preview is the game itself, not a mockup. -->
+  <div id="setup">
+    <div id="setupCard">
+      <div class="h">Your fighter</div>
+      <input id="setupName" maxlength="12" placeholder="Name" autocomplete="off" spellcheck="false">
+      <div class="l">Color</div>
+      <div id="setupColors"></div>
+      <div class="l">Weapon</div>
+      <div id="setupWeapon">
+        <button type="button" data-w="club">Club</button>
+        <button type="button" data-w="fists">Fists</button>
+      </div>
+      <div class="l">Body</div>
+      <div id="setupBody"></div>
+      <button id="setupGo" type="button">FIGHT</button>
+    </div>
+  </div>
+
   <!-- Номер сборки виден всегда, внизу экрана. Он уже жил на завесе паузы,
        но сверяться, доехало ли обновление, приходится чаще, чем хотелось бы,
        и каждый раз лезть за этим в паузу оказалось неудобно. -->
@@ -582,31 +705,31 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "176";</script>
+<script>window.TK_BUILD = "177";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=176",
-    "tk/main.js":         "./src/main.js?v=176",
-    "tk/tuning.js":       "./src/tuning.js?v=176",
-    "tk/mathx.js":        "./src/mathx.js?v=176",
-    "tk/arena.js":        "./src/arena.js?v=176",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=176",
-    "tk/balance.js":      "./src/balance.js?v=176",
-    "tk/skeleton.js":     "./src/skeleton.js?v=176",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=176",
-    "tk/gait.js":         "./src/gait.js?v=176",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=176",
-    "tk/swingAction.js":  "./src/swingAction.js?v=176",
-    "tk/locomotion.js":   "./src/locomotion.js?v=176",
-    "tk/body.js":         "./src/body.js?v=176",
-    "tk/bot.js":          "./src/bot.js?v=176",
-    "tk/contact.js":      "./src/contact.js?v=176",
-    "tk/match.js":        "./src/match.js?v=176",
-    "tk/fighter.js":      "./src/fighter.js?v=176",
-    "tk/input.js":        "./src/input.js?v=176",
-    "tk/ui.js":           "./src/ui.js?v=176",
-    "tk/sound.js":        "./src/sound.js?v=176"
+    "three":              "./vendor/three.module.js?v=177",
+    "tk/main.js":         "./src/main.js?v=177",
+    "tk/tuning.js":       "./src/tuning.js?v=177",
+    "tk/mathx.js":        "./src/mathx.js?v=177",
+    "tk/arena.js":        "./src/arena.js?v=177",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=177",
+    "tk/balance.js":      "./src/balance.js?v=177",
+    "tk/skeleton.js":     "./src/skeleton.js?v=177",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=177",
+    "tk/gait.js":         "./src/gait.js?v=177",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=177",
+    "tk/swingAction.js":  "./src/swingAction.js?v=177",
+    "tk/locomotion.js":   "./src/locomotion.js?v=177",
+    "tk/body.js":         "./src/body.js?v=177",
+    "tk/bot.js":          "./src/bot.js?v=177",
+    "tk/contact.js":      "./src/contact.js?v=177",
+    "tk/match.js":        "./src/match.js?v=177",
+    "tk/fighter.js":      "./src/fighter.js?v=177",
+    "tk/input.js":        "./src/input.js?v=177",
+    "tk/ui.js":           "./src/ui.js?v=177",
+    "tk/sound.js":        "./src/sound.js?v=177"
   }
 }
 </script>

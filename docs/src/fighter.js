@@ -41,6 +41,9 @@ export class Fighter {
     this.arena = arena;
     this.name = options.name || ('F' + this.id);
     this.isPlayer = !!options.isPlayer;
+    /** Whether THIS fighter carries a club. Set per fighter: the player
+     *  picks a weapon on the setup screen, bots get theirs from the roster. */
+    this.armed = options.armed !== false;
     this.color = new THREE.Color(options.color !== undefined ? options.color : 0xe0a267);
 
     this.position = new THREE.Vector3();
@@ -389,12 +392,36 @@ export class Fighter {
   }
 
   /**
-   * Есть ли у ЭТОГО бойца дубина. Общая ручка выключает оружие всем,
-   * отдельная — только ботам: игрок с дубиной против безоружных ботов
-   * (и наоборот) — легитимный способ играть.
+   * Есть ли у ЭТОГО бойца дубина. Слои: свой выбор бойца (armed — игрок
+   * решает на экране персонажа, ботам выдаёт база), общая ручка withClub
+   * выключает оружие всем, botsArmed — только ботам. Игрок с дубиной
+   * против безоружных ботов (и наоборот) — легитимный способ играть.
    */
   get hasClub() {
-    return T.withClub && (this.isPlayer || T.botsArmed);
+    return T.withClub && this.armed && (this.isPlayer || T.botsArmed);
+  }
+
+  /**
+   * Repaint the fighter. Panel materials are SHARED between fighters of
+   * the same color (see mat()), so they are never mutated — the meshes are
+   * moved onto the materials of the new color instead. Only the fighter's
+   * own thread, marker and trail materials change in place.
+   */
+  setColor(hex) {
+    const black = new THREE.Color(0x000000);
+    const oldCard = mat(this.color, 0.95);
+    const oldDark = mat(this.color.clone().lerp(black, 0.55), 0.95);
+    this.color.set(hex);
+    const card = mat(this.color, 0.95);
+    const dark = mat(this.color.clone().lerp(black, 0.55), 0.95);
+    this.group.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.material === oldCard) o.material = card;
+      else if (o.material === oldDark) o.material = dark;
+    });
+    this.thread.material.color.copy(this.color).lerp(new THREE.Color(0xfff6d8), 0.9);
+    if (!this.isPlayer) this.marker.material.color.copy(this.color);
+    this.trail.material.color.copy(this.color);
   }
 
   // ------------------------------------------------------------------ цикл
