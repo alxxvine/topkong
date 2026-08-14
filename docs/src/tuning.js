@@ -606,7 +606,7 @@ export const tuning = {
   // head-on — and FIGHT pulls back into the arena framing, one camera.
   menuCamHalf: 1.5,
   menuCamPitch: 16,
-  menuCamLift: 0.95,
+  menuCamLift: 0.62,
   camFollowWeight: 0.45,
   camSmooth: 0.18,
   camLookAhead: 0.35,

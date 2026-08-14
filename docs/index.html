@@ -685,33 +685,6 @@
 
   #setup.gone { display: none; }
 
-  #setupTitle {
-    position: absolute;
-    top: calc(26px + env(safe-area-inset-top, 0px));
-    left: 0;
-    right: 0;
-    text-align: center;
-  }
-
-  #setupTitle b {
-    display: block;
-    font-size: clamp(40px, 7vw, 66px);
-    font-weight: 800;
-    letter-spacing: -0.045em;
-    line-height: 0.95;
-    color: var(--text);
-  }
-
-  #setupTitle span {
-    display: block;
-    margin-top: 7px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.34em;
-    text-transform: uppercase;
-    color: var(--dim);
-  }
-
   #setupFoot {
     position: absolute;
     left: 50%;
@@ -908,7 +881,6 @@
   .ach.hid { opacity: 0.6; }
 
   @media (max-width: 640px) {
-    #setupTitle b { font-size: 34px; }
     #setupColors button { width: 26px; height: 26px; }
   }
 
@@ -1067,7 +1039,6 @@
        under the hero, nothing else. Locked rewards say on hover exactly
        what it takes to earn them. -->
   <div id="setup">
-    <div id="setupTitle"><b>TOP KONG</b><span>pick your brawler</span></div>
     <div id="setupFoot">
       <div id="setupColors"></div>
       <div id="setupSkins"></div>
@@ -1122,33 +1093,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "193";</script>
+<script>window.TK_BUILD = "194";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=193",
-    "tk/main.js":         "./src/main.js?v=193",
-    "tk/tuning.js":       "./src/tuning.js?v=193",
-    "tk/mathx.js":        "./src/mathx.js?v=193",
-    "tk/arena.js":        "./src/arena.js?v=193",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=193",
-    "tk/balance.js":      "./src/balance.js?v=193",
-    "tk/skeleton.js":     "./src/skeleton.js?v=193",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=193",
-    "tk/gait.js":         "./src/gait.js?v=193",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=193",
-    "tk/swingAction.js":  "./src/swingAction.js?v=193",
-    "tk/locomotion.js":   "./src/locomotion.js?v=193",
-    "tk/body.js":         "./src/body.js?v=193",
-    "tk/bot.js":          "./src/bot.js?v=193",
-    "tk/contact.js":      "./src/contact.js?v=193",
-    "tk/match.js":        "./src/match.js?v=193",
-    "tk/fighter.js":      "./src/fighter.js?v=193",
-    "tk/input.js":        "./src/input.js?v=193",
-    "tk/ui.js":           "./src/ui.js?v=193",
-    "tk/sound.js":        "./src/sound.js?v=193",
-    "tk/telemetry.js":    "./src/telemetry.js?v=193",
-    "tk/progress.js":     "./src/progress.js?v=193"
+    "three":              "./vendor/three.module.js?v=194",
+    "tk/main.js":         "./src/main.js?v=194",
+    "tk/tuning.js":       "./src/tuning.js?v=194",
+    "tk/mathx.js":        "./src/mathx.js?v=194",
+    "tk/arena.js":        "./src/arena.js?v=194",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=194",
+    "tk/balance.js":      "./src/balance.js?v=194",
+    "tk/skeleton.js":     "./src/skeleton.js?v=194",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=194",
+    "tk/gait.js":         "./src/gait.js?v=194",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=194",
+    "tk/swingAction.js":  "./src/swingAction.js?v=194",
+    "tk/locomotion.js":   "./src/locomotion.js?v=194",
+    "tk/body.js":         "./src/body.js?v=194",
+    "tk/bot.js":          "./src/bot.js?v=194",
+    "tk/contact.js":      "./src/contact.js?v=194",
+    "tk/match.js":        "./src/match.js?v=194",
+    "tk/fighter.js":      "./src/fighter.js?v=194",
+    "tk/input.js":        "./src/input.js?v=194",
+    "tk/ui.js":           "./src/ui.js?v=194",
+    "tk/sound.js":        "./src/sound.js?v=194",
+    "tk/telemetry.js":    "./src/telemetry.js?v=194",
+    "tk/progress.js":     "./src/progress.js?v=194"
   }
 }
 </script>
