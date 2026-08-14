@@ -37,12 +37,21 @@ export const SwingState = {
 // LAUNCHES the victim — that is its whole identity (its shorter arc pushes
 // less, so height is what it buys). The overhead slam hits flatter and
 // harder: gravity did half the swing, the victim eats all of it.
+//
+// `time` stretches the sweep, `wind` stretches the pull-in windup — the
+// vertical styles are HEAVIER, and a heavy strike must be visibly raised
+// before it lands. When all three shared one clock, the overhead slam
+// dropped before the raise even registered: the arm teleported up and the
+// hit read as instant. The extra windup is also the counterplay window —
+// a slam you cannot see coming cannot be dodged.
 export const SWING_STYLES = [
-  { name: 'side',     aFrom: [1, 25],   aTo: [-1, 0],    wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
-  { name: 'overhead', aFrom: [0, 15],   aTo: [0, -12],   wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8 },
-  // Снизу — черпающий: дубина опускается к колену остриём вниз
-  // и выгребает вверх-влево, к концу проноса глядя остриём вверх.
-  { name: 'rising',   aFrom: [0.8, 10], aTo: [-0.35, 0], wH: -0.12, wP: 35,  hF: -0.12, hT: 0.5,   pF: 30,  pT: -40, up: 3.2, pow: 1.15 },
+  { name: 'side',     aFrom: [1, 25], aTo: [-1, 0],  wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
+  { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 1.35, wind: 2.3 },
+  // The rising scoop is the overhead's mirror: the club dips to the knees
+  // tip-down right in front of the fighter and rips straight up past the
+  // face, finishing tip-up. It used to travel a wide horizontal arc from
+  // the right side, which made it read as a slightly tilted side swing.
+  { name: 'rising',   aFrom: [0, 14], aTo: [0, -12], wH: -0.28, wP: 65,  hF: -0.18, hT: 0.5,   pF: 55,  pT: -60, up: 3.2, pow: 1.15, time: 1.2,  wind: 1.7 },
 ];
 
 export class SwingAction {
@@ -167,21 +176,28 @@ export class SwingAction {
           const gapA = Math.abs(this.angle - (half * st.aFrom[0] + st.aFrom[1])) / 320;
           const gapH = Math.abs(this.height - st.hF) / 1.4;
           const gapP = Math.abs(this.pitch - st.pF) / 320;
-          this.pullTime = Math.min(0.35, Math.max(gapA, gapH, gapP)) * T.swingStrikeTime;
+          // The style's `wind` stretches the pull: on a heavy vertical
+          // strike the raise must READ as a windup, not flicker past.
+          this.pullTime = Math.min(0.35, Math.max(gapA, gapH, gapP))
+            * T.swingStrikeTime * (st.wind || 1);
           this.state = SwingState.Strike;
           this.timer = 0;
           this.power = lerp(T.swingWeakestPower, 1, this.charge);
         }
         break;
 
-      case SwingState.Strike:
+      case SwingState.Strike: {
         this.timer += dt;
-        if (this.timer >= this.pullTime + T.swingStrikeTime) {
+        // The sweep length is per-style now (`time`): the vertical strikes
+        // are deliberately slower than the side swing — weight over tempo.
+        const st = SWING_STYLES[this.styleIndex] || SWING_STYLES[0];
+        if (this.timer >= this.pullTime + T.swingStrikeTime * (st.time || 1)) {
           this.state = SwingState.Recover;
           this.timer = 0;
           this.cooldown = T.swingCooldown;
         }
         break;
+      }
 
       case SwingState.Recover:
         this.timer += dt;
@@ -242,7 +258,8 @@ export class SwingAction {
           // Рука всегда правая: обратная дуга — бэкхенд, а не
           // перекладывание оружия. У горизонтальных манер пронос плоский,
           // у рубящих высота и наклон дубины падают — удар приходит сверху.
-          const p2 = clamp01((this.timer - pull) / Math.max(0.01, T.swingStrikeTime));
+          const p2 = clamp01((this.timer - pull)
+            / Math.max(0.01, T.swingStrikeTime * (st.time || 1)));
           const e2 = 0.5 - 0.5 * Math.cos(p2 * Math.PI);
           const pulled = pull > 1e-4;
           const fromA = pulled ? arc(st.aFrom) : from.angle;
@@ -280,11 +297,15 @@ export class SwingAction {
         // видна по самой позе. Блок — исключение: дубина поднимается поперёк
         // корпуса, и по стойке видно, что бить сейчас не будут — будут держать.
         if (this.blockPose) {
-          targetAngle = -18;
-          targetReach = 0.46;
-          targetLean = -0.15;
-          targetHeight = 0.34;
-          targetPitch = -55;
+          // The block is a HOLD, not a threat: the club stands almost
+          // vertical, hugged right against the chest, no backward lean.
+          // The first version kept the reach and lean of a windup and read
+          // as "about to strike" — the exact opposite of what a block says.
+          targetAngle = 12;
+          targetReach = 0.24;
+          targetLean = 0;
+          targetHeight = 0.18;
+          targetPitch = -72;
           blend = 12 * dt;
         } else {
           targetAngle = T.carryAngle;
