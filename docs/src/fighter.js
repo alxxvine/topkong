@@ -4,7 +4,7 @@ import { clamp01, inverseLerp, lerp, RAD } from 'tk/mathx.js';
 import * as Rig from 'tk/fighterRig.js';
 import { PoseDriver } from 'tk/poseDriver.js';
 import { Gait } from 'tk/gait.js';
-import { SwingAction, SWING_STYLES } from 'tk/swingAction.js';
+import { SwingAction } from 'tk/swingAction.js';
 import { Locomotion } from 'tk/locomotion.js';
 import { Balance } from 'tk/balance.js';
 import { Body, P } from 'tk/body.js';
@@ -107,6 +107,13 @@ export class Fighter {
     this.clubHeadPrev = new THREE.Vector3();
     this.clubGrip = new THREE.Vector3();
     this.swingSpeed = 0;
+    // The fists get the same treatment for bare-knuckle strikes.
+    this.fistR = new THREE.Vector3();
+    this.fistRPrev = new THREE.Vector3();
+    this.fistL = new THREE.Vector3();
+    this.fistLPrev = new THREE.Vector3();
+    this.fistSpeedR = 0;
+    this.fistSpeedL = 0;
     this.lastHit = new Map();
 
     this.lastImpactSpeed = 0;
@@ -474,11 +481,13 @@ export class Fighter {
     // снова начинают держать тело.
     const inControl = controlEnabled && body.strength > T.controlStrength;
 
-    // Без дубины бить нечем: замах не считается вовсе, иначе боец
-    // размахивает пустой рукой и портит замер походки.
-    this.swing.held = inControl && this.swing.held && this.hasClub;
-    if (this.hasClub) this.swing.tick(dt);
-    else this.swing.reset();
+    // No club is not "no strikes" anymore: the same machine runs the
+    // punches, it just reads PUNCH_STYLES and drives the alternating fist
+    // (poseDriver.overrideHands). The flag is synced every tick — the
+    // club toggles live.
+    this.swing.fists = !this.hasClub;
+    this.swing.held = inControl && this.swing.held;
+    this.swing.tick(dt);
     this.bones.club.visible = this.hasClub;
     // Телу тоже: без дубины набалдашник почти невесом и ничего не тянет.
     body.clubOn = this.hasClub;
@@ -650,11 +659,25 @@ export class Fighter {
     if (snap) {
       this.clubHead.copy(tip);
       this.clubHeadPrev.copy(tip);
+      this.fistR.copy(this.body.pos[P.HandR]);
+      this.fistRPrev.copy(this.fistR);
+      this.fistL.copy(this.body.pos[P.HandL]);
+      this.fistLPrev.copy(this.fistL);
       this.swingSpeed = 0;
+      this.fistSpeedR = 0;
+      this.fistSpeedL = 0;
     } else {
       this.clubHeadPrev.copy(this.clubHead);
       this.clubHead.copy(tip);
       this.swingSpeed = this.clubHeadPrev.distanceTo(this.clubHead) / Math.max(1e-5, dt);
+      // Both fists are tracked the same way: punches alternate hands, and
+      // the swept segment must come from the fist that actually flew.
+      this.fistRPrev.copy(this.fistR);
+      this.fistR.copy(this.body.pos[P.HandR]);
+      this.fistSpeedR = this.fistRPrev.distanceTo(this.fistR) / Math.max(1e-5, dt);
+      this.fistLPrev.copy(this.fistL);
+      this.fistL.copy(this.body.pos[P.HandL]);
+      this.fistSpeedL = this.fistLPrev.distanceTo(this.fistL) / Math.max(1e-5, dt);
     }
     // Хват — вторая точка «лезвия»: в упор попадают древком, а не шаром.
     this.clubGrip.copy(this.body.pos[P.HandR]);
@@ -702,9 +725,19 @@ export class Fighter {
    * диаметра и точечная проверка просто прошла бы сквозь соперника.
    */
   checkHits(others, dt, now, onHit) {
-    if (!this.hasClub) return;
     if (!this.alive || !this.swing.striking) return;
-    if (this.swingSpeed < T.minImpactSpeed) return;
+
+    // Fists are a shorter, softer blade: one swept point instead of a
+    // shaft, tighter reach, and their own speed scale — a fist tops out
+    // far below a club head on a full sweep.
+    const fists = !this.hasClub;
+    const right = this.swing.hand >= 0;
+    const tip = fists ? (right ? this.fistR : this.fistL) : this.clubHead;
+    const tipPrev = fists ? (right ? this.fistRPrev : this.fistLPrev) : this.clubHeadPrev;
+    const speed = fists ? (right ? this.fistSpeedR : this.fistSpeedL) : this.swingSpeed;
+    const minSpeed = fists ? T.punchMinSpeed : T.minImpactSpeed;
+    const maxSpeed = fists ? T.punchMaxSpeed : T.maxImpactSpeed;
+    if (speed < minSpeed) return;
 
     for (const victim of others) {
       if (victim === this || !victim.alive) continue;
@@ -713,15 +746,15 @@ export class Fighter {
       if (last !== undefined && now - last < T.hitCooldown) continue;
 
       victim.torsoSegment(_a, _b);
-      const reach = Rig.ClubHeadRadius + 0.30;
+      const reach = fists ? 0.34 : Rig.ClubHeadRadius + 0.30;
 
-      const swept = segmentDistance(this.clubHeadPrev, this.clubHead, _a, _b);
-      const shaft = segmentDistance(this.clubGrip, this.clubHead, _a, _b);
+      const swept = segmentDistance(tipPrev, tip, _a, _b);
+      const shaft = fists ? swept : segmentDistance(this.clubGrip, this.clubHead, _a, _b);
       if (Math.min(swept, shaft) > reach) continue;
 
       this.lastHit.set(victim.id, now);
 
-      const strength = inverseLerp(T.minImpactSpeed, T.maxImpactSpeed, this.swingSpeed)
+      const strength = inverseLerp(minSpeed, maxSpeed, speed)
         * this.swing.power;
 
       // Блок: удар не роняет, а отталкивает. Толчок уходит в скорость
@@ -739,13 +772,14 @@ export class Fighter {
         victim.staggerDirX = _impulse.x;
         victim.staggerDirZ = _impulse.z;
         victim.credit(this);
-        if (onHit) onHit(this, victim, this.clubHead, clamp01(strength) * 0.5, true);
+        if (onHit) onHit(this, victim, tip, clamp01(strength) * 0.5, true);
         continue;
       }
 
       // The style shapes the hit: the rising scoop launches upward, the
-      // overhead slam hits flatter and harder. See SWING_STYLES.
-      const st = SWING_STYLES[this.swing.styleIndex] || SWING_STYLES[0];
+      // overhead slam hits flatter and harder. Punches carry their own
+      // set with the same slots. See SWING_STYLES / PUNCH_STYLES.
+      const st = this.swing.style;
 
       _impulse.copy(victim.position).sub(this.position);
       _impulse.y = 0;
@@ -761,10 +795,10 @@ export class Fighter {
       // Пока импульс прикладывается всему телу целиком.
       victim.takeHit(_impulse, dt);
       victim.credit(this);
-      victim.lastImpactSpeed = this.swingSpeed;
+      victim.lastImpactSpeed = speed;
       victim.lastImpactPower = strength;
 
-      if (onHit) onHit(this, victim, this.clubHead, clamp01(strength));
+      if (onHit) onHit(this, victim, tip, clamp01(strength));
     }
   }
 

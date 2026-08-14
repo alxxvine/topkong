@@ -38,20 +38,33 @@ export const SwingState = {
 // less, so height is what it buys). The overhead slam hits flatter and
 // harder: gravity did half the swing, the victim eats all of it.
 //
-// `time` stretches the sweep, `wind` stretches the pull-in windup — the
-// vertical styles are HEAVIER, and a heavy strike must be visibly raised
-// before it lands. When all three shared one clock, the overhead slam
-// dropped before the raise even registered: the arm teleported up and the
-// hit read as instant. The extra windup is also the counterplay window —
-// a slam you cannot see coming cannot be dodged.
+// `time` stretches the sweep, `wind` stretches the pull-in windup. The
+// vertical styles put ALL their extra length into the windup: the raise
+// is slow and readable (it is also the counterplay window), the blow
+// itself is FAST — even a touch faster than the side swing, gravity
+// helping the slam down and the legs driving the scoop up. The first cut
+// stretched the sweep instead, and it read exactly backwards: a flicker
+// of a raise, then a strike in slow motion.
 export const SWING_STYLES = [
   { name: 'side',     aFrom: [1, 25], aTo: [-1, 0],  wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
-  { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 1.35, wind: 2.3 },
+  { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 0.9, wind: 4.2 },
   // The rising scoop is the overhead's mirror: the club dips to the knees
   // tip-down right in front of the fighter and rips straight up past the
   // face, finishing tip-up. It used to travel a wide horizontal arc from
   // the right side, which made it read as a slightly tilted side swing.
-  { name: 'rising',   aFrom: [0, 14], aTo: [0, -12], wH: -0.28, wP: 65,  hF: -0.18, hT: 0.5,   pF: 55,  pT: -60, up: 3.2, pow: 1.15, time: 1.2,  wind: 1.7 },
+  { name: 'rising',   aFrom: [0, 14], aTo: [0, -12], wH: -0.28, wP: 65,  hF: -0.18, hT: 0.5,   pF: 55,  pT: -60, up: 3.2, pow: 1.15, time: 0.9, wind: 3.8 },
+];
+
+// The bare-knuckle set — same machine, same slots (LMB 0, wheel up 1,
+// wheel down 2), the fields now describe the punching FIST instead of the
+// club. Punches are quick and light: `rec` shrinks the recover+cooldown so
+// rapid clicks chain left-right-left, and the fighter alternates hands on
+// every punch (see `hand`). The pitch fields are dead weight without a
+// club and stay at zero.
+export const PUNCH_STYLES = [
+  { name: 'jab',      aFrom: [0, 16], aTo: [0, -12], wH: 0.25,  wP: 0, hF: 0.25,  hT: 0.38, pF: 0, pT: 0, up: 0.8, pow: 0.5,  time: 0.55, wind: 0.7, rec: 0.5 },
+  { name: 'overhand', aFrom: [0, 14], aTo: [0, -10], wH: 0.55,  wP: 0, hF: 0.52,  hT: 0.1,  pF: 0, pT: 0, up: 0.5, pow: 0.75, time: 0.7,  wind: 2.4, rec: 0.85 },
+  { name: 'uppercut', aFrom: [0, 12], aTo: [0, -8],  wH: -0.08, wP: 0, hF: -0.08, hT: 0.52, pF: 0, pT: 0, up: 3.4, pow: 0.6,  time: 0.7,  wind: 2.0, rec: 0.85 },
 ];
 
 export class SwingAction {
@@ -85,6 +98,14 @@ export class SwingAction {
     /** Стойка блока: дубина поперёк, поза вместо походной. Ставит боец. */
     this.blockPose = false;
 
+    /** Bare-knuckle mode: the fighter has no club, styles come from
+     *  PUNCH_STYLES. Synced by the fighter every tick — the club can be
+     *  toggled mid-session. */
+    this.fists = false;
+    /** Which fist strikes: +1 right, -1 left. Alternates every punch, so
+     *  rapid clicks read as left-right-left. Clubs are always right. */
+    this.hand = 1;
+
     /** Поза в момент отпускания: пронос стартует из неё, а не из
      *  канонической точки манеры. См. комментарий на переходе в Strike. */
     this.strikeFrom = { angle: 0, reach: 0, lean: 0, height: 0, pitch: 0 };
@@ -97,6 +118,12 @@ export class SwingAction {
      *  while side taps kept nearly all — and the strikes felt like
      *  animations with different frame counts, because they were. */
     this.pullTime = 0;
+  }
+
+  /** The active style: club styles or punch styles, same indices. */
+  get style() {
+    const set = this.fists ? PUNCH_STYLES : SWING_STYLES;
+    return set[this.styleIndex] || set[0];
   }
 
   /** Идёт пронос — только в это время дубина считается бьющей. Подхват
@@ -146,6 +173,9 @@ export class SwingAction {
             const shift = 1 + Math.floor(Math.random() * (SWING_STYLES.length - 1));
             this.styleIndex = (this.styleIndex + shift) % SWING_STYLES.length;
           }
+          // Fists alternate on every punch; the club is welded to the
+          // right hand (see fighterRig: the fighter is right-handed).
+          this.hand = this.fists ? -this.hand : 1;
         }
         break;
 
@@ -171,7 +201,7 @@ export class SwingAction {
           // Длительность подхвата — от расстояния, которое руке осталось
           // пройти; при полном замахе она нулевая. Подхват — ДОБАВКА
           // к времени удара, сам пронос всегда одной длины (см. pullTime).
-          const st = SWING_STYLES[this.styleIndex] || SWING_STYLES[0];
+          const st = this.style;
           const half = T.swingArcDegrees * 0.5;
           const gapA = Math.abs(this.angle - (half * st.aFrom[0] + st.aFrom[1])) / 320;
           const gapH = Math.abs(this.height - st.hF) / 1.4;
@@ -188,20 +218,20 @@ export class SwingAction {
 
       case SwingState.Strike: {
         this.timer += dt;
-        // The sweep length is per-style now (`time`): the vertical strikes
-        // are deliberately slower than the side swing — weight over tempo.
-        const st = SWING_STYLES[this.styleIndex] || SWING_STYLES[0];
+        // Sweep length and recover are per-style (`time`, `rec`): punches
+        // chain fast, the heavy vertical club strikes pay their windup.
+        const st = this.style;
         if (this.timer >= this.pullTime + T.swingStrikeTime * (st.time || 1)) {
           this.state = SwingState.Recover;
           this.timer = 0;
-          this.cooldown = T.swingCooldown;
+          this.cooldown = T.swingCooldown * (st.rec || 1);
         }
         break;
       }
 
       case SwingState.Recover:
         this.timer += dt;
-        if (this.timer >= T.swingRecoverTime) {
+        if (this.timer >= T.swingRecoverTime * (this.style.rec || 1)) {
           this.state = SwingState.Guard;
           this.timer = 0;
         }
@@ -213,7 +243,7 @@ export class SwingAction {
 
   updatePose(dt) {
     const half = T.swingArcDegrees * 0.5;
-    const st = SWING_STYLES[this.styleIndex] || SWING_STYLES[0];
+    const st = this.style;
     const arc = (a) => half * a[0] + a[1];
     let targetAngle, targetReach, targetLean, targetHeight, targetPitch, blend;
 
@@ -332,6 +362,7 @@ export class SwingAction {
     this.wantStyle = null;
     this.castNow = false;
     this.blockPose = false;
+    this.hand = 1;
     this.timer = 0;
     this.cooldown = 0;
     this.charge = 0;

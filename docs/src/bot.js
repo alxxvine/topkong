@@ -22,8 +22,8 @@ const _away = new THREE.Vector3();
 // bot brain, different characters. `temper` is aggression: hot heads rest
 // less between swings and release early pokes, patient ones wind up heavy
 // hits. `fear` is edge caution: cowards turn back far from the rim, the
-// reckless fight with their heels over it. club: false makes a rammer who
-// only fights with the body.
+// reckless fight with their heels over it. club: false makes a brawler
+// who rams with the body and throws bare-knuckle punches up close.
 export const BOT_ROSTER = [
   { name: 'Boulder', color: 0x5b8def, club: true,  temper: 0.35, fear: 0.5 },
   { name: 'Pepper',  color: 0xc46fb0, club: true,  temper: 0.9,  fear: 0.3 },
@@ -208,9 +208,10 @@ export class Bot {
     // 3. Strike. The charge builds while the opponent is in reach and is
     // released once the intended amount is banked. Release EARLY — the
     // sweep takes time, and a point-blank release always arrives late.
-    if (!armed) { f.swing.held = false; return; }
-
-    const inRange = dist < hit * 1.25 && this.rest <= 0;
+    // Unarmed bots throw punches: same machine, PUNCH_STYLES, and a much
+    // tighter release window — a fist is as short as the arm.
+    const range = armed ? hit * 1.25 : 1.05;
+    const inRange = dist < range && this.rest <= 0;
     if (!inRange) {
       if (f.swing.held) f.swing.held = false;
       this.wantSwing = false;

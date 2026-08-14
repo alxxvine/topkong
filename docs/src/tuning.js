@@ -505,6 +505,10 @@ export const tuning = {
   // диапазоне не срабатывали вовсе: удары просто перестали засчитываться.
   minImpactSpeed: 4,
   maxImpactSpeed: 17,
+  // The bare fist tops out far below a club head on a full sweep, so
+  // punches grade on their own speed scale (see fighter.checkHits).
+  punchMinSpeed: 1.6,
+  punchMaxSpeed: 8,
   // Замерено на стенде: незаряженный удар отбрасывает метра на четыре,
   // полный — метров на пять. С прежними числами любой удар в центре арены
   // выносил сразу за кромку, и край переставал быть местом, куда соперника

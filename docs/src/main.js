@@ -15,7 +15,6 @@ import { Ui } from 'tk/ui.js';
 import { Sound } from 'tk/sound.js';
 import { Telemetry } from 'tk/telemetry.js';
 import { Progress, ACHIEVEMENTS } from 'tk/progress.js';
-import { SWING_STYLES } from 'tk/swingAction.js';
 
 // Точка сборки: сцена, цикл, спавн и всё, что связывает модули между собой.
 //
@@ -206,7 +205,8 @@ export async function start() {
     // а принятый удар отталкивает, но не роняет (см. checkHits).
     player.blocking = input.blockHeld && playerFree
       && player.state === BodyState.Standing;
-    player.swing.blockPose = player.blocking && player.hasClub;
+    // Fists block too — both hands up in a boxing shell (poseDriver).
+    player.swing.blockPose = player.blocking;
 
     // Удары целиком на мыши: ЛКМ — боковой (держи для заряда), колесо
     // вверх/вниз — рубящий сверху / черпающий снизу одним тиком.
@@ -214,8 +214,10 @@ export async function start() {
     if (player.swing.held && player.swing.state === 'guard') {
       player.swing.wantStyle = 0;
     }
+    // Same slots armed and bare-handed: 1 is the overhead/overhand,
+    // 2 is the scoop/uppercut.
     const wheel = input.consumeWheelStrike();
-    if (wheel && playerFree && !player.blocking && player.hasClub) {
+    if (wheel && playerFree && !player.blocking) {
       player.swing.cast(wheel === 'overhead' ? 1 : 2);
     }
 
@@ -301,12 +303,11 @@ export async function start() {
     // Sound is edge-triggered off state the simulation already keeps:
     // no controller tells the mixer anything, the mixer watches the game.
     for (const f of fighters) {
-      const striking = f.hasClub && f.swing.striking;
+      const striking = f.swing.striking;
       if (striking && !f.sndStriking) {
-        sound.whoosh(f.swing.power);
-        if (f.isPlayer) {
-          telem.swing((SWING_STYLES[f.swing.styleIndex] || SWING_STYLES[0]).name);
-        }
+        // A fist cuts less air than a club head.
+        sound.whoosh(f.swing.power * (f.hasClub ? 1 : 0.55));
+        if (f.isPlayer) telem.swing(f.swing.style.name);
       }
       f.sndStriking = striking;
 
@@ -362,11 +363,8 @@ export async function start() {
 
     ui.setHud(hudText(player, arena, fps, input, match));
     ui.setBanner(setupState.done ? match.banner : null);
-    if (ui.swingButton) ui.swingButton.style.display = player.hasClub ? '' : 'none';
-    for (const id of ['ovr', 'rise']) {
-      const el = document.getElementById(id);
-      if (el) el.style.display = player.hasClub ? '' : 'none';
-    }
+    // The combat buttons stay up bare-handed too: fists punch now, and
+    // the wheel slots map to overhand/uppercut.
     renderer.render(scene, camera);
   }
 

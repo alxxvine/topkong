@@ -8,6 +8,7 @@ import { P } from 'tk/body.js';
 // в локальных: здесь они и переводятся.
 const _footL = new THREE.Vector3();
 const _footR = new THREE.Vector3();
+const _hand = new THREE.Vector3();
 
 // Считает ЦЕЛЕВУЮ позу бойца — ту, которую тело пытается принять.
 //
@@ -51,6 +52,12 @@ export class PoseDriver {
     this.headTurn = 0;
     /** Фаза дыхания. В покое тело иначе стоит абсолютно неподвижно. */
     this.breath = Math.random();
+
+    /** How far the hands are overridden away from the stock pose:
+     *  a punch in flight and a held block. Blended so entering and
+     *  leaving never snaps. */
+    this.punchBlend = 0;
+    this.blockBlend = 0;
 
     this.pose = Rig.makePose();
   }
@@ -133,6 +140,7 @@ export class PoseDriver {
       swing.height, swing.pitch, this.lift, this.twist, _footL, _footR,
       this.f.hasClub);
 
+    this.overrideHands(dt);
     this.solveJoints();
     return this.pose;
   }
@@ -169,6 +177,7 @@ export class PoseDriver {
       swing.height, swing.pitch, this.lift, this.twist, null, null,
       this.f.hasClub);
 
+    this.overrideHands(dt);
     this.solveJoints();
   }
 
@@ -250,6 +259,61 @@ export class PoseDriver {
     Rig.flexJoint(pose.shoulderLeft, pose.handLeft, Rig.HalfArm, Rig.armPole(false), pose.elbowLeft);
     Rig.flexJoint(pose.hipLeft, pose.footLeft, Rig.HalfLeg, Rig.legPole(), pose.kneeLeft);
     Rig.flexJoint(pose.hipRight, pose.footRight, Rig.HalfLeg, Rig.legPole(), pose.kneeRight);
+  }
+
+  /**
+   * Hand overrides on top of the stock pose: punches and the block.
+   *
+   * computePose knows two hand jobs — carrying the club and the guard
+   * stance — and both keep the arm at full length (see onSphere there).
+   * The two poses that NEED a bent elbow live here instead, applied after
+   * the formula and before the joint solve, so flexJoint sees the final
+   * hand and bends the elbow toward its pole:
+   *
+   *  - a punch: the striking fist rides the swing timeline. The swing
+   *    fields already describe a hand (direction, reach, height); the
+   *    club-less fighter just applies them to the alternating fist while
+   *    the other hand stays in guard.
+   *  - the block: with a club the right hand pulls in to the chest, club
+   *    upright — held like a shield, not wound up. Bare-handed both
+   *    fists come up in front of the chin, a boxing shell.
+   */
+  overrideHands(dt) {
+    const f = this.f;
+    const sw = f.swing;
+    const pose = this.pose;
+
+    const punching = !f.hasClub
+      && (sw.state === 'windup' || sw.state === 'strike' || sw.state === 'recover');
+    this.punchBlend = lerp(this.punchBlend, punching ? 1 : 0, clamp01(14 * dt));
+    this.blockBlend = lerp(this.blockBlend, sw.blockPose ? 1 : 0, clamp01(12 * dt));
+    if (this.punchBlend > 0.01) {
+      const a = sw.angle * DEG;
+      // Reach caps past the arm: the fist lands straight-armed with the
+      // shoulder rolled in, and anything shorter keeps the elbow bent —
+      // the chamber before the hit. The forward lean of the strike adds
+      // its own reach: a punch is thrown with the body, not the arm.
+      const r = Math.min(Rig.ArmLength * 1.3, Math.max(0.16, sw.reach));
+      // The lateral term mirrors for the left fist, so a left punch is a
+      // true mirror of a right one, not a cross-body reach.
+      _hand.set(Math.sin(a) * r * sw.hand, Rig.GripY + sw.height + 0.08,
+        Math.cos(a) * r + Math.max(0, sw.lean) * 0.2);
+      const target = sw.hand >= 0 ? pose.handRight : pose.handLeft;
+      target.lerp(_hand, this.punchBlend);
+    }
+    if (this.blockBlend > 0.01) {
+      if (f.hasClub) {
+        _hand.set(0.12, 1.14, 0.32);
+        pose.handRight.lerp(_hand, this.blockBlend);
+        // The grip was welded to the hand by computePose — re-weld it.
+        pose.grip.copy(pose.handRight);
+      } else {
+        _hand.set(0.17, 1.34, 0.28);
+        pose.handRight.lerp(_hand, this.blockBlend);
+        _hand.set(-0.17, 1.34, 0.28);
+        pose.handLeft.lerp(_hand, this.blockBlend);
+      }
+    }
   }
 
   /**
@@ -386,6 +450,8 @@ export class PoseDriver {
     this.leanVel = 0;
     this.swayVel = 0;
     this.clubLag = 0;
+    this.punchBlend = 0;
+    this.blockBlend = 0;
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
     this.twist = 0;

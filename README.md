@@ -99,6 +99,10 @@ default: the frame should show the game, not a dashboard. **H** brings it back.
 | **F** | slow motion: shows the arc shape and the moment of contact |
 | **R** | reset the round |
 
+The same slots work bare-handed: with fists picked, rapid LMB clicks throw
+alternating left-right jabs, the wheel gives the overhand and the uppercut,
+and the block becomes a two-handed boxing shell.
+
 ## On a phone
 
 Opens from the same link, nothing to install. A move stick appears on the
