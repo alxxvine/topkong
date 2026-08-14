@@ -19,20 +19,20 @@
 <title>Top Kong — arena</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%94%A8</text></svg>">
 <style>
-  /* Светлая матовая тема под стать сцене.
-     Стекло, а не панель: полупрозрачный слой с размытием и лёгкой
-     подкраской насыщенности — так интерфейс не спорит с ареной за внимание,
-     но и не теряется на ней. Тёмная тема с оранжевым акцентом читалась
-     аркадным автоматом. */
+  /* Flat and quiet. The glass phase — translucent panels, backdrop
+     blur, deep soft shadows — read as borrowed chrome and cheapened the
+     game. Now the UI is solid white cards with hairline borders, one
+     accent, near-zero shadow: the arena is the picture, the interface
+     is captions. */
   :root {
-    --panel: rgba(255, 255, 255, 0.72);
-    --panel-solid: rgba(255, 255, 255, 0.9);
-    --line: rgba(0, 0, 0, 0.08);
+    --panel: #ffffff;
+    --panel-solid: #ffffff;
+    --line: rgba(0, 0, 0, 0.1);
     --text: #1d1d1f;
     --dim: #6e6e73;
     --accent: #0071e3;
-    --shadow: 0 6px 28px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
-    --blur: saturate(180%) blur(20px);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --blur: none;
   }
 
   * { box-sizing: border-box; }
@@ -95,7 +95,7 @@
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     white-space: pre;
     /* Место под панель справа резервируется жёстко: иначе на узком окне
@@ -163,7 +163,7 @@
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
   }
 
@@ -237,7 +237,7 @@
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     font-size: 11.5px;
     color: var(--dim);
@@ -262,7 +262,7 @@
     flex-direction: column;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 18px;
+    border-radius: 12px;
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     box-shadow: var(--shadow);
@@ -488,7 +488,7 @@
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     cursor: pointer;
     pointer-events: auto;
@@ -515,7 +515,7 @@
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     cursor: pointer;
     pointer-events: auto;
@@ -543,7 +543,7 @@
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     pointer-events: auto;
     overflow: hidden;
@@ -579,7 +579,7 @@
   #quickTabs button {
     padding: 4px 9px;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 10px;
     background: transparent;
     font: inherit;
     font-size: 10.5px;
@@ -633,8 +633,8 @@
     justify-content: center;
     gap: 6px;
     background: rgba(228, 231, 236, 0.32);
-    backdrop-filter: saturate(140%) blur(18px);
-    -webkit-backdrop-filter: saturate(140%) blur(18px);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.22s ease, visibility 0.22s;
@@ -667,7 +667,7 @@
     color: var(--dim);
     background: var(--panel-solid);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 8px;
     cursor: pointer;
     pointer-events: auto;
   }
@@ -727,18 +727,20 @@
   #setupColors { display: flex; gap: 9px; }
 
   #setupColors button {
-    width: 31px;
-    height: 31px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    border: 2px solid transparent;
+    outline: 1px solid rgba(0, 0, 0, 0.12);
+    outline-offset: 0;
     cursor: pointer;
     padding: 0;
-    transition: transform 0.12s;
   }
 
-  #setupColors button:hover { transform: scale(1.12); }
-  #setupColors button.sel { border-color: var(--text); transform: scale(1.12); }
+  #setupColors button.sel {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
   #setupColors button.lock {
     opacity: 0.6;
     cursor: not-allowed;
@@ -751,7 +753,7 @@
   #setupSkins button {
     padding: 7px 15px;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--panel);
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
@@ -777,7 +779,7 @@
   #achBtn {
     width: 46px;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--panel);
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
@@ -790,19 +792,17 @@
   #setupGo {
     padding: 12px 52px;
     border: none;
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--accent);
     color: #fff;
     font: inherit;
     font-weight: 800;
     font-size: 17px;
     letter-spacing: 0.06em;
-    box-shadow: 0 10px 26px rgba(0, 113, 227, 0.35);
     cursor: pointer;
-    transition: transform 0.12s;
   }
 
-  #setupGo:hover { transform: scale(1.04); }
+  #setupGo:hover { background: #0062c4; }
 
 
   /* The achievements pop-up: everything behind it blurs, the list is
@@ -814,9 +814,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(226, 229, 236, 0.45);
-    backdrop-filter: blur(16px) saturate(130%);
-    -webkit-backdrop-filter: blur(16px) saturate(130%);
+    background: rgba(230, 232, 238, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     pointer-events: auto;
   }
   #achModal.gone { display: none; }
@@ -828,8 +828,8 @@
     flex-direction: column;
     background: var(--panel-solid);
     border: 1px solid var(--line);
-    border-radius: 22px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
     overflow: hidden;
   }
 
@@ -846,7 +846,7 @@
   #achClose {
     border: none;
     background: rgba(0, 0, 0, 0.05);
-    border-radius: 50%;
+    border-radius: 10px;
     width: 28px;
     height: 28px;
     font: inherit;
@@ -869,7 +869,7 @@
     gap: 12px;
     padding: 10px 12px;
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.65);
   }
   .ach .ico {
@@ -930,7 +930,7 @@
     padding: 10px 18px;
     background: var(--panel-solid);
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     font-weight: 600;
     font-size: 13px;
@@ -1122,33 +1122,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "192";</script>
+<script>window.TK_BUILD = "193";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=192",
-    "tk/main.js":         "./src/main.js?v=192",
-    "tk/tuning.js":       "./src/tuning.js?v=192",
-    "tk/mathx.js":        "./src/mathx.js?v=192",
-    "tk/arena.js":        "./src/arena.js?v=192",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=192",
-    "tk/balance.js":      "./src/balance.js?v=192",
-    "tk/skeleton.js":     "./src/skeleton.js?v=192",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=192",
-    "tk/gait.js":         "./src/gait.js?v=192",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=192",
-    "tk/swingAction.js":  "./src/swingAction.js?v=192",
-    "tk/locomotion.js":   "./src/locomotion.js?v=192",
-    "tk/body.js":         "./src/body.js?v=192",
-    "tk/bot.js":          "./src/bot.js?v=192",
-    "tk/contact.js":      "./src/contact.js?v=192",
-    "tk/match.js":        "./src/match.js?v=192",
-    "tk/fighter.js":      "./src/fighter.js?v=192",
-    "tk/input.js":        "./src/input.js?v=192",
-    "tk/ui.js":           "./src/ui.js?v=192",
-    "tk/sound.js":        "./src/sound.js?v=192",
-    "tk/telemetry.js":    "./src/telemetry.js?v=192",
-    "tk/progress.js":     "./src/progress.js?v=192"
+    "three":              "./vendor/three.module.js?v=193",
+    "tk/main.js":         "./src/main.js?v=193",
+    "tk/tuning.js":       "./src/tuning.js?v=193",
+    "tk/mathx.js":        "./src/mathx.js?v=193",
+    "tk/arena.js":        "./src/arena.js?v=193",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=193",
+    "tk/balance.js":      "./src/balance.js?v=193",
+    "tk/skeleton.js":     "./src/skeleton.js?v=193",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=193",
+    "tk/gait.js":         "./src/gait.js?v=193",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=193",
+    "tk/swingAction.js":  "./src/swingAction.js?v=193",
+    "tk/locomotion.js":   "./src/locomotion.js?v=193",
+    "tk/body.js":         "./src/body.js?v=193",
+    "tk/bot.js":          "./src/bot.js?v=193",
+    "tk/contact.js":      "./src/contact.js?v=193",
+    "tk/match.js":        "./src/match.js?v=193",
+    "tk/fighter.js":      "./src/fighter.js?v=193",
+    "tk/input.js":        "./src/input.js?v=193",
+    "tk/ui.js":           "./src/ui.js?v=193",
+    "tk/sound.js":        "./src/sound.js?v=193",
+    "tk/telemetry.js":    "./src/telemetry.js?v=193",
+    "tk/progress.js":     "./src/progress.js?v=193"
   }
 }
 </script>
