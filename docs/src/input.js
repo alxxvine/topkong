@@ -32,6 +32,11 @@ export class Input {
     this.keys = new Set();
     this.pointer = new THREE.Vector2(0, 0);
     this.hasPointer = false;
+    /** Window-level cursor position: unlike `pointer` it also updates
+     *  over UI overlays. The character menu reads it for the gaze. */
+    this.screenX = 0;
+    this.screenY = 0;
+    this.hasScreen = false;
 
     this.touchMode = false;
     this.stickVector = new THREE.Vector2();
@@ -86,6 +91,15 @@ export class Input {
     this.canvas.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') return;
       onMove(e);
+    });
+
+    // The window-level tracker: overlays swallow canvas events, but the
+    // menu gaze must follow the cursor over the UI too.
+    addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;
+      this.screenX = e.clientX;
+      this.screenY = e.clientY;
+      this.hasScreen = true;
     });
 
     this.canvas.addEventListener('pointerdown', (e) => {

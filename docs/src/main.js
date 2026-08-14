@@ -236,11 +236,34 @@ export async function start() {
         player.position.x + (ax / len) * 6, 0, player.position.z + (az / len) * 6);
     }
 
-    player.facingTarget.copy(input.aim).sub(player.position);
-    player.facingTarget.y = 0;
     // На экране персонажа игрок УЖЕ управляем: походить, помахать, послушать
     // звук — всё пробуется прямо в меню, на стоящих вокруг ботах, а не в бою.
     const playerFree = match.controlEnabled || !setupState.done;
+
+    if (setupState.done) {
+      player.facingTarget.copy(input.aim).sub(player.position);
+      player.facingTarget.y = 0;
+      player.poseDriver.menuLook = 0;
+    } else {
+      // In the menu the mouse steers only the GAZE. The body holds its
+      // pose toward the camera (or the walk direction while testing the
+      // controls); the head alone tracks the cursor, clamped so the neck
+      // never wrings. The hero spinning after every pointer move read as
+      // a compass needle, not a character.
+      if (player.moveInput.lengthSq() > 0.01) {
+        player.facingTarget.set(player.moveInput.x, 0, player.moveInput.y);
+      } else {
+        player.facingTarget.set(-1, 0, -1);
+      }
+      // The gaze comes from SCREEN space: at the menu's flat camera tilt
+      // a deck raycast is degenerate — upper-half rays graze the plane
+      // and land kilometers out. The cursor's screen X alone is enough,
+      // taken window-level so the head keeps tracking over the UI too.
+      const nx = input.hasScreen
+        ? Math.max(-1, Math.min(1, (input.screenX / innerWidth) * 2 - 1))
+        : 0;
+      player.poseDriver.menuLook = nx * 0.9;
+    }
 
     // Блок (ПКМ): пока держится — ударов нет, дубина поперёк корпуса,
     // а принятый удар отталкивает, но не роняет (см. checkHits).

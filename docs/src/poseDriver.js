@@ -61,6 +61,11 @@ export class PoseDriver {
     /** Dash pulse 1→0: a crouch-and-lunge that sells the hop. Set by
      *  main on the dash, decays here. */
     this.dashKick = 0;
+    /** Gaze target and its smoothed value, radians of extra head yaw.
+     *  The menu points the gaze at the cursor; zero in the game. */
+    this.menuLook = 0;
+    this.lookExtra = 0;
+    this.headBase = 0;
 
     this.pose = Rig.makePose();
   }
@@ -249,7 +254,17 @@ export class PoseDriver {
     // на слагаемое — иначе на быстром развороте отставание плеч и вынос
     // головы складывались бы и шея выворачивалась.
     const headOffset = clamp(headLead - this.twist, -T.headTurnMax, T.headTurnMax);
-    this.headTurn = lerp(this.headTurn, headOffset * DEG, clamp01(9 * dt * this.softness()));
+    // The smoothing STATE (headBase) stays separate from the output:
+    // adding the gaze into the lerped value compounded it frame over
+    // frame until the head faced backwards.
+    this.headBase = lerp(this.headBase, headOffset * DEG, clamp01(9 * dt * this.softness()));
+
+    // The gaze channel: an extra head yaw in radians, driven from outside
+    // (the character menu points it at the cursor while the BODY holds
+    // its pose — the mouse steers the look, not the fighter). Smoothed
+    // here so the head tracks, never snaps.
+    this.lookExtra = lerp(this.lookExtra, this.menuLook, clamp01(8 * dt));
+    this.headTurn = this.headBase + this.lookExtra;
   }
 
   /**
@@ -467,6 +482,9 @@ export class PoseDriver {
     this.punchBlend = 0;
     this.blockBlend = 0;
     this.dashKick = 0;
+    this.menuLook = 0;
+    this.lookExtra = 0;
+    this.headBase = 0;
     this.lastSpeed = 0;
     this.lastYaw = this.f.yaw * RAD;
     this.twist = 0;
