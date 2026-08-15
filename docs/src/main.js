@@ -195,7 +195,9 @@ export async function start() {
     const sig = rows.map((f) => `${f.name}:${f.kills}:${f.deaths}`).join('|');
     if (sig === scoreSig) return;
     scoreSig = sig;
-    scoreEl.innerHTML = rows.map((f) =>
+    // A tiny caption plus a pill per count: a bare digit next to a name
+    // read as noise, a labeled pill reads as a score.
+    scoreEl.innerHTML = '<i>Kills</i>' + rows.map((f) =>
       `<div${f.isPlayer ? ' class="me"' : ''}><b>${f.name}</b><span>${f.kills}</span></div>`
     ).join('');
   };
@@ -519,9 +521,11 @@ export async function start() {
       lastOverField = overField;
       document.body.classList.toggle('offfield', !overField);
     }
-    // The world ring IS the cursor, in the menu too: same pointer
-    // language on both screens. Off-deck rays hide it (overField).
-    aim.setVisible(overField);
+    // The world ring is the FIGHT's cursor. The menu uses the crosshair
+    // pointer instead (body.insetup #view in the styles): the ring lies
+    // flat on the deck far below the hero close-up, so in the menu it
+    // read as a mystery decal, not as a pointer.
+    aim.setVisible(overField && setupState.done);
     aim.update(input.aim, player);
     scene.userData.camQuat = camera.quaternion;
     fx.tick(real);
@@ -649,76 +653,14 @@ function initSetup(player, aim, match, telem, prog, camera) {
     for (const a of rewardOf('color')) addSwatch(a.reward.color, a);
 
 
-    renderAch();
-
     applyColor(color);
     applySkin(skin);
   };
 
-  // The achievements live in a pop-up now: cards with an icon, the
-  // requirement and a progress bar, over a blurred scene — the dry text
-  // list read as debug output. Hidden ones stay a dark "???" until won.
-  const ACH_ICONS = {
-    first: '🩸', gold: '💪', ink: '🛡️',
-    gild: '⏱️', century: '💯', void: '🌌',
-  };
-  const renderAch = () => {
-    const list = document.getElementById('achList');
-    if (!list) return;
-    list.innerHTML = '';
-    for (const a of ACHIEVEMENTS) {
-      const got = prog.has(a.id);
-      const card = document.createElement('div');
-      card.className = 'ach' + (got ? ' got' : '');
-      const ico = document.createElement('div');
-      ico.className = 'ico';
-      ico.textContent = ACH_ICONS[a.id] || '🏆';
-      const bd = document.createElement('div');
-      bd.className = 'bd';
-      const nm = document.createElement('b');
-      nm.textContent = a.name;
-      const ds = document.createElement('span');
-      ds.textContent = got
-        ? (a.reward ? `${a.desc} — ${a.reward.label} unlocked` : a.desc)
-        : a.reward ? `${a.desc} — unlocks ${a.reward.label}` : a.desc;
-      bd.append(nm, ds);
-      card.append(ico, bd);
-      const em = document.createElement('em');
-      if (got) {
-        em.textContent = '✓';
-      } else {
-        const cur = Math.min(a.need, Math.floor(a.of(prog.p)));
-        const bar = document.createElement('i');
-        bar.className = 'bar';
-        const fill = document.createElement('b');
-        fill.style.width = `${Math.round((cur / a.need) * 100)}%`;
-        bar.appendChild(fill);
-        bd.appendChild(bar);
-        em.textContent = a.time
-          ? `${Math.floor(cur / 60)}/${Math.floor(a.need / 60)}m`
-          : `${cur}/${a.need}`;
-      }
-      card.appendChild(em);
-      list.appendChild(card);
-    }
-  };
-  const achModal = document.getElementById('achModal');
-  const achBtn = document.getElementById('achBtn');
-  if (achBtn && achModal) {
-    achBtn.addEventListener('click', () => {
-      renderAch();
-      achModal.classList.remove('gone');
-    });
-    achModal.addEventListener('click', (e) => {
-      if (e.target === achModal || e.target.id === 'achClose') {
-        achModal.classList.add('gone');
-      }
-    });
-  }
-
-  // The club skins came back as one neat cycler on the right edge:
-  // click rotates through the EARNED skins, the locked recipes wait in
-  // the tooltip. One weapon still — the skins are paint, not stats.
+  // Achievements have no button and no pop-up anymore: progress announces
+  // itself in toasts, and every locked reward — a "?" pill in a part
+  // popover, a padlocked color swatch — says on hover exactly what it
+  // takes. The screen owns nothing but the character.
   const SKINS = [
     { id: 'classic', label: 'Classic' },
     ...rewardOf('club').map((a) => ({
@@ -728,28 +670,11 @@ function initSetup(player, aim, match, telem, prog, camera) {
   const skinOpen = (d) => !d.ach || prog.has(d.ach.id);
   let skin = SKINS.some((d) => d.id === saved.skin && skinOpen(d))
     ? saved.skin : 'classic';
-  const skinBtn = document.getElementById('skinBtn');
   const applySkin = (sk) => {
     skin = sk;
     player.setClubSkin(sk);
     if (popFor === 'club') refreshSel(spots.club.def);
-    if (!skinBtn) return;
-    // Icon only — the corner pair reads as two glyph buttons; the current
-    // skin's name and the locked recipes live in the tooltip.
-    skinBtn.textContent = '🔨';
-    const cur = SKINS.find((d) => d.id === sk);
-    const locked = SKINS.filter((d) => !skinOpen(d))
-      .map((d) => `🔒 ${d.label} — ${d.ach.name}: ${d.ach.desc}`);
-    skinBtn.title = [`Club skin: ${cur ? cur.label : sk} — click to cycle`, ...locked]
-      .join('\n');
   };
-  if (skinBtn) {
-    skinBtn.addEventListener('click', () => {
-      const open = SKINS.filter(skinOpen);
-      const i = open.findIndex((d) => d.id === skin);
-      applySkin(open[(i + 1) % open.length].id);
-    });
-  }
 
   // ----------------------------------------------------------- hotspots
   // Five glass dots pinned to the hero's body parts. Click one and a
@@ -839,9 +764,11 @@ function initSetup(player, aim, match, telem, prog, camera) {
         b.dataset.id = o.id;
         b.dataset.gi = gi;
         if (o.lock) {
-          b.textContent = `🔒 ${o.label}`;
+          // A locked look is a "?" pill: hover it and the tooltip says
+          // what it is and exactly what unlocks it.
+          b.textContent = '?';
           b.className = 'lock';
-          b.title = o.lock;
+          b.title = `${o.label} — ${o.lock}`;
           b.disabled = true;
         } else {
           b.textContent = o.label;

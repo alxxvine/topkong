@@ -81,7 +81,11 @@
      бы вовсе, поэтому там возвращается системный: тонкий кружок с четырьмя
      засечками, без заливки и без жирного контура. Белая подложка под
      тёмной линией нужна, чтобы он читался и на светлом фоне, и на тёмном. */
-  body.offfield #view {
+  /* В меню тот же плюсик: мировое кольцо там спрятано (оно лежит на
+     настиле далеко под героем-крупным-планом), а виджеты — точки, цвета,
+     FIGHT — оставляют себе обычный pointer. */
+  body.offfield #view,
+  body.insetup #view {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' opacity='.75'%3E%3Ccircle cx='12' cy='12' r='5'/%3E%3Cpath d='M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3'/%3E%3C/g%3E%3Cg fill='none' stroke='%231d1d1f' stroke-width='1' stroke-linecap='round' opacity='.85'%3E%3Ccircle cx='12' cy='12' r='5'/%3E%3Cpath d='M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3'/%3E%3C/g%3E%3C/svg%3E") 12 12, crosshair;
   }
 
@@ -205,18 +209,18 @@
   }
   #stam.low #stamBar { background: #e05555; }
 
-  /* The shooter chrome. The scoreboard sits in the left corner — kills
-     per fighter, live; the kill feed stacks under it and every entry
-     dissolves after a beat. Both exist only during the real fight. */
+  /* The shooter chrome. The scoreboard hangs on the RIGHT edge — kills
+     per fighter, live, each count in its own pill so the number reads as
+     a score and not as a stray digit; the kill feed stays on the left.
+     Both exist only during the real fight. */
   #score {
     position: absolute;
-    /* Below the pause and menu buttons, which own the very corner. */
-    top: calc(66px + env(safe-area-inset-top, 0px));
-    left: 12px;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: 12px;
     display: none;
     flex-direction: column;
-    gap: 3px;
-    padding: 9px 13px;
+    gap: 4px;
+    padding: 9px 12px 10px;
     background: var(--panel);
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
@@ -226,12 +230,36 @@
     font-size: 11.5px;
     color: var(--dim);
     pointer-events: none;
-    min-width: 96px;
+    min-width: 122px;
   }
   #score.on { display: flex; }
-  #score div { display: flex; justify-content: space-between; gap: 14px; }
+  #score i {
+    font-style: normal;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.5;
+  }
+  #score div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+  }
   #score b { font-weight: 700; color: var(--text); }
-  #score div.me b, #score div.me { color: var(--accent); }
+  #score span {
+    min-width: 26px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(29, 29, 31, 0.08);
+    text-align: center;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  #score div.me b { color: var(--accent); }
+  #score div.me span { background: var(--accent-glass); color: #fff; }
 
   #feed {
     position: absolute;
@@ -542,13 +570,15 @@
 
   #quick {
     position: absolute;
-    top: calc(10px + env(safe-area-inset-top, 0px));
+    /* Below the scoreboard, which owns the top-right corner now. The
+       panel is temporary test chrome — it yields, not the score. */
+    top: calc(160px + env(safe-area-inset-top, 0px));
     right: 10px;
     width: 208px;
     max-width: calc(100vw - 20px);
     /* The panel must never outgrow the screen: with plain overflow:hidden
        and no height cap, half the sliders were simply unreachable. */
-    max-height: calc(100% - 20px - env(safe-area-inset-top, 0px));
+    max-height: calc(100% - 170px - env(safe-area-inset-top, 0px));
     display: flex;
     flex-direction: column;
     background: var(--panel);
@@ -735,33 +765,6 @@
     line-height: 1;
   }
 
-  #setupCorner {
-    position: absolute;
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    right: max(3vw, 14px);
-    display: flex;
-    gap: 8px;
-    align-items: stretch;
-    pointer-events: auto;
-  }
-
-  /* The corner pair are twin icon buttons: glyphs only, names in the
-     tooltips. Words on capsules read as labels, not as controls. */
-  #skinBtn,
-  #achBtn {
-    width: 44px;
-    padding: 9px 0;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--panel);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    box-shadow: var(--shadow);
-    font: inherit;
-    font-size: 17px;
-    cursor: pointer;
-  }
-
   /* Customization hotspots: small glass dots pinned onto the hero. The
      pulse ring invites the first click; a dot with its popover open goes
      accent so you can tell WHICH part you are dressing. */
@@ -908,108 +911,6 @@
 
   #setupGo:hover { background: rgba(0, 113, 227, 0.95); }
 
-
-  /* The achievements pop-up: everything behind it blurs, the list is
-     cards — icon, name, a progress bar — not dry text lines. */
-  #achModal {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(228, 231, 238, 0.45);
-    backdrop-filter: blur(18px) saturate(150%);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-    pointer-events: auto;
-  }
-  #achModal.gone { display: none; }
-
-  #achCard {
-    width: min(480px, 94vw);
-    max-height: min(78vh, 640px);
-    display: flex;
-    flex-direction: column;
-    background: var(--panel-solid);
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    box-shadow: var(--shadow);
-    overflow: hidden;
-  }
-
-  #achHead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px 12px;
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-  }
-
-  #achClose {
-    border: none;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 999px;
-    width: 28px;
-    height: 28px;
-    font: inherit;
-    font-size: 13px;
-    color: var(--dim);
-    cursor: pointer;
-  }
-
-  #achList {
-    padding: 4px 14px 16px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .ach {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.65);
-  }
-  .ach .ico {
-    width: 40px;
-    height: 40px;
-    flex: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.05);
-  }
-  .ach .bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .ach .bd b { font-size: 13px; letter-spacing: -0.01em; }
-  .ach .bd span { font-size: 11px; color: var(--dim); line-height: 1.35; }
-  .ach .bar {
-    display: block;
-    height: 4px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.08);
-    overflow: hidden;
-    margin-top: 3px;
-  }
-  .ach .bar b { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
-  .ach em {
-    font-style: normal;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--dim);
-    flex: none;
-  }
-  .ach.got { border-color: rgba(0, 113, 227, 0.45); }
-  .ach.got .ico { background: rgba(0, 113, 227, 0.12); }
-  .ach.got em { color: var(--accent); font-size: 14px; }
-  .ach.hid { opacity: 0.6; }
 
   @media (max-width: 640px) {
     #setupColors button { width: 26px; height: 26px; }
@@ -1172,12 +1073,6 @@
        under the hero, nothing else. Locked rewards say on hover exactly
        what it takes to earn them. -->
   <div id="setup">
-    <!-- The service pair — achievements and the skin cycler — lives in
-         the top corner; the bottom is colors and one big FIGHT. -->
-    <div id="setupCorner">
-      <button id="achBtn" type="button" aria-label="Achievements">🏆</button>
-      <button id="skinBtn" type="button" aria-label="Club skin"></button>
-    </div>
     <!-- Customization hotspots: glass dots pinned to the hero's parts
          (positions are projected from the bones every frame), each opens
          a popover with that part's looks. -->
@@ -1189,16 +1084,6 @@
     <div id="setupFoot">
       <div id="setupColors"></div>
       <button id="setupGo" type="button">FIGHT</button>
-    </div>
-  </div>
-
-  <!-- Achievements pop-up: the scene blurs behind, the list becomes
-       cards instead of the dry text lines it used to be. -->
-  <div id="achModal" class="gone">
-    <div id="achCard">
-      <div id="achHead"><span>Achievements</span>
-        <button id="achClose" type="button" aria-label="Close">✕</button></div>
-      <div id="achList"></div>
     </div>
   </div>
 
@@ -1236,33 +1121,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "201";</script>
+<script>window.TK_BUILD = "202";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=201",
-    "tk/main.js":         "./src/main.js?v=201",
-    "tk/tuning.js":       "./src/tuning.js?v=201",
-    "tk/mathx.js":        "./src/mathx.js?v=201",
-    "tk/arena.js":        "./src/arena.js?v=201",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=201",
-    "tk/balance.js":      "./src/balance.js?v=201",
-    "tk/skeleton.js":     "./src/skeleton.js?v=201",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=201",
-    "tk/gait.js":         "./src/gait.js?v=201",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=201",
-    "tk/swingAction.js":  "./src/swingAction.js?v=201",
-    "tk/locomotion.js":   "./src/locomotion.js?v=201",
-    "tk/body.js":         "./src/body.js?v=201",
-    "tk/bot.js":          "./src/bot.js?v=201",
-    "tk/contact.js":      "./src/contact.js?v=201",
-    "tk/match.js":        "./src/match.js?v=201",
-    "tk/fighter.js":      "./src/fighter.js?v=201",
-    "tk/input.js":        "./src/input.js?v=201",
-    "tk/ui.js":           "./src/ui.js?v=201",
-    "tk/sound.js":        "./src/sound.js?v=201",
-    "tk/telemetry.js":    "./src/telemetry.js?v=201",
-    "tk/progress.js":     "./src/progress.js?v=201"
+    "three":              "./vendor/three.module.js?v=202",
+    "tk/main.js":         "./src/main.js?v=202",
+    "tk/tuning.js":       "./src/tuning.js?v=202",
+    "tk/mathx.js":        "./src/mathx.js?v=202",
+    "tk/arena.js":        "./src/arena.js?v=202",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=202",
+    "tk/balance.js":      "./src/balance.js?v=202",
+    "tk/skeleton.js":     "./src/skeleton.js?v=202",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=202",
+    "tk/gait.js":         "./src/gait.js?v=202",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=202",
+    "tk/swingAction.js":  "./src/swingAction.js?v=202",
+    "tk/locomotion.js":   "./src/locomotion.js?v=202",
+    "tk/body.js":         "./src/body.js?v=202",
+    "tk/bot.js":          "./src/bot.js?v=202",
+    "tk/contact.js":      "./src/contact.js?v=202",
+    "tk/match.js":        "./src/match.js?v=202",
+    "tk/fighter.js":      "./src/fighter.js?v=202",
+    "tk/input.js":        "./src/input.js?v=202",
+    "tk/ui.js":           "./src/ui.js?v=202",
+    "tk/sound.js":        "./src/sound.js?v=202",
+    "tk/telemetry.js":    "./src/telemetry.js?v=202",
+    "tk/progress.js":     "./src/progress.js?v=202"
   }
 }
 </script>
