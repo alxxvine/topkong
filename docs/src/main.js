@@ -235,7 +235,9 @@ export async function start() {
     // with the countdown held forever: free player, mannequin bots,
     // and nothing feeding the stats.
     const practice = setupState.done && setupState.practice;
-    const playerFree = match.controlEnabled || !setupState.done || practice;
+    // The menu hero only follows the cursor with his eyes — no walking,
+    // no swinging on the character screen.
+    const playerFree = match.controlEnabled || practice;
     const inGame = setupState.done && !practice;
     telem.beat(real);
     // Playtime achievements tick in the game, not on the menu screen.
@@ -282,15 +284,9 @@ export async function start() {
       player.poseDriver.menuLookPitch = 0;
     } else {
       // In the menu the mouse steers only the GAZE. The body holds its
-      // pose toward the camera (or the walk direction while testing the
-      // controls); the head alone tracks the cursor, clamped so the neck
-      // never wrings. The hero spinning after every pointer move read as
-      // a compass needle, not a character.
-      if (player.moveInput.lengthSq() > 0.01) {
-        player.facingTarget.set(player.moveInput.x, 0, player.moveInput.y);
-      } else {
-        player.facingTarget.set(-1, 0, -1);
-      }
+      // pose toward the camera; the head alone tracks the cursor, clamped
+      // so the neck never wrings.
+      player.facingTarget.set(-1, 0, -1);
       // The gaze comes from SCREEN space: at the menu's flat camera tilt
       // a deck raycast is degenerate — upper-half rays graze the plane
       // and land kilometers out. The cursor's screen X/Y are enough,
@@ -595,27 +591,11 @@ function initSetup(player, aim, match, telem, prog) {
   const FREE_COLORS = [0xff8a5c, 0xe4533f, 0x4fbf8b, 0x5b8def, 0xc46fb0];
   const rewardOf = (kind) => ACHIEVEMENTS.filter((a) => a.reward && a.reward[kind]);
 
-  const SKINS = [
-    { id: 'classic', label: 'Classic' },
-    ...rewardOf('club').map((a) => ({
-      id: a.reward.club, label: a.reward.label, ach: a,
-    })),
-  ];
-
   const colorKnown = (c) => FREE_COLORS.includes(c)
     || rewardOf('color').some((a) => a.reward.color === c);
-  const skinOk = (sk) => {
-    const def = SKINS.find((x) => x.id === sk);
-    return !!def && (!def.ach || prog.has(def.ach.id));
-  };
 
   let color = colorKnown(saved.color) && prog.colorUnlocked(saved.color)
     ? saved.color : FREE_COLORS[0];
-  // Migration: builds up to 189 stored a `weapon`; a picked skin rode in
-  // it ('gilded'/'void'), everything else maps to the classic club.
-  let skin = skinOk(saved.skin) ? saved.skin
-    : skinOk(saved.weapon) && saved.weapon !== 'club' && saved.weapon !== 'fists'
-      ? saved.weapon : 'classic';
 
   const applyColor = (c) => {
     color = c;
@@ -623,14 +603,6 @@ function initSetup(player, aim, match, telem, prog) {
     aim.setColor(c);
     for (const b of document.querySelectorAll('#setupColors button')) {
       b.classList.toggle('sel', +b.dataset.c === c);
-    }
-  };
-  const applySkin = (sk) => {
-    skin = sk;
-    player.armed = true;
-    player.setClubSkin(sk);
-    for (const b of document.querySelectorAll('#setupSkins button')) {
-      b.classList.toggle('sel', b.dataset.s === sk);
     }
   };
 
@@ -660,27 +632,10 @@ function initSetup(player, aim, match, telem, prog) {
     for (const c of FREE_COLORS) addSwatch(c, null);
     for (const a of rewardOf('color')) addSwatch(a.reward.color, a);
 
-    const skinsEl = document.getElementById('setupSkins');
-    skinsEl.innerHTML = '';
-    for (const def of SKINS) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.s = def.id;
-      if (!def.ach || prog.has(def.ach.id)) {
-        b.textContent = def.label;
-        b.addEventListener('click', () => applySkin(def.id));
-      } else {
-        b.textContent = '🔒 ' + def.label;
-        b.title = `${def.ach.name}: ${def.ach.desc}`;
-        b.disabled = true;
-      }
-      skinsEl.appendChild(b);
-    }
 
     renderAch();
 
     applyColor(color);
-    applySkin(skin);
   };
 
   // The achievements live in a pop-up now: cards with an icon, the
@@ -748,7 +703,9 @@ function initSetup(player, aim, match, telem, prog) {
   state.refresh = buildPickers;
 
   applyColor(color);
-  applySkin(skin);
+  // One weapon for everyone: the classic club, no picker.
+  player.armed = true;
+  player.setClubSkin('classic');
   // Лицом к камере, в центре: экран персонажа должен показывать персонажа.
   player.spawn(0, 0, Math.PI * 0.25);
 
@@ -757,16 +714,13 @@ function initSetup(player, aim, match, telem, prog) {
   document.getElementById('setupGo').addEventListener('click', () => {
     player.name = 'You';
     try {
-      localStorage.setItem('tk-player', JSON.stringify({ color, skin }));
+      localStorage.setItem('tk-player', JSON.stringify({ color }));
     } catch { /* private mode */ }
     root.classList.add('gone');
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
     state.practice = false;
-    telem.fight({
-      skin,
-      color: color.toString(16).padStart(6, '0'),
-    });
+    telem.fight({ color: color.toString(16).padStart(6, '0') });
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }

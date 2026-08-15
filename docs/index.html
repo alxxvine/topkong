@@ -25,17 +25,26 @@
      its top edge (inset specular), wears a pale stroke and floats on a
      soft ambient shadow. Shapes are capsules and squircles. */
   :root {
-    --panel: rgba(255, 255, 255, 0.45);
-    --panel-solid: rgba(255, 255, 255, 0.68);
-    --line: rgba(255, 255, 255, 0.65);
+    /* The sheen gradient is what sells the glass: the scene behind is
+       nearly uniform, so pure transparency reads as a gray card. */
+    --panel: linear-gradient(160deg,
+      rgba(255, 255, 255, 0.62) 0%,
+      rgba(255, 255, 255, 0.18) 45%,
+      rgba(255, 255, 255, 0.34) 100%);
+    --panel-solid: linear-gradient(160deg,
+      rgba(255, 255, 255, 0.78) 0%,
+      rgba(255, 255, 255, 0.42) 55%,
+      rgba(255, 255, 255, 0.58) 100%);
+    --line: rgba(255, 255, 255, 0.75);
     --text: #1d1d1f;
-    --dim: #63666e;
+    --dim: #5d6068;
     --accent: #0071e3;
-    --shadow: inset 0 1px 1px rgba(255, 255, 255, 0.85),
-      inset 0 -1px 1px rgba(255, 255, 255, 0.25),
-      0 10px 30px rgba(25, 30, 45, 0.16);
-    --blur: saturate(170%) blur(22px);
-    --accent-glass: rgba(0, 113, 227, 0.82);
+    --shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.95),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+      inset 1px 0 1px rgba(255, 255, 255, 0.25),
+      0 14px 38px rgba(25, 30, 45, 0.22);
+    --blur: saturate(200%) blur(28px);
+    --accent-glass: rgba(0, 113, 227, 0.78);
   }
 
   * { box-sizing: border-box; }
@@ -726,34 +735,6 @@
     line-height: 1;
   }
 
-  #setupSkins { display: flex; gap: 7px; }
-
-  #setupSkins button {
-    padding: 7px 15px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--panel);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    box-shadow: var(--shadow);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  #setupSkins button.sel {
-    background: var(--accent-glass);
-    border-color: rgba(255, 255, 255, 0.55);
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5),
-      0 6px 18px rgba(0, 113, 227, 0.3);
-    color: #fff;
-  }
-
-  #setupSkins button:disabled { opacity: 0.55; cursor: not-allowed; }
-
   #setupRow { display: flex; gap: 10px; align-items: stretch; }
 
   #achBtn {
@@ -903,6 +884,9 @@
   body.insetup #score, body.insetup #feed { display: none; }
   /* On a phone the touch cluster used to bleed through the menu buttons. */
   body.insetup #touch { display: none !important; }
+  /* The menu has no world aim ring, so the system cursor comes back —
+     without it the buttons were a guessing game. */
+  body.insetup #view { cursor: default; }
 
   /* Тост достижения: сверху по центру, поверх всего, кликов не ловит. */
   #toast {
@@ -1052,7 +1036,6 @@
   <div id="setup">
     <div id="setupFoot">
       <div id="setupColors"></div>
-      <div id="setupSkins"></div>
       <div id="setupRow">
         <button id="achBtn" type="button" aria-label="Achievements">🏆</button>
         <button id="setupGo" type="button">FIGHT</button>
@@ -1104,33 +1087,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "195";</script>
+<script>window.TK_BUILD = "196";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=195",
-    "tk/main.js":         "./src/main.js?v=195",
-    "tk/tuning.js":       "./src/tuning.js?v=195",
-    "tk/mathx.js":        "./src/mathx.js?v=195",
-    "tk/arena.js":        "./src/arena.js?v=195",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=195",
-    "tk/balance.js":      "./src/balance.js?v=195",
-    "tk/skeleton.js":     "./src/skeleton.js?v=195",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=195",
-    "tk/gait.js":         "./src/gait.js?v=195",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=195",
-    "tk/swingAction.js":  "./src/swingAction.js?v=195",
-    "tk/locomotion.js":   "./src/locomotion.js?v=195",
-    "tk/body.js":         "./src/body.js?v=195",
-    "tk/bot.js":          "./src/bot.js?v=195",
-    "tk/contact.js":      "./src/contact.js?v=195",
-    "tk/match.js":        "./src/match.js?v=195",
-    "tk/fighter.js":      "./src/fighter.js?v=195",
-    "tk/input.js":        "./src/input.js?v=195",
-    "tk/ui.js":           "./src/ui.js?v=195",
-    "tk/sound.js":        "./src/sound.js?v=195",
-    "tk/telemetry.js":    "./src/telemetry.js?v=195",
-    "tk/progress.js":     "./src/progress.js?v=195"
+    "three":              "./vendor/three.module.js?v=196",
+    "tk/main.js":         "./src/main.js?v=196",
+    "tk/tuning.js":       "./src/tuning.js?v=196",
+    "tk/mathx.js":        "./src/mathx.js?v=196",
+    "tk/arena.js":        "./src/arena.js?v=196",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=196",
+    "tk/balance.js":      "./src/balance.js?v=196",
+    "tk/skeleton.js":     "./src/skeleton.js?v=196",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=196",
+    "tk/gait.js":         "./src/gait.js?v=196",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=196",
+    "tk/swingAction.js":  "./src/swingAction.js?v=196",
+    "tk/locomotion.js":   "./src/locomotion.js?v=196",
+    "tk/body.js":         "./src/body.js?v=196",
+    "tk/bot.js":          "./src/bot.js?v=196",
+    "tk/contact.js":      "./src/contact.js?v=196",
+    "tk/match.js":        "./src/match.js?v=196",
+    "tk/fighter.js":      "./src/fighter.js?v=196",
+    "tk/input.js":        "./src/input.js?v=196",
+    "tk/ui.js":           "./src/ui.js?v=196",
+    "tk/sound.js":        "./src/sound.js?v=196",
+    "tk/telemetry.js":    "./src/telemetry.js?v=196",
+    "tk/progress.js":     "./src/progress.js?v=196"
   }
 }
 </script>
