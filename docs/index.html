@@ -261,32 +261,6 @@
   #score div.me b { color: var(--accent); }
   #score div.me span { background: var(--accent-glass); color: #fff; }
 
-  #feed {
-    position: absolute;
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    left: 132px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    pointer-events: none;
-  }
-  #feed div {
-    padding: 5px 12px;
-    background: var(--panel);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    box-shadow: var(--shadow);
-    font-size: 11.5px;
-    color: var(--dim);
-    animation: fade 0.25s ease-out;
-    transition: opacity 0.5s;
-  }
-  #feed div b { color: var(--text); font-weight: 700; }
-  #feed div .me { color: var(--accent); }
-  #feed div.out { opacity: 0; }
 
   /* --- панель настроек --- */
   body.bare #tune, body.bare #hud, body.bare #hint { display: none; }
@@ -892,6 +866,61 @@
     cursor: not-allowed;
   }
 
+  /* The lock card: one glass tooltip for every padlocked reward — the
+     name, the achievement recipe and a LIVE progress bar. A lock with no
+     visible progress reads as "never". */
+  #lockTip {
+    position: fixed;
+    z-index: 40;
+    width: 216px;
+    padding: 10px 12px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel-solid);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    pointer-events: none;
+    animation: fade 0.15s ease-out;
+  }
+
+  #lockTip.gone { display: none; }
+  #lockTip b { font-size: 12.5px; letter-spacing: -0.01em; }
+  #lockTip span { font-size: 11px; color: var(--dim); line-height: 1.35; }
+
+  #lockTip .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+  }
+
+  #lockTip .bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+
+  #lockTip .bar i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
+  #lockTip em {
+    font-style: normal;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
   #setupGo {
     padding: 13px 72px;
     border: 1px solid rgba(255, 255, 255, 0.55);
@@ -923,7 +952,7 @@
      exactly on top of the weapon column. */
   body.insetup #hint, body.insetup #stam, body.insetup #hud,
   body.insetup #tune, body.insetup #quick, body.insetup #pause,
-  body.insetup #score, body.insetup #feed { display: none; }
+  body.insetup #score { display: none; }
   /* On a phone the touch cluster used to bleed through the menu buttons. */
   body.insetup #touch { display: none !important; }
 
@@ -1035,7 +1064,6 @@
   <!-- The shooter chrome: a live scoreboard in the left corner and a
        kill feed under it — who dropped whom, fading after a beat. -->
   <div id="score"></div>
-  <div id="feed"></div>
   <div id="hint">WASD — move · LMB — strike (hold to charge) · wheel — overhead / rising · RMB — block · Space — dash · R — reset</div>
 
   <div id="tune" class="folded">
@@ -1081,6 +1109,9 @@
       <b id="partPopTitle"></b>
       <div id="partPopOpts"></div>
     </div>
+    <!-- The lock card: raised on hover over any padlocked reward — what
+         it is, the achievement that pays it, and live progress. -->
+    <div id="lockTip" class="gone"></div>
     <div id="setupFoot">
       <div id="setupColors"></div>
       <button id="setupGo" type="button">FIGHT</button>
@@ -1121,33 +1152,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "202";</script>
+<script>window.TK_BUILD = "203";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=202",
-    "tk/main.js":         "./src/main.js?v=202",
-    "tk/tuning.js":       "./src/tuning.js?v=202",
-    "tk/mathx.js":        "./src/mathx.js?v=202",
-    "tk/arena.js":        "./src/arena.js?v=202",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=202",
-    "tk/balance.js":      "./src/balance.js?v=202",
-    "tk/skeleton.js":     "./src/skeleton.js?v=202",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=202",
-    "tk/gait.js":         "./src/gait.js?v=202",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=202",
-    "tk/swingAction.js":  "./src/swingAction.js?v=202",
-    "tk/locomotion.js":   "./src/locomotion.js?v=202",
-    "tk/body.js":         "./src/body.js?v=202",
-    "tk/bot.js":          "./src/bot.js?v=202",
-    "tk/contact.js":      "./src/contact.js?v=202",
-    "tk/match.js":        "./src/match.js?v=202",
-    "tk/fighter.js":      "./src/fighter.js?v=202",
-    "tk/input.js":        "./src/input.js?v=202",
-    "tk/ui.js":           "./src/ui.js?v=202",
-    "tk/sound.js":        "./src/sound.js?v=202",
-    "tk/telemetry.js":    "./src/telemetry.js?v=202",
-    "tk/progress.js":     "./src/progress.js?v=202"
+    "three":              "./vendor/three.module.js?v=203",
+    "tk/main.js":         "./src/main.js?v=203",
+    "tk/tuning.js":       "./src/tuning.js?v=203",
+    "tk/mathx.js":        "./src/mathx.js?v=203",
+    "tk/arena.js":        "./src/arena.js?v=203",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=203",
+    "tk/balance.js":      "./src/balance.js?v=203",
+    "tk/skeleton.js":     "./src/skeleton.js?v=203",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=203",
+    "tk/gait.js":         "./src/gait.js?v=203",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=203",
+    "tk/swingAction.js":  "./src/swingAction.js?v=203",
+    "tk/locomotion.js":   "./src/locomotion.js?v=203",
+    "tk/body.js":         "./src/body.js?v=203",
+    "tk/bot.js":          "./src/bot.js?v=203",
+    "tk/contact.js":      "./src/contact.js?v=203",
+    "tk/match.js":        "./src/match.js?v=203",
+    "tk/fighter.js":      "./src/fighter.js?v=203",
+    "tk/input.js":        "./src/input.js?v=203",
+    "tk/ui.js":           "./src/ui.js?v=203",
+    "tk/sound.js":        "./src/sound.js?v=203",
+    "tk/telemetry.js":    "./src/telemetry.js?v=203",
+    "tk/progress.js":     "./src/progress.js?v=203"
   }
 }
 </script>

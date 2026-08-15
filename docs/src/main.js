@@ -167,23 +167,12 @@ export async function start() {
   const stamEl = document.getElementById('stam');
   const stamBar = document.getElementById('stamBar');
 
-  // The shooter chrome: a kill feed and a live scoreboard. The feed
-  // hangs off the one place every credited knock-off passes through
-  // (Fighter.eliminate); the scoreboard re-renders only when the
-  // standings actually change.
-  const feedEl = document.getElementById('feed');
+  // The shooter chrome is ONE panel now: the live scoreboard. The kill
+  // feed was tried and cut — with four fighters the KILLS board already
+  // tells the story, and the feed doubled it as noise. The board
+  // re-renders only when the standings actually change.
   const scoreEl = document.getElementById('score');
   let scoreSig = '';
-  Fighter.onKill = (attacker, victim) => {
-    if (!feedEl || !setupState.done || setupState.practice) return;
-    const row = document.createElement('div');
-    const name = (f) => `<b${f.isPlayer ? ' class="me"' : ''}>${f.name}</b>`;
-    row.innerHTML = `${name(attacker)} 🔨 ${name(victim)}`;
-    feedEl.prepend(row);
-    while (feedEl.children.length > 5) feedEl.lastChild.remove();
-    setTimeout(() => row.classList.add('out'), 3800);
-    setTimeout(() => row.remove(), 4400);
-  };
   const updateScore = (on) => {
     if (!scoreEl) return;
     scoreEl.classList.toggle('on', on);
@@ -642,10 +631,10 @@ function initSetup(player, aim, match, telem, prog, camera) {
         b.addEventListener('click', () => applyColor(c));
         if (ach) b.title = ach.reward.label;
       } else {
+        // Same glass card as the popover locks — recipe plus progress.
         b.className = 'lock';
         b.textContent = '🔒';
-        b.title = `${ach.reward.label} — ${ach.name}: ${ach.desc}`;
-        b.disabled = true;
+        bindTip(b, ach, ach.reward.label);
       }
       colorsEl.appendChild(b);
     };
@@ -661,8 +650,11 @@ function initSetup(player, aim, match, telem, prog, camera) {
   // itself in toasts, and every locked reward — a "?" pill in a part
   // popover, a padlocked color swatch — says on hover exactly what it
   // takes. The screen owns nothing but the character.
+  // The weapon rack: two free looks and the achievement trophies. All of
+  // them share the club's grip, reach and physics — variety, not stats.
   const SKINS = [
     { id: 'classic', label: 'Classic' },
+    { id: 'hammer', label: 'Sledge' },
     ...rewardOf('club').map((a) => ({
       id: a.reward.club, label: a.reward.label, ach: a,
     })),
@@ -674,6 +666,44 @@ function initSetup(player, aim, match, telem, prog, camera) {
     skin = sk;
     player.setClubSkin(sk);
     if (popFor === 'club') refreshSel(spots.club.def);
+  };
+
+  // ------------------------------------------------------ lock tooltip
+  // Locked rewards wear a padlock; hovering (or tapping) one raises a
+  // glass card: what the reward is, which achievement pays it, and a live
+  // progress bar — a lock with no visible progress reads as "never".
+  const tipEl = document.getElementById('lockTip');
+  let tipFor = null;
+  const showTip = (el, ach, label) => {
+    if (!tipEl || !ach) return;
+    tipFor = el;
+    const cur = Math.min(ach.need, Math.floor(ach.of(prog.p)));
+    const pct = Math.round((cur / ach.need) * 100);
+    const count = ach.time
+      ? `${Math.floor(cur / 60)}/${Math.floor(ach.need / 60)} min`
+      : `${cur}/${ach.need}`;
+    tipEl.innerHTML = `<b>${label}</b><span>${ach.name} — ${ach.desc}</span>`
+      + `<div class="row"><div class="bar"><i style="width:${pct}%"></i></div>`
+      + `<em>${count}</em></div>`;
+    tipEl.classList.remove('gone');
+    const r = el.getBoundingClientRect();
+    const w = tipEl.offsetWidth || 200;
+    const h = tipEl.offsetHeight || 70;
+    const x = Math.min(innerWidth - w - 8, Math.max(8, r.x + r.width / 2 - w / 2));
+    const y = r.y - h - 10 < 8 ? r.bottom + 10 : r.y - h - 10;
+    tipEl.style.left = `${Math.round(x)}px`;
+    tipEl.style.top = `${Math.round(y)}px`;
+  };
+  const hideTip = (el) => {
+    if (el && tipFor !== el) return;
+    tipFor = null;
+    tipEl?.classList.add('gone');
+  };
+  const bindTip = (el, ach, label) => {
+    el.addEventListener('pointerenter', () => showTip(el, ach, label));
+    el.addEventListener('pointerleave', () => hideTip(el));
+    // No hover on touch: a tap on the lock raises the same card.
+    el.addEventListener('click', () => showTip(el, ach, label));
   };
 
   // ----------------------------------------------------------- hotspots
@@ -715,10 +745,10 @@ function initSetup(player, aim, match, telem, prog, camera) {
     // bone origin — the origin is the grip, down in the fist.
     { part: 'club', label: 'Club', bone: 'club', lift: 0, world: (v) => v.copy(player.clubHead),
       groups: [{
-        title: 'Skin',
+        title: 'Weapon',
         opts: () => SKINS.map((d) => ({
           id: d.id, label: d.label,
-          lock: skinOpen(d) ? null : `${d.ach.name}: ${d.ach.desc}`,
+          lock: skinOpen(d) ? null : d.ach,
         })),
         get: () => skin,
         set: (id) => applySkin(id),
@@ -733,6 +763,7 @@ function initSetup(player, aim, match, telem, prog, camera) {
   const closePop = () => {
     popFor = null;
     if (popEl) popEl.classList.add('gone');
+    hideTip();
     for (const s of Object.values(spots)) s.el.classList.remove('on');
   };
   /** Re-mark the selected pill in every group of the open popover. */
@@ -764,12 +795,12 @@ function initSetup(player, aim, match, telem, prog, camera) {
         b.dataset.id = o.id;
         b.dataset.gi = gi;
         if (o.lock) {
-          // A locked look is a "?" pill: hover it and the tooltip says
-          // what it is and exactly what unlocks it.
-          b.textContent = '?';
+          // A locked look keeps its name behind a padlock; hover raises
+          // the glass card with the recipe and the live progress bar.
+          // NOT disabled: disabled buttons swallow the hover events.
+          b.textContent = `🔒 ${o.label}`;
           b.className = 'lock';
-          b.title = `${o.label} — ${o.lock}`;
-          b.disabled = true;
+          bindTip(b, o.lock, o.label);
         } else {
           b.textContent = o.label;
           b.addEventListener('click', () => { g.set(o.id); refreshSel(def); });
@@ -917,8 +948,10 @@ function syncDummies(scene, arena, dummies, fighters) {
     // каждая игра встречает другим составом. Колода тасуется один раз,
     // добавленные позже боты продолжают ту же раздачу.
     const p = drawPersona(index);
+    // Everyone carries a club — equal footing. The roster's bare-hand
+    // brawlers keep their tempers, they just get armed like the rest.
     const d = new Fighter(scene, arena, {
-      name: p.name, color: p.color, armed: p.club,
+      name: p.name, color: p.color, armed: true,
     });
     dressBot(d, p.name);
     d.bot = new Bot(d, arena, p);

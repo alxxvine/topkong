@@ -17,11 +17,13 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // Последнее пришлось делать руками: вставание и удар хранятся временем,
 // то есть ползунок «скорость», сползающий влево при ускорении, читался бы
 // сломанным. Поэтому у каждой строки своё чтение и своя запись.
-// Presets. The tuning stage is CLOSING: the playtest winners are baked in
-// as defaults and their tabs are gone — Movement runs Drunk (slow, swaying,
-// lazy dash), Strike runs Heavy (slowest chain, biggest weight), the
-// overhead is the Executioner cut. What remains player-tunable is what is
-// still being tested: the Rising animation and the Stamina screw.
+// The tuning stage is CLOSING: the playtest winners are baked in as
+// defaults and their tabs are gone — Movement runs Drunk (slow, swaying,
+// lazy dash), Strike runs Heavy with an extra-long side swing (the fast
+// blow clashed with the drunk walk), the overhead is the Executioner cut,
+// Stamina is the tight middle grade, clubs are on for EVERYONE (the
+// bare-fist mode is hidden — equal footing). The one thing still being
+// tested is the Rising animation.
 //
 // BAKED overrides the saved tuning on every boot: the testing builds wrote
 // preset experiments into localStorage, and without the force any stale
@@ -30,36 +32,17 @@ const BAKED = {
   // Movement: Drunk.
   maxRunSpeed: 1.0, strafeSpeed: 0.45, backSpeed: 0.5, turnSpeed: 160,
   dashPower: 1.4, dashCooldown: 1.1, leanAmount: 1.3, drunk: 0.25,
-  // Strike pacing: Heavy.
+  // Strike pacing: Heavy, with the side swing slowed to match the walk.
   swingSpeed: 0.85, swingChargeTime: 0.6, swingRecoverTime: 0.22, swingCooldown: 0.18,
-  sideWind: 2.2, sideTime: 0.9,
+  sideWind: 3.2, sideTime: 1.2,
   // Overhead pacing: the Executioner variant's own beat.
   overheadWind: 6, overheadTime: 0.85,
-};
-
-const PRESETS = {
-  Stamina: [
-    // The whole ladder moved DOWN a rung on request: the old default is
-    // now the soft option, and the new Classic makes every swing a spend.
-    { name: 'Off', hint: 'infinite everything',
-      set: { staminaOn: false } },
-    { name: 'Light', hint: 'the old easy default',
-      set: { staminaOn: true, staminaRegen: 0.45, staminaDelay: 0.5,
-             staminaClubCost: 0.32, staminaPunchCost: 0.11,
-             staminaDashCost: 0.42, staminaBlockDrain: 0.22 } },
-    { name: 'Classic', hint: 'tight: every swing counts',
-      set: { staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
-             staminaClubCost: 0.42, staminaPunchCost: 0.15,
-             staminaDashCost: 0.55, staminaBlockDrain: 0.3 } },
-    { name: 'Strict', hint: 'plan two moves ahead',
-      set: { staminaOn: true, staminaRegen: 0.28, staminaDelay: 0.9,
-             staminaClubCost: 0.5, staminaPunchCost: 0.18,
-             staminaDashCost: 0.65, staminaBlockDrain: 0.38 } },
-    { name: 'Hardcore', hint: 'two swings and a nap',
-      set: { staminaOn: true, staminaRegen: 0.2, staminaDelay: 1.1,
-             staminaClubCost: 0.6, staminaPunchCost: 0.22,
-             staminaDashCost: 0.8, staminaBlockDrain: 0.5 } },
-  ],
+  // Stamina: the tight middle grade — every swing is a real spend.
+  staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
+  staminaClubCost: 0.42, staminaPunchCost: 0.15,
+  staminaDashCost: 0.55, staminaBlockDrain: 0.3,
+  // One weapon culture: everyone swings a club, fists are hidden.
+  withClub: true, botsArmed: true, botsActive: true,
 };
 
 // Animation VARIANTS for the rising strike: these rewrite the strike's
@@ -96,39 +79,10 @@ const STRIKE_VARIANTS = {
   },
 };
 
-const QUICK = [
-  // The fight-test switches stay raw: they help testing, not tuning.
-  {
-    // Оружие меняет игру целиком — с ним бой про удар, без него про толчок
-    // телом, — и переключать это надо на ходу, а не искать в отладочной
-    // панели.
-    group: 'Match',
-    label: 'Clubs',
-    bool: true,
-    get: () => !!T.withClub,
-    set: (v) => { T.withClub = v; },
-  },
-  {
-    // Стоящие манекены: спокойно пробовать управление, удары и толчки.
-    label: 'Bots fight',
-    bool: true,
-    get: () => !!T.botsActive,
-    set: (v) => { T.botsActive = v; },
-  },
-  {
-    // Игрок с дубиной против безоружных — легитимный способ играть.
-    label: 'Bots armed',
-    bool: true,
-    get: () => !!T.botsArmed,
-    set: (v) => { T.botsArmed = v; },
-  },
-  {
-    label: 'Sound',
-    bool: true,
-    get: () => !!T.sound,
-    set: (v) => { T.sound = v; },
-  },
-];
+// The Match switches (clubs / bots fight / bots armed / sound) retired
+// with the rest of the settled settings: one weapon culture, live bots,
+// sound on. The raw toggles live on in the big debug panel.
+const QUICK = [];
 
 export class Ui {
   constructor() {
@@ -212,10 +166,6 @@ export class Ui {
       }
       return picked;
     };
-    const applySet = (preset) => {
-      for (const [k, v] of Object.entries(preset.set)) T[k] = v;
-      saveTuning();
-    };
     const applyVariant = (group) => (preset) => {
       Object.assign(SWING_STYLES[STRIKE_VARIANTS[group].index], preset.style);
       // Pacing rides in the same variant; mirror it into the live keys.
@@ -230,6 +180,7 @@ export class Ui {
     try {
       localStorage.removeItem('tk-preset-Movement');
       localStorage.removeItem('tk-preset-Strike');
+      localStorage.removeItem('tk-preset-Stamina');
       localStorage.removeItem('tk-variant-Overhead');
     } catch { /* private mode */ }
     saveTuning();
@@ -243,14 +194,6 @@ export class Ui {
       // the variant's pacing over the baked keys.
       const v = STRIKE_VARIANTS[group].list.find((x) => x.name === picked);
       if (v) applyVariant(group)(v);
-    }
-    {
-      // The stamina ladder was re-graded (everything one rung stingier),
-      // so the stored PICK is re-applied by name on boot — otherwise the
-      // old numbers saved under the same name would shadow the new ones.
-      const picked = makeGroup('Stamina', PRESETS.Stamina, 'tk-preset-Stamina', applySet);
-      const p = PRESETS.Stamina.find((x) => x.name === (picked || 'Classic'));
-      if (p) applySet(p);
     }
 
     for (const item of QUICK) {
@@ -270,7 +213,8 @@ export class Ui {
     }
     let saved = null;
     try { saved = localStorage.getItem('tk-quicktab'); } catch { /* private mode */ }
-    this.showQuickTab(saved || QUICK[0].group);
+    // Any stale tab name falls back to the first live section inside.
+    this.showQuickTab(saved || '');
 
     const head = document.getElementById('quickHead');
     // На телефоне панель начинается свёрнутой: девять строк занимают

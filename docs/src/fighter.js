@@ -26,13 +26,19 @@ export const BodyState = {
 
 const TRAIL_POINTS = 26;
 
-// Club skins — progression rewards. Classic is the scene-toned ash and
-// graphite; the unlockables get to be louder on purpose: a trophy that
-// nobody can tell from the default is not a trophy.
+// Weapon looks. Not just palettes anymore: `head` picks the head's
+// GEOMETRY — the spiked ball, a sledge block, an axe blade — while the
+// grip, length, mass and hit physics stay the club's, so every look
+// swings identically and the strikes read the same. Classic is the
+// scene-toned ash and graphite; the unlockables get to be louder on
+// purpose: a trophy that nobody can tell from the default is not a
+// trophy.
 export const CLUB_SKINS = {
-  classic: { wood: 0xd8c3a5, woodR: 0.72, metal: 0x9ba1ab, metalR: 0.38, metalM: 0.55 },
-  gilded:  { wood: 0xc9a54f, woodR: 0.45, metal: 0xf3d05e, metalR: 0.22, metalM: 0.9 },
-  void:    { wood: 0x2b2438, woodR: 0.6,  metal: 0x8b5cf6, metalR: 0.3,  metalM: 0.7 },
+  classic: { wood: 0xd8c3a5, woodR: 0.72, metal: 0x9ba1ab, metalR: 0.38, metalM: 0.55, head: 'ball' },
+  hammer:  { wood: 0xb99b7a, woodR: 0.6,  metal: 0xaab4c0, metalR: 0.3,  metalM: 0.75, head: 'maul' },
+  axe:     { wood: 0x9a7b5c, woodR: 0.62, metal: 0xc6cdd8, metalR: 0.26, metalM: 0.8,  head: 'axe' },
+  gilded:  { wood: 0xc9a54f, woodR: 0.45, metal: 0xf3d05e, metalR: 0.22, metalM: 0.9,  head: 'ball' },
+  void:    { wood: 0x2b2438, woodR: 0.6,  metal: 0x8b5cf6, metalR: 0.3,  metalM: 0.7,  head: 'ball' },
 };
 
 // Part SHAPES: silhouette variants of the cardboard cutout. The skeleton
@@ -117,6 +123,7 @@ export class Fighter {
      *  before build(): the per-part builders read them, and setPart
      *  re-runs one builder to swap a silhouette live. */
     this.parts = { head: 'classic', torso: 'classic', arms: 'classic', legs: 'classic' };
+    this.clubSkin = 'classic';
     this.eyeStyle = EYE_STYLES[options.eyes] ? options.eyes : 'classic';
     this.partMeshes = { head: [], torso: [], arms: [], legs: [] };
     this.eyeMeshes = [];
@@ -186,12 +193,6 @@ export class Fighter {
   // ---------------------------------------------------------------- сборка
 
   build() {
-    // Оружие в тон сцене: светлый ясень и матовый графит вместо тёмного
-    // дерева с чёрным набалдашником. Прежняя дубина была самым тёмным
-    // пятном в кадре и перетягивала взгляд с бойца на себя.
-    const wood = mat(new THREE.Color(0xd8c3a5), 0.72);
-    const metal = mat(new THREE.Color(0x9ba1ab), 0.38, 0.55);
-
     // Тело — картонная кукла строго по выкройке: голова 5x5, грудь трапеция
     // 2 сверху и 3 снизу, таз квадрат 3x3, рука 6, нога 8. Стоп нет вовсе,
     // нога цельная деталь. Панели расширяются к дальнему концу, а не
@@ -218,15 +219,7 @@ export class Fighter {
     this.buildLegs();
 
     this.bones.club = this.bone('club');
-    capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
-    sphere(this.bones.club, Rig.ClubHeadRadius, metal, Rig.ClubHeadLocal);
-    for (let i = 0; i < 4; i++) {
-      const angle = i * Math.PI * 0.5;
-      const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
-      const spike = box(this.bones.club, 0.08, 0.08, 0.10,
-        _v.copy(Rig.ClubHeadLocal).addScaledVector(dir, Rig.ClubHeadRadius), metal);
-      spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-    }
+    this.buildClub();
 
     this.buildThread();
     this.buildMarker();
@@ -541,18 +534,51 @@ export class Fighter {
   }
 
   /**
-   * Reskin the club. Same shared-material discipline as setColor: meshes
-   * move onto materials of the new palette. The shaft is the only capsule
-   * in the club group; everything else (head, spikes) is metal.
+   * Re-arm the fighter with the named look: skins are palettes, and some
+   * of them are whole different HEADS (sledge block, axe blade). Rebuilds
+   * the club meshes; the bone, grip and physics never change.
    */
   setClubSkin(name) {
-    const skin = CLUB_SKINS[name] || CLUB_SKINS.classic;
     this.clubSkin = CLUB_SKINS[name] ? name : 'classic';
+    this.buildClub();
+  }
+
+  /** (Re)build the weapon on the club bone for the current skin. */
+  buildClub() {
+    const skin = CLUB_SKINS[this.clubSkin] || CLUB_SKINS.classic;
+    for (const m of [...this.bones.club.children]) {
+      if (!m.isMesh) continue;
+      m.geometry.dispose();
+      this.bones.club.remove(m);
+    }
+    // Оружие в тон сцене: светлый ясень и матовый металл вместо тёмного
+    // дерева с чёрным набалдашником — тёмная дубина была самым тёмным
+    // пятном в кадре и перетягивала взгляд с бойца на себя.
     const wood = mat(new THREE.Color(skin.wood), skin.woodR);
     const metal = mat(new THREE.Color(skin.metal), skin.metalR, skin.metalM);
-    for (const o of this.bones.club.children) {
-      if (!o.isMesh) continue;
-      o.material = o.geometry.type === 'CapsuleGeometry' ? wood : metal;
+    capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
+    const H = Rig.ClubHeadLocal;
+    if (skin.head === 'maul') {
+      // The sledge: one steel block across the shaft.
+      box(this.bones.club, 0.34, 0.17, 0.17, H, metal);
+    } else if (skin.head === 'axe') {
+      // The axe: a trapezoid blade flaring OUT one side (the panel's wide
+      // end lands outward after the quarter turn), a stubby poll behind.
+      const blade = panel(this.bones.club, 0.26, 0.38, 0.16, 0.045, metal,
+        _v.copy(H).add(new THREE.Vector3(0.16, 0, 0)));
+      blade.rotation.z = Math.PI / 2;
+      box(this.bones.club, 0.12, 0.13, 0.11,
+        _v.copy(H).add(new THREE.Vector3(-0.07, 0, 0)), metal);
+    } else {
+      // The classic: the spiked ball.
+      sphere(this.bones.club, Rig.ClubHeadRadius, metal, H);
+      for (let i = 0; i < 4; i++) {
+        const angle = i * Math.PI * 0.5;
+        const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+        const spike = box(this.bones.club, 0.08, 0.08, 0.10,
+          _v.copy(H).addScaledVector(dir, Rig.ClubHeadRadius), metal);
+        spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+      }
     }
   }
 

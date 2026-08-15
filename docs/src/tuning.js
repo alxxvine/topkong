@@ -509,8 +509,8 @@ export const tuning = {
   // name and falls back to the style's own fields — the punch styles
   // keep their constants). These are dev knobs: once the tempo feels
   // right the winning numbers get baked in as the defaults.
-  sideWind: 2.2,
-  sideTime: 0.9,
+  sideWind: 3.2,
+  sideTime: 1.2,
   overheadWind: 6,
   overheadTime: 0.85,
   risingWind: 6.5,
