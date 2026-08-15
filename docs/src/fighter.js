@@ -35,17 +35,40 @@ export const CLUB_SKINS = {
   void:    { wood: 0x2b2438, woodR: 0.6,  metal: 0x8b5cf6, metalR: 0.3,  metalM: 0.7 },
 };
 
-// Body-part shades: each cardboard group (torso / arms / legs) can wear a
-// tint of the fighter's base color instead of a whole new palette. One hue
-// per fighter stays the identity (markers, thread, trail all key off it);
-// the shades add variety WITHIN that identity, so a crowd of bots reads
-// as individuals without turning into confetti.
-// Positive values lean toward black, negative toward white.
-export const PART_SHADES = {
-  classic:  0,
-  bleached: -0.34,
-  shadow:   0.34,
-  ink:      0.62,
+// Part SHAPES: silhouette variants of the cardboard cutout. The skeleton
+// never changes — bone lengths, joints and all the physics stay identical;
+// a shape only re-cuts the visual panels (widths, depths, and for the head
+// the primitive itself). Same doll, a different cut of cardboard, so any
+// combination is safe to hand to bots and players alike.
+export const HEAD_SHAPES = {
+  // w/h/d in HeadSize units; eyeZ pushes the face out to the new surface.
+  classic: { w: 1, h: 1, d: 0.85 },
+  brick:   { w: 1.35, h: 0.68, d: 0.85 },
+  tower:   { w: 0.75, h: 1.38, d: 0.78 },
+  ball:    { ball: true, r: 0.58, eyeZ: 0.54 },
+};
+export const TORSO_SHAPES = {
+  // Multipliers on hips width, chest bottom/top widths and sheet depth.
+  classic: { hips: 1, chestB: 1, chestT: 1, d: 1 },
+  hero:    { hips: 0.85, chestB: 1.05, chestT: 1.7, d: 1 },
+  barrel:  { hips: 1.2, chestB: 1.4, chestT: 0.85, d: 1.3 },
+  wiry:    { hips: 0.78, chestB: 0.75, chestT: 0.85, d: 0.7 },
+};
+export const ARM_SHAPES = {
+  // Multipliers on the top/mid/bottom widths of the two-piece trapezoid.
+  classic: { top: 1, mid: 1, bottom: 1, d: 1 },
+  beefy:   { top: 1.6, mid: 1.5, bottom: 1.3, d: 1.5 },
+  noodle:  { top: 0.55, mid: 0.5, bottom: 0.6, d: 0.7 },
+  slab:    { top: 1.2, mid: 0.96, bottom: 0.8, d: 1.6 },
+};
+export const LEG_SHAPES = {
+  classic: { top: 1, mid: 1, bottom: 1, d: 1 },
+  stumpy:  { top: 1.6, mid: 1.5, bottom: 1.4, d: 1.4 },
+  lanky:   { top: 0.6, mid: 0.55, bottom: 0.6, d: 0.75 },
+  slab:    { top: 1.2, mid: 0.96, bottom: 0.8, d: 1.5 },
+};
+const SHAPE_SETS = {
+  head: HEAD_SHAPES, torso: TORSO_SHAPES, arms: ARM_SHAPES, legs: LEG_SHAPES,
 };
 
 // Eye styles — the head's "skin". Geometry variants of the two face boxes:
@@ -90,9 +113,9 @@ export class Fighter {
     this.group = new THREE.Group();
     scene.add(this.group);
 
-    /** Per-part shade names (see PART_SHADES) and the eye style. Filled
-     *  before build(): build sorts every colored mesh into partMeshes so
-     *  the shades can be swapped live without touching geometry. */
+    /** Per-part shape names (see SHAPE_SETS) and the eye style. Filled
+     *  before build(): the per-part builders read them, and setPart
+     *  re-runs one builder to swap a silhouette live. */
     this.parts = { head: 'classic', torso: 'classic', arms: 'classic', legs: 'classic' };
     this.eyeStyle = EYE_STYLES[options.eyes] ? options.eyes : 'classic';
     this.partMeshes = { head: [], torso: [], arms: [], legs: [] };
@@ -163,7 +186,6 @@ export class Fighter {
   // ---------------------------------------------------------------- сборка
 
   build() {
-    const card = mat(this.color, 0.95);
     // Оружие в тон сцене: светлый ясень и матовый графит вместо тёмного
     // дерева с чёрным набалдашником. Прежняя дубина была самым тёмным
     // пятном в кадре и перетягивала взгляд с бойца на себя.
@@ -174,50 +196,26 @@ export class Fighter {
     // 2 сверху и 3 снизу, таз квадрат 3x3, рука 6, нога 8. Стоп нет вовсе,
     // нога цельная деталь. Панели расширяются к дальнему концу, а не
     // к суставу, — от этого и весь силуэт.
-    const D = Rig.PanelDepth;
-
-    this.bones.hips = this.bone('hips');
-    this.partMeshes.torso.push(
-      panel(this.bones.hips, Rig.HipsSize, Rig.HipsSize, Rig.HipsSize, D * 2, card));
-
-    this.bones.chest = this.bone('chest');
-    this.partMeshes.torso.push(panel(this.bones.chest, Rig.ChestHeight,
-      Rig.ChestBottomWidth, Rig.ChestTopWidth, D * 2, card));
-
-    this.bones.head = this.bone('head');
-    this.partMeshes.head.push(
-      box(this.bones.head, Rig.HeadSize, Rig.HeadSize, Rig.HeadSize * 0.85, null, card));
-    this.buildEyes();
-
-    // Нога и рука — та же трапеция, что и была, но разрезанная ровно
-    // посередине и раздвинутая на зазор. Ширина в месте разреза — среднее
-    // концов, поэтому сложи половинки обратно, и получится прежняя цельная
-    // деталь: силуэт не изменился, а в просвете видна нить.
     //
-    // Разрез не косметический. Пока деталь была одна, наступить на что-то
-    // выше настила боец физически не мог: расстояние от бедра до стопы
-    // держалось намертво. Теперь колено есть, и оно сгибается — но только
-    // когда прямой ноге места не осталось.
-    for (const name of ['legLUpper', 'legRUpper']) {
-      this.bones[name] = this.limbPanel(name, Rig.HalfLeg,
-        Rig.LegTopWidth, Rig.LegMidWidth, D * 1.4);
+    // Кости создаются здесь один раз; сами панели вешают пер-частевые
+    // билдеры (buildTorso и компания) — их же дергает setPart, когда
+    // игрок меняет форму детали на живой кукле.
+    //
+    // Нога и рука — трапеция, разрезанная ровно посередине и раздвинутая
+    // на зазор: в просвете видна нить, а колено может согнуться, когда
+    // прямой ноге места не осталось.
+    for (const name of ['hips', 'chest', 'head',
+      'legLUpper', 'legRUpper', 'legLLower', 'legRLower',
+      'armRUpper', 'armLUpper', 'armRFore', 'armLFore',
+      // Стоп на выкройке нет: кости оставлены пустыми, физике они нужны.
+      'footL', 'footR']) {
+      this.bones[name] = this.bone(name);
     }
-    for (const name of ['legLLower', 'legRLower']) {
-      this.bones[name] = this.limbPanel(name, Rig.HalfLeg,
-        Rig.LegMidWidth, Rig.LegBottomWidth, D * 1.4);
-    }
-    // Стоп на выкройке нет: кости оставлены пустыми, физике они ещё нужны.
-    this.bones.footL = this.bone('footL');
-    this.bones.footR = this.bone('footR');
-
-    for (const name of ['armRUpper', 'armLUpper']) {
-      this.bones[name] = this.limbPanel(name, Rig.HalfArm,
-        Rig.ArmTopWidth, Rig.ArmMidWidth, D);
-    }
-    for (const name of ['armRFore', 'armLFore']) {
-      this.bones[name] = this.limbPanel(name, Rig.HalfArm,
-        Rig.ArmMidWidth, Rig.ArmBottomWidth, D);
-    }
+    this.buildTorso();
+    this.buildHead();
+    this.buildEyes();
+    this.buildArms();
+    this.buildLegs();
 
     this.bones.club = this.bone('club');
     capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
@@ -243,26 +241,85 @@ export class Fighter {
     return g;
   }
 
+  /** Drop one part's meshes so its builder can hang a new silhouette. */
+  clearPart(part) {
+    for (const m of this.partMeshes[part]) {
+      m.geometry.dispose();
+      m.parent.remove(m);
+    }
+    this.partMeshes[part].length = 0;
+  }
+
+  /** Hips + chest panels for the current torso shape. */
+  buildTorso() {
+    this.clearPart('torso');
+    const st = TORSO_SHAPES[this.parts.torso] || TORSO_SHAPES.classic;
+    const card = mat(this.color, 0.95);
+    const D = Rig.PanelDepth;
+    this.partMeshes.torso.push(
+      panel(this.bones.hips, Rig.HipsSize,
+        Rig.HipsSize * st.hips, Rig.HipsSize * st.hips, D * 2 * st.d, card),
+      panel(this.bones.chest, Rig.ChestHeight,
+        Rig.ChestBottomWidth * st.chestB, Rig.ChestTopWidth * st.chestT,
+        D * 2 * st.d, card));
+  }
+
+  /** The head block (or ball) for the current head shape. */
+  buildHead() {
+    this.clearPart('head');
+    const st = HEAD_SHAPES[this.parts.head] || HEAD_SHAPES.classic;
+    const card = mat(this.color, 0.95);
+    const H = Rig.HeadSize;
+    this.partMeshes.head.push(st.ball
+      ? sphere(this.bones.head, H * st.r, card)
+      : box(this.bones.head, H * st.w, H * st.h, H * st.d, null, card));
+  }
+
   /**
-   * Звено конечности: трапеция от сустава к суставу.
-   *
-   * Локальная +Y кости смотрит на дальний сустав, поэтому широкий конец
-   * панели внизу, узкий вверху — как на чертеже выкройки.
+   * Звено конечности: трапеция от сустава к суставу. Локальная +Y кости
+   * смотрит на дальний сустав, панель расширяется к нему — как на чертеже.
+   * Панель короче своей кости на зазор с обоих концов: части тела висят
+   * НЕ впритык, на сгибе не въезжают друг в друга, в просвете видна нить.
    */
-  limbPanel(name, length, nearWidth, farWidth, depth) {
-    const g = this.bone(name);
-    // Панель короче своей кости на зазор с обоих концов: части тела висят
-    // НЕ впритык. Так на сгибе они не въезжают друг в друга, а в просвете
-    // видно нить, на которой всё держится.
-    const m = panel(g, Math.max(0.02, length - (T.partGap || 0) * Rig.CM * 2),
+  limbPiece(part, boneName, half, nearWidth, farWidth, depth) {
+    const m = panel(this.bones[boneName],
+      Math.max(0.02, half - (T.partGap || 0) * Rig.CM * 2),
       nearWidth, farWidth, depth, mat(this.color, 0.95));
-    // Limb panels sort themselves into the shade groups by bone name.
-    this.partMeshes[name.startsWith('leg') ? 'legs' : 'arms'].push(m);
-    return g;
+    this.partMeshes[part].push(m);
+  }
+
+  buildArms() {
+    this.clearPart('arms');
+    const st = ARM_SHAPES[this.parts.arms] || ARM_SHAPES.classic;
+    const D = Rig.PanelDepth * st.d;
+    for (const n of ['armRUpper', 'armLUpper']) {
+      this.limbPiece('arms', n, Rig.HalfArm,
+        Rig.ArmTopWidth * st.top, Rig.ArmMidWidth * st.mid, D);
+    }
+    for (const n of ['armRFore', 'armLFore']) {
+      this.limbPiece('arms', n, Rig.HalfArm,
+        Rig.ArmMidWidth * st.mid, Rig.ArmBottomWidth * st.bottom, D);
+    }
+  }
+
+  buildLegs() {
+    this.clearPart('legs');
+    const st = LEG_SHAPES[this.parts.legs] || LEG_SHAPES.classic;
+    const D = Rig.PanelDepth * 1.4 * st.d;
+    for (const n of ['legLUpper', 'legRUpper']) {
+      this.limbPiece('legs', n, Rig.HalfLeg,
+        Rig.LegTopWidth * st.top, Rig.LegMidWidth * st.mid, D);
+    }
+    for (const n of ['legLLower', 'legRLower']) {
+      this.limbPiece('legs', n, Rig.HalfLeg,
+        Rig.LegMidWidth * st.mid, Rig.LegBottomWidth * st.bottom, D);
+    }
   }
 
   /** (Re)build the two face boxes for the current eye style. Called from
-   *  build() and again by setEyes — geometry swaps, the head bone stays. */
+   *  build() and again by setEyes — geometry swaps, the head bone stays.
+   *  The Z offset comes from the HEAD shape: the face sits on whatever
+   *  surface the current head has. */
   buildEyes() {
     for (const eye of this.eyeMeshes) {
       eye.geometry.dispose();
@@ -270,11 +327,12 @@ export class Fighter {
     }
     this.eyeMeshes.length = 0;
     const st = EYE_STYLES[this.eyeStyle] || EYE_STYLES.classic;
+    const hs = HEAD_SHAPES[this.parts.head] || HEAD_SHAPES.classic;
     const ink = mat(new THREE.Color(0x2b2f38), 0.85);
     for (const side of [-1, 1]) {
       const eye = box(this.bones.head, Rig.HeadSize * st.w, Rig.HeadSize * st.h, 0.02,
         new THREE.Vector3(side * Rig.HeadSize * 0.2, Rig.HeadSize * st.y,
-          Rig.HeadSize * 0.43), ink);
+          Rig.HeadSize * (hs.eyeZ ?? 0.43)), ink);
       eye.rotation.z = side * st.tilt;
       this.eyeMeshes.push(eye);
     }
@@ -513,12 +571,20 @@ export class Fighter {
     this.trail.material.color.copy(this.color);
   }
 
-  /** Dress one body part (torso / arms / legs / head) in a shade of the
-   *  base color. Unknown names fall back to classic. */
-  setPart(part, shadeName) {
-    if (!this.partMeshes[part]) return;
-    this.parts[part] = PART_SHADES[shadeName] !== undefined ? shadeName : 'classic';
-    this.applyParts();
+  /** Re-cut one body part (head / torso / arms / legs) to the named
+   *  shape. Unknown names fall back to classic. Pure cosmetics: the
+   *  builders touch panels only, never bones or physics. */
+  setPart(part, shapeName) {
+    const set = SHAPE_SETS[part];
+    if (!set) return;
+    this.parts[part] = set[shapeName] ? shapeName : 'classic';
+    if (part === 'head') {
+      this.buildHead();
+      // The face rides the head's surface — a new skull re-seats the eyes.
+      this.buildEyes();
+    } else if (part === 'torso') this.buildTorso();
+    else if (part === 'arms') this.buildArms();
+    else this.buildLegs();
   }
 
   /** Swap the face: rebuilds the eye boxes for the named style. */
@@ -527,16 +593,10 @@ export class Fighter {
     this.buildEyes();
   }
 
-  /** Move every colored panel onto the material of its part's shade. */
+  /** Move every colored panel onto the base color's material. */
   applyParts() {
-    const white = new THREE.Color(0xffffff);
-    const black = new THREE.Color(0x000000);
+    const m = mat(this.color, 0.95);
     for (const part of Object.keys(this.partMeshes)) {
-      const shade = PART_SHADES[this.parts[part]] || 0;
-      const c = this.color.clone();
-      if (shade > 0) c.lerp(black, shade);
-      else if (shade < 0) c.lerp(white, -shade);
-      const m = mat(c, 0.95);
       for (const mesh of this.partMeshes[part]) mesh.material = m;
     }
   }

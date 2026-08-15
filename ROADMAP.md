@@ -500,16 +500,18 @@ torso, arms and legs, each picked separately in the character menu, so a
 player builds THEIR figure out of the shared construction kit. Bots draw
 random combinations from the same parts.
 
-**Done (build 199) — as looks, not proportions.** Five hotspot dots pinned
-to the hero's body on the character screen (positions projected from the
-bones every frame); each opens a glass popover with that part's options:
-eye styles for the face (classic/dot/mean/sleepy), shade tints of the base
-color for torso, arms and legs (classic/bleached/shadow/ink), the earned
-skins for the club. Picks persist in `tk-player` next to the color; bots
-sample the same catalog deterministically by name, so Boulder always wears
-Boulder's face. Shape/proportion variants (the original idea) stay open
-for later — shades and faces already de-clone the crowd without touching
-the rig.
+**Done (build 200) — as shapes.** Five hotspot dots pinned to the hero's
+body on the character screen (positions projected from the bones every
+frame); each opens a glass popover with that part's SHAPE variants:
+head classic/brick/tower/ball plus the face styles
+(classic/dot/mean/sleepy), torso classic/hero/barrel/wiry, arms
+classic/beefy/noodle/slab, legs classic/stumpy/lanky/slab, and the earned
+skins on the club. Shapes re-cut the visual panels only — bone lengths,
+joints and physics never change, so any combination is safe. Picks
+persist in `tk-player` next to the color; bots sample the same catalog
+deterministically by name (fmix32 over the name hash), so Boulder always
+wears Boulder's head. A first pass with color-shade tints instead of
+shapes was rejected — shapes it is.
 
 ### I10 — Camera and sound
 

@@ -4,7 +4,7 @@ import { tuning as T, loadTuning } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
-import { Fighter, BodyState, EYE_STYLES, PART_SHADES } from 'tk/fighter.js';
+import { Fighter, BodyState, EYE_STYLES, HEAD_SHAPES, TORSO_SHAPES, ARM_SHAPES, LEG_SHAPES } from 'tk/fighter.js';
 import { Bot, BOT_ROSTER } from 'tk/bot.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
@@ -588,16 +588,18 @@ function initSetup(player, aim, match, telem, prog, camera) {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('tk-player') || '{}'); } catch { /* fresh */ }
 
-  // Part customization: eyes for the head, a shade per cardboard group.
-  // Restored from the save up front so the hero boots dressed.
+  // Part customization: a SHAPE per body part plus the face style.
+  // Restored from the save up front so the hero boots dressed. Unknown
+  // names (including last build's shade ids) fall back to classic.
   const partPick = {
     eyes: EYE_STYLES[saved.eyes] ? saved.eyes : 'classic',
-    torso: PART_SHADES[saved.torso] !== undefined ? saved.torso : 'classic',
-    arms: PART_SHADES[saved.arms] !== undefined ? saved.arms : 'classic',
-    legs: PART_SHADES[saved.legs] !== undefined ? saved.legs : 'classic',
+    head: HEAD_SHAPES[saved.head] ? saved.head : 'classic',
+    torso: TORSO_SHAPES[saved.torso] ? saved.torso : 'classic',
+    arms: ARM_SHAPES[saved.arms] ? saved.arms : 'classic',
+    legs: LEG_SHAPES[saved.legs] ? saved.legs : 'classic',
   };
   player.setEyes(partPick.eyes);
-  for (const p of ['torso', 'arms', 'legs']) player.setPart(p, partPick[p]);
+  for (const p of ['head', 'torso', 'arms', 'legs']) player.setPart(p, partPick[p]);
 
   // The demo character is a COLOR and a CLUB SKIN, nothing else: no name,
   // no bodies, no weapon choice — everyone swings the same club, and the
@@ -730,7 +732,7 @@ function initSetup(player, aim, match, telem, prog, camera) {
   const applySkin = (sk) => {
     skin = sk;
     player.setClubSkin(sk);
-    if (spots.club) markSel('club', sk);
+    if (popFor === 'club') refreshSel(spots.club.def);
     if (!skinBtn) return;
     // Icon only — the corner pair reads as two glyph buttons; the current
     // skin's name and the locked recipes live in the tooltip.
@@ -751,40 +753,51 @@ function initSetup(player, aim, match, telem, prog, camera) {
 
   // ----------------------------------------------------------- hotspots
   // Five glass dots pinned to the hero's body parts. Click one and a
-  // popover offers that part's looks: eyes for the head, shades for the
-  // cardboard groups, the earned skins for the club. The dots track the
-  // bones through the camera every frame (state.placeSpots), so they sit
-  // on the character, not on guessed screen coordinates.
-  const SHADE_LABELS = { classic: 'Classic', bleached: 'Bleached', shadow: 'Shadow', ink: 'Ink' };
-  const EYE_LABELS = { classic: 'Classic', dot: 'Dot', mean: 'Mean', sleepy: 'Sleepy' };
-  const shadeOpts = () => Object.keys(PART_SHADES)
-    .map((id) => ({ id, label: SHADE_LABELS[id] || id }));
+  // popover offers that part's SHAPES — silhouette variants cut from the
+  // same skeleton — plus the face styles on the head and the earned skins
+  // on the club. The dots track the bones through the camera every frame
+  // (state.placeSpots), so they sit on the character, not on guessed
+  // screen coordinates.
+  const LABELS = {
+    classic: 'Classic', brick: 'Brick', tower: 'Tower', ball: 'Ball',
+    hero: 'Hero', barrel: 'Barrel', wiry: 'Wiry',
+    beefy: 'Beefy', noodle: 'Noodle', slab: 'Slab',
+    stumpy: 'Stumpy', lanky: 'Lanky',
+    dot: 'Dot', mean: 'Mean', sleepy: 'Sleepy',
+  };
+  const named = (set) => () => Object.keys(set)
+    .map((id) => ({ id, label: LABELS[id] || id }));
+  const shapeGroup = (part, set) => ({
+    title: 'Shape', opts: named(set),
+    get: () => partPick[part],
+    set: (id) => { partPick[part] = id; player.setPart(part, id); },
+  });
   const PART_DEFS = [
-    { part: 'eyes', label: 'Face', bone: 'head', lift: 0.14,
-      opts: () => Object.keys(EYE_STYLES).map((id) => ({ id, label: EYE_LABELS[id] || id })),
-      get: () => partPick.eyes,
-      set: (id) => { partPick.eyes = id; player.setEyes(id); } },
+    { part: 'head', label: 'Head', bone: 'head', lift: 0.14,
+      groups: [
+        shapeGroup('head', HEAD_SHAPES),
+        { title: 'Face', opts: named(EYE_STYLES),
+          get: () => partPick.eyes,
+          set: (id) => { partPick.eyes = id; player.setEyes(id); } },
+      ] },
     { part: 'torso', label: 'Torso', bone: 'chest', lift: 0,
-      opts: shadeOpts,
-      get: () => partPick.torso,
-      set: (id) => { partPick.torso = id; player.setPart('torso', id); } },
+      groups: [shapeGroup('torso', TORSO_SHAPES)] },
     { part: 'arms', label: 'Arms', bone: 'armLFore', lift: 0,
-      opts: shadeOpts,
-      get: () => partPick.arms,
-      set: (id) => { partPick.arms = id; player.setPart('arms', id); } },
+      groups: [shapeGroup('arms', ARM_SHAPES)] },
     { part: 'legs', label: 'Legs', bone: 'legRLower', lift: 0,
-      opts: shadeOpts,
-      get: () => partPick.legs,
-      set: (id) => { partPick.legs = id; player.setPart('legs', id); } },
+      groups: [shapeGroup('legs', LEG_SHAPES)] },
     // The club dot rides the tracked head-of-club world point, not the
     // bone origin — the origin is the grip, down in the fist.
     { part: 'club', label: 'Club', bone: 'club', lift: 0, world: (v) => v.copy(player.clubHead),
-      opts: () => SKINS.map((d) => ({
-        id: d.id, label: d.label,
-        lock: skinOpen(d) ? null : `${d.ach.name}: ${d.ach.desc}`,
-      })),
-      get: () => skin,
-      set: (id) => applySkin(id) },
+      groups: [{
+        title: 'Skin',
+        opts: () => SKINS.map((d) => ({
+          id: d.id, label: d.label,
+          lock: skinOpen(d) ? null : `${d.ach.name}: ${d.ach.desc}`,
+        })),
+        get: () => skin,
+        set: (id) => applySkin(id),
+      }] },
   ];
   const spotsEl = document.getElementById('spots');
   const popEl = document.getElementById('partPop');
@@ -797,31 +810,48 @@ function initSetup(player, aim, match, telem, prog, camera) {
     if (popEl) popEl.classList.add('gone');
     for (const s of Object.values(spots)) s.el.classList.remove('on');
   };
-  const markSel = (part, id) => {
-    if (popFor !== part || !popOpts) return;
-    for (const b of popOpts.children) b.classList.toggle('sel', b.dataset.id === id);
+  /** Re-mark the selected pill in every group of the open popover. */
+  const refreshSel = (def) => {
+    if (!popOpts) return;
+    for (const b of popOpts.querySelectorAll('button')) {
+      const g = def.groups[+b.dataset.gi];
+      b.classList.toggle('sel', g && g.get() === b.dataset.id);
+    }
   };
   const openPop = (def) => {
     if (!popEl) return;
     popFor = def.part;
     popTitle.textContent = def.label;
     popOpts.innerHTML = '';
-    for (const o of def.opts()) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.id = o.id;
-      if (o.lock) {
-        b.textContent = `🔒 ${o.label}`;
-        b.className = 'lock';
-        b.title = o.lock;
-        b.disabled = true;
-      } else {
-        b.textContent = o.label;
-        b.addEventListener('click', () => { def.set(o.id); markSel(def.part, o.id); });
+    def.groups.forEach((g, gi) => {
+      // Group captions only when there is more than one group to tell apart.
+      if (def.groups.length > 1) {
+        const t = document.createElement('i');
+        t.className = 'gt';
+        t.textContent = g.title;
+        popOpts.appendChild(t);
       }
-      popOpts.appendChild(b);
-    }
-    markSel(def.part, def.get());
+      const row = document.createElement('div');
+      row.className = 'grow';
+      for (const o of g.opts()) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.id = o.id;
+        b.dataset.gi = gi;
+        if (o.lock) {
+          b.textContent = `🔒 ${o.label}`;
+          b.className = 'lock';
+          b.title = o.lock;
+          b.disabled = true;
+        } else {
+          b.textContent = o.label;
+          b.addEventListener('click', () => { g.set(o.id); refreshSel(def); });
+        }
+        row.appendChild(b);
+      }
+      popOpts.appendChild(row);
+    });
+    refreshSel(def);
     for (const [p, s] of Object.entries(spots)) s.el.classList.toggle('on', p === def.part);
     popEl.classList.remove('gone');
     placePop(def);
@@ -973,19 +1003,28 @@ function syncDummies(scene, arena, dummies, fighters) {
 }
 
 /**
- * Bots sample the same part catalog the player customizes from, seeded by
- * their name: Boulder always wears Boulder's face. The roster color stays
- * the identity; the eyes and shades just keep the crowd from being clones.
+ * Bots sample the same shape catalog the player customizes from, seeded
+ * by their name: Boulder always wears Boulder's head. The roster color
+ * stays the identity; the shapes keep the crowd from being clones.
  */
 function dressBot(fighter, name) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  const eyes = Object.keys(EYE_STYLES);
-  const shades = Object.keys(PART_SHADES);
-  fighter.setEyes(eyes[h % eyes.length]);
-  fighter.setPart('torso', shades[(h >> 3) % shades.length]);
-  fighter.setPart('arms', shades[(h >> 6) % shades.length]);
-  fighter.setPart('legs', shades[(h >> 9) % shades.length]);
+  // fmix32 avalanche: the raw sum's bits are too tame — and a SIGNED
+  // shift on a hash past 2^31 dealt negative indexes, which dressed half
+  // the roster in silent all-classic. Unsigned shifts only.
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35) >>> 0;
+  h ^= h >>> 16;
+  const pick = (set, shift) => {
+    const keys = Object.keys(set);
+    return keys[(h >>> shift) % keys.length];
+  };
+  fighter.setEyes(pick(EYE_STYLES, 0));
+  fighter.setPart('head', pick(HEAD_SHAPES, 2));
+  fighter.setPart('torso', pick(TORSO_SHAPES, 5));
+  fighter.setPart('arms', pick(ARM_SHAPES, 8));
+  fighter.setPart('legs', pick(LEG_SHAPES, 11));
 }
 
 function drawPersona(index) {
