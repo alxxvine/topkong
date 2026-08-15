@@ -4,7 +4,7 @@ import { tuning as T, loadTuning } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
-import { Fighter, BodyState } from 'tk/fighter.js';
+import { Fighter, BodyState, EYE_STYLES, PART_SHADES } from 'tk/fighter.js';
 import { Bot, BOT_ROSTER } from 'tk/bot.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
@@ -103,7 +103,7 @@ export async function start() {
 
   // Экран персонажа. Пока он открыт, отсчёт матча не заканчивается;
   // кнопка FIGHT применяет выбор, прячет экран и начинает бой заново.
-  const setupState = initSetup(player, aim, match, telem, prog);
+  const setupState = initSetup(player, aim, match, telem, prog, camera);
 
   // On the character screen the hero faces the CAMERA until the mouse
   // takes over: a menu where the fighter shows you his back is no menu.
@@ -544,6 +544,9 @@ export async function start() {
     // The combat buttons stay up bare-handed too: fists punch now, and
     // the wheel slots map to overhand/uppercut.
     renderer.render(scene, camera);
+    // The customization dots ride the freshly rendered pose: render has
+    // just updated every world matrix, so the projection is this frame's.
+    if (!setupState.done) setupState.placeSpots?.();
   }
 
   requestAnimationFrame(frame);
@@ -577,13 +580,24 @@ function toast(text) {
  * is the game itself, not a mockup. FIGHT hides the card and restarts
  * the match countdown. Choices persist in localStorage.
  */
-function initSetup(player, aim, match, telem, prog) {
+function initSetup(player, aim, match, telem, prog, camera) {
   const root = document.getElementById('setup');
   const state = { done: !root, practice: false };
   if (!root) return state;
 
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('tk-player') || '{}'); } catch { /* fresh */ }
+
+  // Part customization: eyes for the head, a shade per cardboard group.
+  // Restored from the save up front so the hero boots dressed.
+  const partPick = {
+    eyes: EYE_STYLES[saved.eyes] ? saved.eyes : 'classic',
+    torso: PART_SHADES[saved.torso] !== undefined ? saved.torso : 'classic',
+    arms: PART_SHADES[saved.arms] !== undefined ? saved.arms : 'classic',
+    legs: PART_SHADES[saved.legs] !== undefined ? saved.legs : 'classic',
+  };
+  player.setEyes(partPick.eyes);
+  for (const p of ['torso', 'arms', 'legs']) player.setPart(p, partPick[p]);
 
   // The demo character is a COLOR and a CLUB SKIN, nothing else: no name,
   // no bodies, no weapon choice — everyone swings the same club, and the
@@ -716,14 +730,16 @@ function initSetup(player, aim, match, telem, prog) {
   const applySkin = (sk) => {
     skin = sk;
     player.setClubSkin(sk);
+    if (spots.club) markSel('club', sk);
     if (!skinBtn) return;
+    // Icon only — the corner pair reads as two glyph buttons; the current
+    // skin's name and the locked recipes live in the tooltip.
+    skinBtn.textContent = '🔨';
     const cur = SKINS.find((d) => d.id === sk);
-    skinBtn.textContent = `🔨 ${cur ? cur.label : sk}`;
     const locked = SKINS.filter((d) => !skinOpen(d))
       .map((d) => `🔒 ${d.label} — ${d.ach.name}: ${d.ach.desc}`);
-    skinBtn.title = locked.length
-      ? 'Club skin — click to cycle\n' + locked.join('\n')
-      : 'Club skin — click to cycle';
+    skinBtn.title = [`Club skin: ${cur ? cur.label : sk} — click to cycle`, ...locked]
+      .join('\n');
   };
   if (skinBtn) {
     skinBtn.addEventListener('click', () => {
@@ -732,6 +748,154 @@ function initSetup(player, aim, match, telem, prog) {
       applySkin(open[(i + 1) % open.length].id);
     });
   }
+
+  // ----------------------------------------------------------- hotspots
+  // Five glass dots pinned to the hero's body parts. Click one and a
+  // popover offers that part's looks: eyes for the head, shades for the
+  // cardboard groups, the earned skins for the club. The dots track the
+  // bones through the camera every frame (state.placeSpots), so they sit
+  // on the character, not on guessed screen coordinates.
+  const SHADE_LABELS = { classic: 'Classic', bleached: 'Bleached', shadow: 'Shadow', ink: 'Ink' };
+  const EYE_LABELS = { classic: 'Classic', dot: 'Dot', mean: 'Mean', sleepy: 'Sleepy' };
+  const shadeOpts = () => Object.keys(PART_SHADES)
+    .map((id) => ({ id, label: SHADE_LABELS[id] || id }));
+  const PART_DEFS = [
+    { part: 'eyes', label: 'Face', bone: 'head', lift: 0.14,
+      opts: () => Object.keys(EYE_STYLES).map((id) => ({ id, label: EYE_LABELS[id] || id })),
+      get: () => partPick.eyes,
+      set: (id) => { partPick.eyes = id; player.setEyes(id); } },
+    { part: 'torso', label: 'Torso', bone: 'chest', lift: 0,
+      opts: shadeOpts,
+      get: () => partPick.torso,
+      set: (id) => { partPick.torso = id; player.setPart('torso', id); } },
+    { part: 'arms', label: 'Arms', bone: 'armLFore', lift: 0,
+      opts: shadeOpts,
+      get: () => partPick.arms,
+      set: (id) => { partPick.arms = id; player.setPart('arms', id); } },
+    { part: 'legs', label: 'Legs', bone: 'legRLower', lift: 0,
+      opts: shadeOpts,
+      get: () => partPick.legs,
+      set: (id) => { partPick.legs = id; player.setPart('legs', id); } },
+    // The club dot rides the tracked head-of-club world point, not the
+    // bone origin — the origin is the grip, down in the fist.
+    { part: 'club', label: 'Club', bone: 'club', lift: 0, world: (v) => v.copy(player.clubHead),
+      opts: () => SKINS.map((d) => ({
+        id: d.id, label: d.label,
+        lock: skinOpen(d) ? null : `${d.ach.name}: ${d.ach.desc}`,
+      })),
+      get: () => skin,
+      set: (id) => applySkin(id) },
+  ];
+  const spotsEl = document.getElementById('spots');
+  const popEl = document.getElementById('partPop');
+  const popTitle = document.getElementById('partPopTitle');
+  const popOpts = document.getElementById('partPopOpts');
+  const spots = {};
+  let popFor = null;
+  const closePop = () => {
+    popFor = null;
+    if (popEl) popEl.classList.add('gone');
+    for (const s of Object.values(spots)) s.el.classList.remove('on');
+  };
+  const markSel = (part, id) => {
+    if (popFor !== part || !popOpts) return;
+    for (const b of popOpts.children) b.classList.toggle('sel', b.dataset.id === id);
+  };
+  const openPop = (def) => {
+    if (!popEl) return;
+    popFor = def.part;
+    popTitle.textContent = def.label;
+    popOpts.innerHTML = '';
+    for (const o of def.opts()) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.id = o.id;
+      if (o.lock) {
+        b.textContent = `🔒 ${o.label}`;
+        b.className = 'lock';
+        b.title = o.lock;
+        b.disabled = true;
+      } else {
+        b.textContent = o.label;
+        b.addEventListener('click', () => { def.set(o.id); markSel(def.part, o.id); });
+      }
+      popOpts.appendChild(b);
+    }
+    markSel(def.part, def.get());
+    for (const [p, s] of Object.entries(spots)) s.el.classList.toggle('on', p === def.part);
+    popEl.classList.remove('gone');
+    placePop(def);
+  };
+  const placePop = (def) => {
+    const s = spots[def.part];
+    if (!s || !popEl) return;
+    // Beside the dot, on the side AWAY from the body column: the dots run
+    // down the hero's middle, and a card opened below its dot sat exactly
+    // on top of the next dot. The viewport edge flips the side back.
+    const w = popEl.offsetWidth || 180;
+    const h = popEl.offsetHeight || 90;
+    const all = Object.values(spots);
+    const centerX = all.reduce((a, q) => a + q.x, 0) / Math.max(1, all.length);
+    const fits = (px) => px >= 8 && px + w <= innerWidth - 8;
+    let x = s.x >= centerX ? s.x + 26 : s.x - 26 - w;
+    let y = s.y - h * 0.5;
+    if (!fits(x)) {
+      const other = s.x >= centerX ? s.x - 26 - w : s.x + 26;
+      if (fits(other)) {
+        x = other;
+      } else {
+        // A phone fits the card on neither side: drop it under the dot.
+        x = Math.min(innerWidth - w - 8, Math.max(8, s.x - w * 0.5));
+        y = s.y + 18;
+      }
+    }
+    y = Math.min(innerHeight - h - 8, Math.max(8, y));
+    popEl.style.left = `${Math.round(x)}px`;
+    popEl.style.top = `${Math.round(y)}px`;
+  };
+  if (spotsEl) {
+    for (const def of PART_DEFS) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'spot';
+      el.dataset.part = def.part;
+      el.title = def.label;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (popFor === def.part) closePop();
+        else openPop(def);
+      });
+      spotsEl.appendChild(el);
+      spots[def.part] = { el, def, x: 0, y: 0 };
+    }
+    // A click anywhere off the popover folds it — the dots stop the
+    // bubbling themselves, and clicks INSIDE the popover stay inside.
+    addEventListener('pointerdown', (e) => {
+      if (popFor && popEl && !popEl.contains(e.target)) closePop();
+    });
+  }
+  const _spotV = new THREE.Vector3();
+  /** Pin the dots to the bones through the live camera. Runs every menu
+   *  frame after render, when the world matrices are fresh. */
+  state.placeSpots = () => {
+    if (!spotsEl) return;
+    for (const s of Object.values(spots)) {
+      if (s.def.world) {
+        s.def.world(_spotV);
+      } else {
+        const bone = player.bones[s.def.bone];
+        if (!bone) continue;
+        _spotV.setFromMatrixPosition(bone.matrixWorld);
+        _spotV.y += s.def.lift;
+      }
+      _spotV.project(camera);
+      s.x = (_spotV.x * 0.5 + 0.5) * innerWidth;
+      s.y = (-_spotV.y * 0.5 + 0.5) * innerHeight;
+      s.el.style.left = `${Math.round(s.x)}px`;
+      s.el.style.top = `${Math.round(s.y)}px`;
+    }
+    if (popFor) placePop(spots[popFor].def);
+  };
 
 
   buildPickers();
@@ -748,8 +912,9 @@ function initSetup(player, aim, match, telem, prog) {
   document.getElementById('setupGo').addEventListener('click', () => {
     player.name = 'You';
     try {
-      localStorage.setItem('tk-player', JSON.stringify({ color, skin }));
+      localStorage.setItem('tk-player', JSON.stringify({ color, skin, ...partPick }));
     } catch { /* private mode */ }
+    closePop();
     root.classList.add('gone');
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
@@ -798,12 +963,29 @@ function syncDummies(scene, arena, dummies, fighters) {
     const d = new Fighter(scene, arena, {
       name: p.name, color: p.color, armed: p.club,
     });
+    dressBot(d, p.name);
     d.bot = new Bot(d, arena, p);
     dummies.push(d);
     fighters.push(d);
   }
 
   placeRound(fighters, arena);
+}
+
+/**
+ * Bots sample the same part catalog the player customizes from, seeded by
+ * their name: Boulder always wears Boulder's face. The roster color stays
+ * the identity; the eyes and shades just keep the crowd from being clones.
+ */
+function dressBot(fighter, name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const eyes = Object.keys(EYE_STYLES);
+  const shades = Object.keys(PART_SHADES);
+  fighter.setEyes(eyes[h % eyes.length]);
+  fighter.setPart('torso', shades[(h >> 3) % shades.length]);
+  fighter.setPart('arms', shades[(h >> 6) % shades.length]);
+  fighter.setPart('legs', shades[(h >> 9) % shades.length]);
 }
 
 function drawPersona(index) {

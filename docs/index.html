@@ -745,22 +745,9 @@
     pointer-events: auto;
   }
 
-  #skinBtn {
-    padding: 9px 16px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--panel);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    box-shadow: var(--shadow);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
+  /* The corner pair are twin icon buttons: glyphs only, names in the
+     tooltips. Words on capsules read as labels, not as controls. */
+  #skinBtn,
   #achBtn {
     width: 44px;
     padding: 9px 0;
@@ -773,6 +760,116 @@
     font: inherit;
     font-size: 17px;
     cursor: pointer;
+  }
+
+  /* Customization hotspots: small glass dots pinned onto the hero. The
+     pulse ring invites the first click; a dot with its popover open goes
+     accent so you can tell WHICH part you are dressing. */
+  #spots {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .spot {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.32);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.65),
+      0 2px 8px rgba(25, 30, 45, 0.28);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .spot::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    animation: spotPulse 2.4s ease-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes spotPulse {
+    0% { transform: scale(0.55); opacity: 0.9; }
+    70% { transform: scale(1.2); opacity: 0; }
+    100% { transform: scale(1.2); opacity: 0; }
+  }
+
+  .spot:hover { background: rgba(255, 255, 255, 0.6); }
+
+  .spot.on {
+    background: var(--accent-glass);
+    border-color: rgba(255, 255, 255, 0.95);
+  }
+
+  .spot.on::after { animation: none; opacity: 0; }
+
+  /* The part popover: one glass card by the clicked dot, options as
+     pills. Same language as the quick panel, just anchored to the body. */
+  #partPop {
+    position: absolute;
+    min-width: 150px;
+    max-width: 250px;
+    padding: 11px 13px 12px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    pointer-events: auto;
+    z-index: 3;
+  }
+
+  #partPop.gone { display: none; }
+
+  #partPopTitle {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  #partPopOpts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  #partPopOpts button {
+    padding: 6px 13px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #partPopOpts button:hover { background: rgba(255, 255, 255, 0.6); }
+
+  #partPopOpts button.sel {
+    background: var(--accent-glass);
+    border-color: rgba(255, 255, 255, 0.55);
+    color: #fff;
+  }
+
+  #partPopOpts button.lock {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   #setupGo {
@@ -899,6 +996,8 @@
 
   @media (max-width: 640px) {
     #setupColors button { width: 26px; height: 26px; }
+    /* Fingers need more dot than a mouse pointer does. */
+    .spot { width: 26px; height: 26px; }
   }
 
   /* The menu hides the in-game service chrome under it: the tuning
@@ -1060,7 +1159,15 @@
          the top corner; the bottom is colors and one big FIGHT. -->
     <div id="setupCorner">
       <button id="achBtn" type="button" aria-label="Achievements">🏆</button>
-      <button id="skinBtn" type="button"></button>
+      <button id="skinBtn" type="button" aria-label="Club skin"></button>
+    </div>
+    <!-- Customization hotspots: glass dots pinned to the hero's parts
+         (positions are projected from the bones every frame), each opens
+         a popover with that part's looks. -->
+    <div id="spots"></div>
+    <div id="partPop" class="gone">
+      <b id="partPopTitle"></b>
+      <div id="partPopOpts"></div>
     </div>
     <div id="setupFoot">
       <div id="setupColors"></div>
@@ -1112,33 +1219,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "198";</script>
+<script>window.TK_BUILD = "199";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=198",
-    "tk/main.js":         "./src/main.js?v=198",
-    "tk/tuning.js":       "./src/tuning.js?v=198",
-    "tk/mathx.js":        "./src/mathx.js?v=198",
-    "tk/arena.js":        "./src/arena.js?v=198",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=198",
-    "tk/balance.js":      "./src/balance.js?v=198",
-    "tk/skeleton.js":     "./src/skeleton.js?v=198",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=198",
-    "tk/gait.js":         "./src/gait.js?v=198",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=198",
-    "tk/swingAction.js":  "./src/swingAction.js?v=198",
-    "tk/locomotion.js":   "./src/locomotion.js?v=198",
-    "tk/body.js":         "./src/body.js?v=198",
-    "tk/bot.js":          "./src/bot.js?v=198",
-    "tk/contact.js":      "./src/contact.js?v=198",
-    "tk/match.js":        "./src/match.js?v=198",
-    "tk/fighter.js":      "./src/fighter.js?v=198",
-    "tk/input.js":        "./src/input.js?v=198",
-    "tk/ui.js":           "./src/ui.js?v=198",
-    "tk/sound.js":        "./src/sound.js?v=198",
-    "tk/telemetry.js":    "./src/telemetry.js?v=198",
-    "tk/progress.js":     "./src/progress.js?v=198"
+    "three":              "./vendor/three.module.js?v=199",
+    "tk/main.js":         "./src/main.js?v=199",
+    "tk/tuning.js":       "./src/tuning.js?v=199",
+    "tk/mathx.js":        "./src/mathx.js?v=199",
+    "tk/arena.js":        "./src/arena.js?v=199",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=199",
+    "tk/balance.js":      "./src/balance.js?v=199",
+    "tk/skeleton.js":     "./src/skeleton.js?v=199",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=199",
+    "tk/gait.js":         "./src/gait.js?v=199",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=199",
+    "tk/swingAction.js":  "./src/swingAction.js?v=199",
+    "tk/locomotion.js":   "./src/locomotion.js?v=199",
+    "tk/body.js":         "./src/body.js?v=199",
+    "tk/bot.js":          "./src/bot.js?v=199",
+    "tk/contact.js":      "./src/contact.js?v=199",
+    "tk/match.js":        "./src/match.js?v=199",
+    "tk/fighter.js":      "./src/fighter.js?v=199",
+    "tk/input.js":        "./src/input.js?v=199",
+    "tk/ui.js":           "./src/ui.js?v=199",
+    "tk/sound.js":        "./src/sound.js?v=199",
+    "tk/telemetry.js":    "./src/telemetry.js?v=199",
+    "tk/progress.js":     "./src/progress.js?v=199"
   }
 }
 </script>

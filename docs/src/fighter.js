@@ -35,6 +35,30 @@ export const CLUB_SKINS = {
   void:    { wood: 0x2b2438, woodR: 0.6,  metal: 0x8b5cf6, metalR: 0.3,  metalM: 0.7 },
 };
 
+// Body-part shades: each cardboard group (torso / arms / legs) can wear a
+// tint of the fighter's base color instead of a whole new palette. One hue
+// per fighter stays the identity (markers, thread, trail all key off it);
+// the shades add variety WITHIN that identity, so a crowd of bots reads
+// as individuals without turning into confetti.
+// Positive values lean toward black, negative toward white.
+export const PART_SHADES = {
+  classic:  0,
+  bleached: -0.34,
+  shadow:   0.34,
+  ink:      0.62,
+};
+
+// Eye styles — the head's "skin". Geometry variants of the two face boxes:
+// size, height on the face and tilt are enough for four readable moods.
+// Tilt is per-side (rotation.z = side * tilt), so positive is a friendly
+// outward slant and negative knits the brows.
+export const EYE_STYLES = {
+  classic: { w: 0.16, h: 0.24, y: 0.05, tilt: 0.1 },
+  dot:     { w: 0.13, h: 0.13, y: 0.07, tilt: 0 },
+  mean:    { w: 0.2,  h: 0.18, y: 0.08, tilt: -0.38 },
+  sleepy:  { w: 0.22, h: 0.08, y: 0.02, tilt: 0.16 },
+};
+
 const _v = new THREE.Vector3();
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
@@ -65,6 +89,14 @@ export class Fighter {
 
     this.group = new THREE.Group();
     scene.add(this.group);
+
+    /** Per-part shade names (see PART_SHADES) and the eye style. Filled
+     *  before build(): build sorts every colored mesh into partMeshes so
+     *  the shades can be swapped live without touching geometry. */
+    this.parts = { head: 'classic', torso: 'classic', arms: 'classic', legs: 'classic' };
+    this.eyeStyle = EYE_STYLES[options.eyes] ? options.eyes : 'classic';
+    this.partMeshes = { head: [], torso: [], arms: [], legs: [] };
+    this.eyeMeshes = [];
 
     this.bones = {};
     this.build();
@@ -132,8 +164,6 @@ export class Fighter {
 
   build() {
     const card = mat(this.color, 0.95);
-    const dark = mat(this.color.clone().lerp(new THREE.Color(0x000000), 0.55), 0.95);
-    const ink = mat(new THREE.Color(0x2b2f38), 0.85);
     // Оружие в тон сцене: светлый ясень и матовый графит вместо тёмного
     // дерева с чёрным набалдашником. Прежняя дубина была самым тёмным
     // пятном в кадре и перетягивала взгляд с бойца на себя.
@@ -147,20 +177,17 @@ export class Fighter {
     const D = Rig.PanelDepth;
 
     this.bones.hips = this.bone('hips');
-    panel(this.bones.hips, Rig.HipsSize, Rig.HipsSize, Rig.HipsSize, D * 2, card);
+    this.partMeshes.torso.push(
+      panel(this.bones.hips, Rig.HipsSize, Rig.HipsSize, Rig.HipsSize, D * 2, card));
 
     this.bones.chest = this.bone('chest');
-    panel(this.bones.chest, Rig.ChestHeight,
-      Rig.ChestBottomWidth, Rig.ChestTopWidth, D * 2, card);
+    this.partMeshes.torso.push(panel(this.bones.chest, Rig.ChestHeight,
+      Rig.ChestBottomWidth, Rig.ChestTopWidth, D * 2, card));
 
     this.bones.head = this.bone('head');
-    box(this.bones.head, Rig.HeadSize, Rig.HeadSize, Rig.HeadSize * 0.85, null, card);
-    for (const side of [-1, 1]) {
-      const eye = box(this.bones.head, Rig.HeadSize * 0.16, Rig.HeadSize * 0.24, 0.02,
-        new THREE.Vector3(side * Rig.HeadSize * 0.2, Rig.HeadSize * 0.05,
-          Rig.HeadSize * 0.43), ink);
-      eye.rotation.z = side * 0.1;
-    }
+    this.partMeshes.head.push(
+      box(this.bones.head, Rig.HeadSize, Rig.HeadSize, Rig.HeadSize * 0.85, null, card));
+    this.buildEyes();
 
     // Нога и рука — та же трапеция, что и была, но разрезанная ровно
     // посередине и раздвинутая на зазор. Ширина в месте разреза — среднее
@@ -227,9 +254,30 @@ export class Fighter {
     // Панель короче своей кости на зазор с обоих концов: части тела висят
     // НЕ впритык. Так на сгибе они не въезжают друг в друга, а в просвете
     // видно нить, на которой всё держится.
-    panel(g, Math.max(0.02, length - (T.partGap || 0) * Rig.CM * 2),
+    const m = panel(g, Math.max(0.02, length - (T.partGap || 0) * Rig.CM * 2),
       nearWidth, farWidth, depth, mat(this.color, 0.95));
+    // Limb panels sort themselves into the shade groups by bone name.
+    this.partMeshes[name.startsWith('leg') ? 'legs' : 'arms'].push(m);
     return g;
+  }
+
+  /** (Re)build the two face boxes for the current eye style. Called from
+   *  build() and again by setEyes — geometry swaps, the head bone stays. */
+  buildEyes() {
+    for (const eye of this.eyeMeshes) {
+      eye.geometry.dispose();
+      this.bones.head.remove(eye);
+    }
+    this.eyeMeshes.length = 0;
+    const st = EYE_STYLES[this.eyeStyle] || EYE_STYLES.classic;
+    const ink = mat(new THREE.Color(0x2b2f38), 0.85);
+    for (const side of [-1, 1]) {
+      const eye = box(this.bones.head, Rig.HeadSize * st.w, Rig.HeadSize * st.h, 0.02,
+        new THREE.Vector3(side * Rig.HeadSize * 0.2, Rig.HeadSize * st.y,
+          Rig.HeadSize * 0.43), ink);
+      eye.rotation.z = side * st.tilt;
+      this.eyeMeshes.push(eye);
+    }
   }
 
   /**
@@ -453,24 +501,44 @@ export class Fighter {
   /**
    * Repaint the fighter. Panel materials are SHARED between fighters of
    * the same color (see mat()), so they are never mutated — the meshes are
-   * moved onto the materials of the new color instead. Only the fighter's
-   * own thread, marker and trail materials change in place.
+   * moved onto the materials of the new palette instead (applyParts walks
+   * every colored mesh). Only the fighter's own thread, marker and trail
+   * materials change in place.
    */
   setColor(hex) {
-    const black = new THREE.Color(0x000000);
-    const oldCard = mat(this.color, 0.95);
-    const oldDark = mat(this.color.clone().lerp(black, 0.55), 0.95);
     this.color.set(hex);
-    const card = mat(this.color, 0.95);
-    const dark = mat(this.color.clone().lerp(black, 0.55), 0.95);
-    this.group.traverse((o) => {
-      if (!o.isMesh) return;
-      if (o.material === oldCard) o.material = card;
-      else if (o.material === oldDark) o.material = dark;
-    });
+    this.applyParts();
     this.thread.material.color.copy(this.color).lerp(new THREE.Color(0xfff6d8), 0.9);
     if (!this.isPlayer) this.marker.material.color.copy(this.color);
     this.trail.material.color.copy(this.color);
+  }
+
+  /** Dress one body part (torso / arms / legs / head) in a shade of the
+   *  base color. Unknown names fall back to classic. */
+  setPart(part, shadeName) {
+    if (!this.partMeshes[part]) return;
+    this.parts[part] = PART_SHADES[shadeName] !== undefined ? shadeName : 'classic';
+    this.applyParts();
+  }
+
+  /** Swap the face: rebuilds the eye boxes for the named style. */
+  setEyes(styleName) {
+    this.eyeStyle = EYE_STYLES[styleName] ? styleName : 'classic';
+    this.buildEyes();
+  }
+
+  /** Move every colored panel onto the material of its part's shade. */
+  applyParts() {
+    const white = new THREE.Color(0xffffff);
+    const black = new THREE.Color(0x000000);
+    for (const part of Object.keys(this.partMeshes)) {
+      const shade = PART_SHADES[this.parts[part]] || 0;
+      const c = this.color.clone();
+      if (shade > 0) c.lerp(black, shade);
+      else if (shade < 0) c.lerp(white, -shade);
+      const m = mat(c, 0.95);
+      for (const mesh of this.partMeshes[part]) mesh.material = m;
+    }
   }
 
   // ------------------------------------------------------------------ цикл

@@ -498,10 +498,18 @@ everything above stays a sandbox.
 Custom fighters assembled from parts: several variations of the head,
 torso, arms and legs, each picked separately in the character menu, so a
 player builds THEIR figure out of the shared construction kit. Bots draw
-random combinations from the same parts. Technically: per-part panel
-variants in the skeleton (proportions and shapes), a per-part picker in
-the menu, persistence next to the color, and the roster generator
-sampling the same catalog. Requested, not yet scheduled.
+random combinations from the same parts.
+
+**Done (build 199) — as looks, not proportions.** Five hotspot dots pinned
+to the hero's body on the character screen (positions projected from the
+bones every frame); each opens a glass popover with that part's options:
+eye styles for the face (classic/dot/mean/sleepy), shade tints of the base
+color for torso, arms and legs (classic/bleached/shadow/ink), the earned
+skins for the club. Picks persist in `tk-player` next to the color; bots
+sample the same catalog deterministically by name, so Boulder always wears
+Boulder's face. Shape/proportion variants (the original idea) stay open
+for later — shades and faces already de-clone the crowd without touching
+the rig.
 
 ### I10 — Camera and sound
 
