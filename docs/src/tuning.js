@@ -40,14 +40,14 @@ export const tuning = {
   // и походка сломается: замерено, при 1.7 боец шагал одной и той же ногой
   // дважды подряд, а промежутки между отрывами падали до 16 мс.
   // При 1.4 чередование ног стопроцентное.
-  maxRunSpeed: 1.3,
+  maxRunSpeed: 1.0,
   // Доля скорости при ходе вбок и назад. Не условность жанра, а следствие
   // устройства ног: приставным шагом стопа уходит вбок недалеко — наружу
   // мешает досягаемость, внутрь вторая нога. На полной скорости вбок обе
   // ноги хотят оторваться разом, одна ждёт очереди, и её опору утаскивает
   // на 97 см при досягаемости в сорок.
-  strafeSpeed: 0.5,
-  backSpeed: 0.55,
+  strafeSpeed: 0.45,
+  backSpeed: 0.5,
   moveAccel: 16,
   moveBrake: 10,
   // Управление в воздухе малое намеренно: сбитый должен долетать до края,
@@ -61,15 +61,15 @@ export const tuning = {
   // за таким разворотом не поспевают: опора уезжает вбок по дуге быстрее,
   // чем боец успевает переступить, и он вертится, непрерывно перебирая
   // ногами. Отсюда и ощущение, что при малейшем повороте всё мотает.
-  turnSpeed: 220,
+  turnSpeed: 160,
   turnAccel: 1600,
   // Насколько теряется управление во время проноса. Удар должен чего-то стоить.
   swingMoveLock: 0.2,
   // Рывок (пробел): прибавка скорости по направлению хода. Нарочно мягкий —
   // темп игры вязкий и пьяный, и резкий телепорт-дэш из него выпадал бы.
   // A dash is a HOP, not a sprint: short, readable, then done.
-  dashPower: 1.9,
-  dashCooldown: 0.9,
+  dashPower: 1.4,
+  dashCooldown: 1.1,
   // Блок (ПКМ): принявший удар не падает, а отъезжает назад на столько.
   blockPushback: 2.6,
 
@@ -280,7 +280,7 @@ export const tuning = {
   // Общий множитель скорости удара: ускоряет заряд, пронос, возврат
   // и откат разом. Отдельные времена ниже задают их соотношение,
   // а эта ручка — темп целиком.
-  swingSpeed: 1,
+  swingSpeed: 0.85,
 
   // С какой силой тело сползает с кромки, когда таз оказался за краем.
   // Ноль — тело может висеть поперёк края бесконечно.
@@ -291,7 +291,7 @@ export const tuning = {
   // работает В ПОЗЕ и в намерении хода, а не в физике: тряпка на ходу
   // ровно один раз уже ломала игру, и возвращать её сюда незачем.
   // Ноль — трезвая походка, как была.
-  drunk: 0,
+  drunk: 0.25,
   // Насколько сильно заваливает вбок. Идёт в тот же sway, которым сделана
   // вся штатная шаткость, поэтому складывается с ней, а не спорит.
   drunkSway: 1,
@@ -393,7 +393,7 @@ export const tuning = {
   // и наклон от скорости, и отыгрыш от ускорения: ручка одна, и разводить
   // их порознь незачем — на большом наклоне слабая инерция всё равно
   // потерялась бы на его фоне.
-  leanAmount: 1,
+  leanAmount: 1.3,
   // Пружина наклона. Жёсткость задаёт, как быстро корпус догоняет своё
   // положение, демпфер — ДОЛЯ от критического: единица это приход без
   // перелёта, меньше — тело проскакивает отвес и качается обратно.
@@ -485,14 +485,14 @@ export const tuning = {
   // из опущенной руки и идёт набалдашником у самого настила.
   carryPitch: 72,
   chargeMoveSlow: 0.45,
-  swingChargeTime: 0.5,
+  swingChargeTime: 0.6,
   // Замерено: тяжёлой дубине нужно время догнать дугу. При 0.18 с
   // набалдашник не доходил до цели метра на метр — оружие проносилось
   // мимо, ещё не успев вылететь. Длинный мах у тяжёлого оружия и должен
   // быть длинным, это же и есть цена вложения в удар.
   swingStrikeTime: 0.34,
-  swingRecoverTime: 0.16,
-  swingCooldown: 0.12,
+  swingRecoverTime: 0.22,
+  swingCooldown: 0.18,
   swingArcDegrees: 150,
   windUpReach: 0.50,
   handMaxReach: 0.62,
@@ -509,12 +509,12 @@ export const tuning = {
   // name and falls back to the style's own fields — the punch styles
   // keep their constants). These are dev knobs: once the tempo feels
   // right the winning numbers get baked in as the defaults.
-  sideWind: 1.8,
-  sideTime: 0.85,
-  overheadWind: 5.5,
-  overheadTime: 0.8,
-  risingWind: 5.5,
-  risingTime: 0.8,
+  sideWind: 2.2,
+  sideTime: 0.9,
+  overheadWind: 6,
+  overheadTime: 0.85,
+  risingWind: 6.5,
+  risingTime: 0.85,
   // The fists are their own weapon with their own tempo.
   jabWind: 0.7,
   jabTime: 0.55,
@@ -537,12 +537,12 @@ export const tuning = {
   // is a moment, not a home. Regen pauses briefly after every spend and
   // while the body is busy swinging or blocking.
   staminaOn: true,
-  staminaRegen: 0.45,
-  staminaDelay: 0.5,
-  staminaClubCost: 0.32,
-  staminaPunchCost: 0.11,
-  staminaDashCost: 0.42,
-  staminaBlockDrain: 0.22,
+  staminaRegen: 0.35,
+  staminaDelay: 0.7,
+  staminaClubCost: 0.42,
+  staminaPunchCost: 0.15,
+  staminaDashCost: 0.55,
+  staminaBlockDrain: 0.3,
   // Below this the broken block will not re-engage (hysteresis: an empty
   // pool must climb back here before RMB works again).
   staminaFloor: 0.3,

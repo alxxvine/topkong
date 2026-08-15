@@ -17,118 +17,81 @@ import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 // Последнее пришлось делать руками: вставание и удар хранятся временем,
 // то есть ползунок «скорость», сползающий влево при ускорении, читался бы
 // сломанным. Поэтому у каждой строки своё чтение и своя запись.
-// Presets. The tuning stage is over for the player-facing panel: instead
-// of two dozen sliders there are five flavors per system, tap and feel.
-// Each preset is a complete bundle — applying one overwrites every knob
-// it owns, so presets never half-mix. The raw sliders live on in the big
-// Settings panel for surgery; the winners get baked in as defaults.
+// Presets. The tuning stage is CLOSING: the playtest winners are baked in
+// as defaults and their tabs are gone — Movement runs Drunk (slow, swaying,
+// lazy dash), Strike runs Heavy (slowest chain, biggest weight), the
+// overhead is the Executioner cut. What remains player-tunable is what is
+// still being tested: the Rising animation and the Stamina screw.
+//
+// BAKED overrides the saved tuning on every boot: the testing builds wrote
+// preset experiments into localStorage, and without the force any stale
+// pick would shadow the new defaults forever.
+const BAKED = {
+  // Movement: Drunk.
+  maxRunSpeed: 1.0, strafeSpeed: 0.45, backSpeed: 0.5, turnSpeed: 160,
+  dashPower: 1.4, dashCooldown: 1.1, leanAmount: 1.3, drunk: 0.25,
+  // Strike pacing: Heavy.
+  swingSpeed: 0.85, swingChargeTime: 0.6, swingRecoverTime: 0.22, swingCooldown: 0.18,
+  sideWind: 2.2, sideTime: 0.9,
+  // Overhead pacing: the Executioner variant's own beat.
+  overheadWind: 6, overheadTime: 0.85,
+};
+
 const PRESETS = {
-  Movement: [
-    { name: 'Drunk', hint: 'slow, swaying, lazy dash',
-      set: { maxRunSpeed: 1.0, strafeSpeed: 0.45, backSpeed: 0.5, turnSpeed: 160,
-             dashPower: 1.4, dashCooldown: 1.1, leanAmount: 1.3, drunk: 0.25 } },
-    { name: 'Classic', hint: 'the build you know',
-      set: { maxRunSpeed: 1.3, strafeSpeed: 0.5, backSpeed: 0.55, turnSpeed: 220,
-             dashPower: 1.9, dashCooldown: 0.9, leanAmount: 1.0, drunk: 0 } },
-    { name: 'Brisk', hint: 'a step quicker everywhere',
-      set: { maxRunSpeed: 1.6, strafeSpeed: 0.55, backSpeed: 0.6, turnSpeed: 280,
-             dashPower: 2.2, dashCooldown: 0.8, leanAmount: 1.1, drunk: 0 } },
-    { name: 'Nimble', hint: 'fast feet, sharp turns',
-      set: { maxRunSpeed: 1.9, strafeSpeed: 0.65, backSpeed: 0.7, turnSpeed: 340,
-             dashPower: 2.6, dashCooldown: 0.7, leanAmount: 1.2, drunk: 0 } },
-    { name: 'Turbo', hint: 'arcade speed',
-      set: { maxRunSpeed: 2.3, strafeSpeed: 0.7, backSpeed: 0.75, turnSpeed: 420,
-             dashPower: 3.2, dashCooldown: 0.6, leanAmount: 1.3, drunk: 0 } },
-  ],
-  Strike: [
-    // Every flavor keeps the same formula — a LONG readable windup and a
-    // FAST blow (the pick from playtesting); they differ in how far that
-    // contrast is pushed and how quickly strikes chain.
-    { name: 'Heavy', hint: 'slowest chain, biggest weight',
-      set: { swingSpeed: 0.85, swingChargeTime: 0.6, swingRecoverTime: 0.22, swingCooldown: 0.18,
-             sideWind: 2.2, sideTime: 0.9, overheadWind: 6.5, overheadTime: 0.85,
-             risingWind: 6.5, risingTime: 0.85 } },
-    { name: 'Classic', hint: 'the baseline: wind up, snap',
-      set: { swingSpeed: 1, swingChargeTime: 0.5, swingRecoverTime: 0.16, swingCooldown: 0.12,
-             sideWind: 1.8, sideTime: 0.85, overheadWind: 5.5, overheadTime: 0.8,
-             risingWind: 5.5, risingTime: 0.8 } },
-    { name: 'Snappy', hint: 'same formula, brisker chain',
-      set: { swingSpeed: 1.1, swingChargeTime: 0.45, swingRecoverTime: 0.13, swingCooldown: 0.1,
-             sideWind: 1.5, sideTime: 0.78, overheadWind: 4.5, overheadTime: 0.75,
-             risingWind: 4.5, risingTime: 0.75 } },
-    { name: 'Frenzy', hint: 'shortest raises that still read',
-      set: { swingSpeed: 1.2, swingChargeTime: 0.4, swingRecoverTime: 0.11, swingCooldown: 0.08,
-             sideWind: 1.2, sideTime: 0.72, overheadWind: 3.6, overheadTime: 0.7,
-             risingWind: 3.6, risingTime: 0.7 } },
-    { name: 'Telegraph', hint: 'duel pace: huge raises, hard punishes',
-      set: { swingSpeed: 0.95, swingChargeTime: 0.55, swingRecoverTime: 0.18, swingCooldown: 0.15,
-             sideWind: 2.8, sideTime: 0.8, overheadWind: 7, overheadTime: 0.75,
-             risingWind: 7, risingTime: 0.75 } },
-  ],
   Stamina: [
+    // The whole ladder moved DOWN a rung on request: the old default is
+    // now the soft option, and the new Classic makes every swing a spend.
     { name: 'Off', hint: 'infinite everything',
       set: { staminaOn: false } },
-    { name: 'Light', hint: 'barely noticeable',
-      set: { staminaOn: true, staminaRegen: 0.7, staminaClubCost: 0.22,
-             staminaPunchCost: 0.08, staminaDashCost: 0.3, staminaBlockDrain: 0.15 } },
-    { name: 'Classic', hint: 'the build you know',
-      set: { staminaOn: true, staminaRegen: 0.45, staminaClubCost: 0.32,
-             staminaPunchCost: 0.11, staminaDashCost: 0.42, staminaBlockDrain: 0.22 } },
-    { name: 'Strict', hint: 'every swing counts',
-      set: { staminaOn: true, staminaRegen: 0.35, staminaClubCost: 0.42,
-             staminaPunchCost: 0.15, staminaDashCost: 0.55, staminaBlockDrain: 0.3 } },
+    { name: 'Light', hint: 'the old easy default',
+      set: { staminaOn: true, staminaRegen: 0.45, staminaDelay: 0.5,
+             staminaClubCost: 0.32, staminaPunchCost: 0.11,
+             staminaDashCost: 0.42, staminaBlockDrain: 0.22 } },
+    { name: 'Classic', hint: 'tight: every swing counts',
+      set: { staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
+             staminaClubCost: 0.42, staminaPunchCost: 0.15,
+             staminaDashCost: 0.55, staminaBlockDrain: 0.3 } },
+    { name: 'Strict', hint: 'plan two moves ahead',
+      set: { staminaOn: true, staminaRegen: 0.28, staminaDelay: 0.9,
+             staminaClubCost: 0.5, staminaPunchCost: 0.18,
+             staminaDashCost: 0.65, staminaBlockDrain: 0.38 } },
     { name: 'Hardcore', hint: 'two swings and a nap',
-      set: { staminaOn: true, staminaRegen: 0.25, staminaClubCost: 0.5,
-             staminaPunchCost: 0.18, staminaDashCost: 0.7, staminaBlockDrain: 0.4 } },
+      set: { staminaOn: true, staminaRegen: 0.2, staminaDelay: 1.1,
+             staminaClubCost: 0.6, staminaPunchCost: 0.22,
+             staminaDashCost: 0.8, staminaBlockDrain: 0.5 } },
   ],
 };
 
-// Animation VARIANTS for the two vertical strikes: unlike the pacing
-// presets these rewrite the strike's GEOMETRY — where the club chambers,
-// what arc it travels, how it finishes — plus its own pacing. Applying
-// one mutates the style object in SWING_STYLES (shared with the bots)
-// and mirrors wind/time into the tuning keys. The picked name persists
-// and is re-applied on boot, because style fields live in code, not in
-// the saved tuning.
+// Animation VARIANTS for the rising strike: these rewrite the strike's
+// GEOMETRY — where the club chambers, what arc it travels, how it
+// finishes — plus its own pacing. Applying one mutates the style object
+// in SWING_STYLES (shared with the bots) and mirrors wind/time into the
+// tuning keys. The picked name persists and is re-applied on boot,
+// because style fields live in code, not in the saved tuning.
+//
+// The first cut of this list was five nudges around one diagonal rip and
+// read as five copies. This one spreads the MOVES: the arcs start a body
+// apart, the sweeps run 0.6..1.15 of the base beat, the finishes range
+// from a flat push to a straight-overhead launch.
 const STRIKE_VARIANTS = {
-  Overhead: {
-    index: 1,
-    list: [
-      { name: 'Classic', hint: 'raise high, chop past the knee',
-        style: { aFrom: [0, 15], aTo: [0, -12], wH: 0.6, wP: -75, hF: 0.55, hT: -0.08,
-                 pF: -70, pT: 28, up: 0.7, pow: 1.8, time: 0.8, wind: 5.5, windMin: 0.24 } },
-      { name: 'Executioner', hint: 'dead vertical, deep finish',
-        style: { aFrom: [0, 10], aTo: [0, -10], wH: 0.72, wP: -88, hF: 0.7, hT: -0.15,
-                 pF: -85, pT: 35, up: 0.6, pow: 1.9, time: 0.85, wind: 6, windMin: 0.3 } },
-      { name: 'Hammer', hint: 'compact raise, quick chop',
-        style: { aFrom: [0, 15], aTo: [0, -12], wH: 0.45, wP: -55, hF: 0.42, hT: -0.02,
-                 pF: -55, pT: 22, up: 0.7, pow: 1.6, time: 0.7, wind: 4, windMin: 0.18 } },
-      { name: 'Diagonal', hint: 'comes down at a slant',
-        style: { aFrom: [0.3, 12], aTo: [-0.18, -4], wH: 0.55, wP: -65, hF: 0.5, hT: -0.05,
-                 pF: -62, pT: 20, up: 0.75, pow: 1.7, time: 0.8, wind: 5, windMin: 0.24 } },
-      { name: 'Smash', hint: 'highest raise, hardest drop',
-        style: { aFrom: [0, 18], aTo: [0, -14], wH: 0.66, wP: -80, hF: 0.62, hT: -0.12,
-                 pF: -75, pT: 40, up: 0.65, pow: 2, time: 0.75, wind: 6.5, windMin: 0.3 } },
-    ],
-  },
   Rising: {
     index: 2,
     list: [
       { name: 'Classic', hint: 'dip back-down, diagonal rip',
         style: { aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55,
-                 pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.8, wind: 5.5, windMin: 0.3 } },
-      { name: 'Golf', hint: 'wider arc from the hip',
-        style: { aFrom: [0.85, 8], aTo: [-0.12, -2], wH: -0.3, wP: 65, hF: -0.3, hT: 0.5,
-                 pF: 65, pT: -50, up: 2.8, pow: 1.2, time: 0.85, wind: 4.5, windMin: 0.26 } },
-      { name: 'Uppercut', hint: 'straight up the front',
-        style: { aFrom: [0.2, 8], aTo: [0, -8], wH: -0.32, wP: 68, hF: -0.32, hT: 0.6,
-                 pF: 68, pT: -75, up: 3.6, pow: 1.05, time: 0.75, wind: 6, windMin: 0.32 } },
-      { name: 'Scoop', hint: 'deepest dip, flatter finish',
-        style: { aFrom: [0.5, 5], aTo: [0, -12], wH: -0.44, wP: 82, hF: -0.44, hT: 0.42,
-                 pF: 82, pT: -40, up: 3, pow: 1.25, time: 0.8, wind: 5, windMin: 0.34 } },
-      { name: 'Launcher', hint: 'same path, harder lift',
-        style: { aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.58,
-                 pF: 76, pT: -65, up: 4.2, pow: 1.1, time: 0.75, wind: 5.5, windMin: 0.3 } },
+                 pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.85, wind: 6.5, windMin: 0.3 } },
+      { name: 'Golf', hint: 'wide lazy sweep from way outside',
+        style: { aFrom: [1.1, 12], aTo: [-0.25, -4], wH: -0.26, wP: 55, hF: -0.26, hT: 0.32,
+                 pF: 55, pT: -30, up: 2.2, pow: 1.35, time: 1.0, wind: 5, windMin: 0.28 } },
+      { name: 'Piston', hint: 'long pull, instant vertical punch',
+        style: { aFrom: [0.15, 4], aTo: [0, -6], wH: -0.5, wP: 88, hF: -0.5, hT: 0.78,
+                 pF: 88, pT: -85, up: 4.4, pow: 1.0, time: 0.6, wind: 7.5, windMin: 0.38 } },
+      { name: 'Shovel', hint: 'deepest dig, heavy flat push',
+        style: { aFrom: [0.5, 6], aTo: [0.05, -14], wH: -0.55, wP: 82, hF: -0.55, hT: 0.22,
+                 pF: 82, pT: -20, up: 2.4, pow: 1.45, time: 1.1, wind: 5.5, windMin: 0.36 } },
+      { name: 'Moonshot', hint: 'slow ceremony, sky launch',
+        style: { aFrom: [0.7, 8], aTo: [0, -8], wH: -0.44, wP: 80, hF: -0.44, hT: 0.85,
+                 pF: 80, pT: -90, up: 5.5, pow: 1.0, time: 1.15, wind: 8.5, windMin: 0.45 } },
     ],
   },
 };
@@ -261,18 +224,34 @@ export class Ui {
       saveTuning();
     };
 
-    makeGroup('Movement', PRESETS.Movement, 'tk-preset-Movement', applySet);
-    makeGroup('Strike', PRESETS.Strike, 'tk-preset-Strike', applySet);
+    // The baked winners win over whatever the testing builds stored.
+    for (const [k, v] of Object.entries(BAKED)) T[k] = v;
+    // The retired tabs' bookmarks would otherwise linger forever.
+    try {
+      localStorage.removeItem('tk-preset-Movement');
+      localStorage.removeItem('tk-preset-Strike');
+      localStorage.removeItem('tk-variant-Overhead');
+    } catch { /* private mode */ }
+    saveTuning();
+
     for (const group of Object.keys(STRIKE_VARIANTS)) {
       const picked = makeGroup(group, STRIKE_VARIANTS[group].list,
         'tk-variant-' + group, applyVariant(group));
       // Geometry lives in code, not in saved tuning: the stored variant
       // must be re-applied on every boot (Classic is the code default,
-      // but applying it anyway keeps one path).
+      // but applying it anyway keeps one path). applyVariant also mirrors
+      // the variant's pacing over the baked keys.
       const v = STRIKE_VARIANTS[group].list.find((x) => x.name === picked);
-      if (v) Object.assign(SWING_STYLES[STRIKE_VARIANTS[group].index], v.style);
+      if (v) applyVariant(group)(v);
     }
-    makeGroup('Stamina', PRESETS.Stamina, 'tk-preset-Stamina', applySet);
+    {
+      // The stamina ladder was re-graded (everything one rung stingier),
+      // so the stored PICK is re-applied by name on boot — otherwise the
+      // old numbers saved under the same name would shadow the new ones.
+      const picked = makeGroup('Stamina', PRESETS.Stamina, 'tk-preset-Stamina', applySet);
+      const p = PRESETS.Stamina.find((x) => x.name === (picked || 'Classic'));
+      if (p) applySet(p);
+    }
 
     for (const item of QUICK) {
       if (item.group) {

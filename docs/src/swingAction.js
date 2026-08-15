@@ -47,7 +47,10 @@ export const SwingState = {
 // of a raise, then a strike in slow motion.
 export const SWING_STYLES = [
   { name: 'side',     aFrom: [1, 25], aTo: [-1, 0],  wH: 0.14,  wP: -22, hF: 0,     hT: 0,     pF: 0,   pT: 0,   up: 1,   pow: 1 },
-  { name: 'overhead', aFrom: [0, 15], aTo: [0, -12], wH: 0.6,   wP: -75, hF: 0.55,  hT: -0.08, pF: -70, pT: 28,  up: 0.7, pow: 1.8,  time: 0.8, wind: 5.5, windMin: 0.24 },
+  // The overhead ships as the "Executioner" cut from the variant testing:
+  // dead vertical, the club chambers high behind the head and finishes
+  // deep past the knee.
+  { name: 'overhead', aFrom: [0, 10], aTo: [0, -10], wH: 0.72,  wP: -88, hF: 0.7,   hT: -0.15, pF: -85, pT: 35,  up: 0.6, pow: 1.9,  time: 0.85, wind: 6, windMin: 0.3 },
   // The rising scoop winds BACK-AND-DOWN past the hip — an underhand
   // throw, not a raise — and rips forward-up in one diagonal sweep,
   // finishing tip-up in front of the face. Its chamber sits close to the
@@ -58,7 +61,7 @@ export const SWING_STYLES = [
   // draw-back is a real motion, not a timer.
   // (A wider back-arc chamber was tried and missed: by the time the club
   // crossed the front it was already above head height.)
-  { name: 'rising',   aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55, pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.8, wind: 5.5, windMin: 0.3 },
+  { name: 'rising',   aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55, pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.85, wind: 6.5, windMin: 0.3 },
 ];
 
 // The bare-knuckle set — same machine, same slots (LMB 0, wheel up 1,
