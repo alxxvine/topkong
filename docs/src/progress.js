@@ -16,7 +16,7 @@ const KEY = 'tk-progress';
 export const ACHIEVEMENTS = [
   { id: 'first',   name: 'First Blood',  desc: 'Knock somebody off',
     need: 1, of: (p) => p.kills,
-    reward: { club: 'axe', label: 'Axe' } },
+    reward: { club: 'bat', label: 'Bat' } },
   { id: 'gold',    name: 'Bouncer',      desc: '25 knock-offs',
     need: 25, of: (p) => p.kills,
     reward: { color: 0xf5c542, label: 'Gold' } },

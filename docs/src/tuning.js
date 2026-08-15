@@ -513,8 +513,8 @@ export const tuning = {
   sideTime: 1.2,
   overheadWind: 6,
   overheadTime: 0.85,
-  risingWind: 6.5,
-  risingTime: 0.85,
+  risingWind: 7,
+  risingTime: 1.05,
   // The fists are their own weapon with their own tempo.
   jabWind: 0.7,
   jabTime: 0.55,

@@ -61,7 +61,10 @@ export const SWING_STYLES = [
   // draw-back is a real motion, not a timer.
   // (A wider back-arc chamber was tried and missed: by the time the club
   // crossed the front it was already above head height.)
-  { name: 'rising',   aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55, pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.85, wind: 6.5, windMin: 0.3 },
+  // Final cut after variant testing: the chamber pulls a touch FURTHER
+  // back and deeper than before, and the rip itself is unhurried (time
+  // above 1) — the snappy version read as a glitch, not a strike.
+  { name: 'rising',   aFrom: [0.7, 8], aTo: [0, -10], wH: -0.44, wP: 78, hF: -0.44, hT: 0.55, pF: 78, pT: -60, up: 3.2, pow: 1.15, time: 1.05, wind: 7, windMin: 0.38 },
 ];
 
 // The bare-knuckle set — same machine, same slots (LMB 0, wheel up 1,

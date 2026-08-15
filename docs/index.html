@@ -16,7 +16,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Top Kong — arena</title>
+<title>Top Kong</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%94%A8</text></svg>">
 <style>
   /* Liquid Glass, the current Apple language: the chrome is a LENS over
@@ -538,6 +538,7 @@
 
   #menu:active { transform: scale(0.94); }
   #menu.gone { display: none; }
+  #menu svg { display: block; margin: 0 auto; }
 
   /* HUD стоит в том же углу — сдвигаем его вправо от кнопки. */
   #hud { left: 62px; }
@@ -1077,7 +1078,9 @@
   <button id="pause" type="button" aria-label="Pause">❙❙</button>
   <!-- Achievement toast: announces itself, asks for nothing. -->
   <div id="toast"></div>
-  <button id="menu" class="gone" type="button" aria-label="Back to menu">⌂</button>
+  <!-- The hamburger matches the pause bars: both buttons speak the same
+       thin-line glyph language (the old house outline was a stray serif). -->
+  <button id="menu" class="gone" type="button" aria-label="Back to menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>
 
   <div id="quick">
     <div id="quickHead"><span>Quick tuning</span><span class="spacer"></span><span class="chev">▴</span></div>
@@ -1152,33 +1155,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "203";</script>
+<script>window.TK_BUILD = "204";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=203",
-    "tk/main.js":         "./src/main.js?v=203",
-    "tk/tuning.js":       "./src/tuning.js?v=203",
-    "tk/mathx.js":        "./src/mathx.js?v=203",
-    "tk/arena.js":        "./src/arena.js?v=203",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=203",
-    "tk/balance.js":      "./src/balance.js?v=203",
-    "tk/skeleton.js":     "./src/skeleton.js?v=203",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=203",
-    "tk/gait.js":         "./src/gait.js?v=203",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=203",
-    "tk/swingAction.js":  "./src/swingAction.js?v=203",
-    "tk/locomotion.js":   "./src/locomotion.js?v=203",
-    "tk/body.js":         "./src/body.js?v=203",
-    "tk/bot.js":          "./src/bot.js?v=203",
-    "tk/contact.js":      "./src/contact.js?v=203",
-    "tk/match.js":        "./src/match.js?v=203",
-    "tk/fighter.js":      "./src/fighter.js?v=203",
-    "tk/input.js":        "./src/input.js?v=203",
-    "tk/ui.js":           "./src/ui.js?v=203",
-    "tk/sound.js":        "./src/sound.js?v=203",
-    "tk/telemetry.js":    "./src/telemetry.js?v=203",
-    "tk/progress.js":     "./src/progress.js?v=203"
+    "three":              "./vendor/three.module.js?v=204",
+    "tk/main.js":         "./src/main.js?v=204",
+    "tk/tuning.js":       "./src/tuning.js?v=204",
+    "tk/mathx.js":        "./src/mathx.js?v=204",
+    "tk/arena.js":        "./src/arena.js?v=204",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=204",
+    "tk/balance.js":      "./src/balance.js?v=204",
+    "tk/skeleton.js":     "./src/skeleton.js?v=204",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=204",
+    "tk/gait.js":         "./src/gait.js?v=204",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=204",
+    "tk/swingAction.js":  "./src/swingAction.js?v=204",
+    "tk/locomotion.js":   "./src/locomotion.js?v=204",
+    "tk/body.js":         "./src/body.js?v=204",
+    "tk/bot.js":          "./src/bot.js?v=204",
+    "tk/contact.js":      "./src/contact.js?v=204",
+    "tk/match.js":        "./src/match.js?v=204",
+    "tk/fighter.js":      "./src/fighter.js?v=204",
+    "tk/input.js":        "./src/input.js?v=204",
+    "tk/ui.js":           "./src/ui.js?v=204",
+    "tk/sound.js":        "./src/sound.js?v=204",
+    "tk/telemetry.js":    "./src/telemetry.js?v=204",
+    "tk/progress.js":     "./src/progress.js?v=204"
   }
 }
 </script>

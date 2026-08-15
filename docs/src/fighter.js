@@ -36,7 +36,10 @@ const TRAIL_POINTS = 26;
 export const CLUB_SKINS = {
   classic: { wood: 0xd8c3a5, woodR: 0.72, metal: 0x9ba1ab, metalR: 0.38, metalM: 0.55, head: 'ball' },
   hammer:  { wood: 0xb99b7a, woodR: 0.6,  metal: 0xaab4c0, metalR: 0.3,  metalM: 0.75, head: 'maul' },
-  axe:     { wood: 0x9a7b5c, woodR: 0.62, metal: 0xc6cdd8, metalR: 0.26, metalM: 0.8,  head: 'axe' },
+  // The bat is all wood; the "metal" slot paints its grip tape. (An axe
+  // was tried in this slot and cut: a bladed head read wrong against the
+  // blunt swing arcs — simple club-shaped things only.)
+  bat:     { wood: 0xdcae72, woodR: 0.55, metal: 0x3a3f47, metalR: 0.65, metalM: 0.15, head: 'bat' },
   gilded:  { wood: 0xc9a54f, woodR: 0.45, metal: 0xf3d05e, metalR: 0.22, metalM: 0.9,  head: 'ball' },
   void:    { wood: 0x2b2438, woodR: 0.6,  metal: 0x8b5cf6, metalR: 0.3,  metalM: 0.7,  head: 'ball' },
 };
@@ -556,19 +559,24 @@ export class Fighter {
     // пятном в кадре и перетягивала взгляд с бойца на себя.
     const wood = mat(new THREE.Color(skin.wood), skin.woodR);
     const metal = mat(new THREE.Color(skin.metal), skin.metalR, skin.metalM);
-    capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
     const H = Rig.ClubHeadLocal;
+    if (skin.head === 'bat') {
+      // The bat: one smooth round taper instead of shaft-plus-head, a fat
+      // tip and a taped grip. Same length, same hit point (ClubHeadLocal).
+      addMesh(this.bones.club,
+        new THREE.CylinderGeometry(0.085, 0.045, Rig.ClubLength + 0.14, 12, 1),
+        wood, _v.set(0, 0.07, 0));
+      sphere(this.bones.club, 0.085, wood,
+        _v.set(0, Rig.ClubLength * 0.5 + 0.14, 0));
+      addMesh(this.bones.club,
+        new THREE.CylinderGeometry(0.052, 0.052, 0.16, 10, 1),
+        metal, _v.set(0, -Rig.ClubLength * 0.4, 0));
+      return;
+    }
+    capsule(this.bones.club, Rig.ClubRadius, Rig.ClubLength, wood);
     if (skin.head === 'maul') {
       // The sledge: one steel block across the shaft.
       box(this.bones.club, 0.34, 0.17, 0.17, H, metal);
-    } else if (skin.head === 'axe') {
-      // The axe: a trapezoid blade flaring OUT one side (the panel's wide
-      // end lands outward after the quarter turn), a stubby poll behind.
-      const blade = panel(this.bones.club, 0.26, 0.38, 0.16, 0.045, metal,
-        _v.copy(H).add(new THREE.Vector3(0.16, 0, 0)));
-      blade.rotation.z = Math.PI / 2;
-      box(this.bones.club, 0.12, 0.13, 0.11,
-        _v.copy(H).add(new THREE.Vector3(-0.07, 0, 0)), metal);
     } else {
       // The classic: the spiked ball.
       sphere(this.bones.club, Rig.ClubHeadRadius, metal, H);

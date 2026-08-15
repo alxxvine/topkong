@@ -1,5 +1,4 @@
 import { tuning as T, tuneGroups, saveTuning, resetTuning } from 'tk/tuning.js';
-import { SWING_STYLES } from 'tk/swingAction.js';
 import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 
 // Интерфейс: строка состояния и панель ползунков.
@@ -37,6 +36,9 @@ const BAKED = {
   sideWind: 3.2, sideTime: 1.2,
   // Overhead pacing: the Executioner variant's own beat.
   overheadWind: 6, overheadTime: 0.85,
+  // Rising: a touch more wind-back and a soft, unhurried rip — the snap
+  // was the complaint.
+  risingWind: 7, risingTime: 1.05,
   // Stamina: the tight middle grade — every swing is a real spend.
   staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
   staminaClubCost: 0.42, staminaPunchCost: 0.15,
@@ -45,44 +47,10 @@ const BAKED = {
   withClub: true, botsArmed: true, botsActive: true,
 };
 
-// Animation VARIANTS for the rising strike: these rewrite the strike's
-// GEOMETRY — where the club chambers, what arc it travels, how it
-// finishes — plus its own pacing. Applying one mutates the style object
-// in SWING_STYLES (shared with the bots) and mirrors wind/time into the
-// tuning keys. The picked name persists and is re-applied on boot,
-// because style fields live in code, not in the saved tuning.
-//
-// The first cut of this list was five nudges around one diagonal rip and
-// read as five copies. This one spreads the MOVES: the arcs start a body
-// apart, the sweeps run 0.6..1.15 of the base beat, the finishes range
-// from a flat push to a straight-overhead launch.
-const STRIKE_VARIANTS = {
-  Rising: {
-    index: 2,
-    list: [
-      { name: 'Classic', hint: 'dip back-down, diagonal rip',
-        style: { aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55,
-                 pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.85, wind: 6.5, windMin: 0.3 } },
-      { name: 'Golf', hint: 'wide lazy sweep from way outside',
-        style: { aFrom: [1.1, 12], aTo: [-0.25, -4], wH: -0.26, wP: 55, hF: -0.26, hT: 0.32,
-                 pF: 55, pT: -30, up: 2.2, pow: 1.35, time: 1.0, wind: 5, windMin: 0.28 } },
-      { name: 'Piston', hint: 'long pull, instant vertical punch',
-        style: { aFrom: [0.15, 4], aTo: [0, -6], wH: -0.5, wP: 88, hF: -0.5, hT: 0.78,
-                 pF: 88, pT: -85, up: 4.4, pow: 1.0, time: 0.6, wind: 7.5, windMin: 0.38 } },
-      { name: 'Shovel', hint: 'deepest dig, heavy flat push',
-        style: { aFrom: [0.5, 6], aTo: [0.05, -14], wH: -0.55, wP: 82, hF: -0.55, hT: 0.22,
-                 pF: 82, pT: -20, up: 2.4, pow: 1.45, time: 1.1, wind: 5.5, windMin: 0.36 } },
-      { name: 'Moonshot', hint: 'slow ceremony, sky launch',
-        style: { aFrom: [0.7, 8], aTo: [0, -8], wH: -0.44, wP: 80, hF: -0.44, hT: 0.85,
-                 pF: 80, pT: -90, up: 5.5, pow: 1.0, time: 1.15, wind: 8.5, windMin: 0.45 } },
-    ],
-  },
-};
-
-// The Match switches (clubs / bots fight / bots armed / sound) retired
-// with the rest of the settled settings: one weapon culture, live bots,
-// sound on. The raw toggles live on in the big debug panel.
-const QUICK = [];
+// The Rising animation variants retired too (the winner — a soft rip
+// with a deeper wind-back — is baked into SWING_STYLES), as did the
+// Match switches: one weapon culture, live bots, sound on. The player
+// just plays; the raw knobs live on in the debug panel behind KeyH.
 
 export class Ui {
   constructor() {
@@ -117,129 +85,22 @@ export class Ui {
   }
 
   buildQuick() {
-    if (!this.quickBody) return;
-    // Tabs, one group at a time. Five groups in one column ran the panel
-    // past the bottom of the screen with overflow:hidden on top — half
-    // the sliders were simply unreachable. A tab bar keeps every group
-    // short enough to fit, and the active tab survives reloads.
-    this.quickTabs = document.createElement('div');
-    this.quickTabs.id = 'quickTabs';
-    this.quickBody.appendChild(this.quickTabs);
-    this.quickSections = new Map();
-    this.quickSection = null;
-
-    // The preset tabs come first: five flavors per system, one tap each.
-    // The vertical-strike ANIMATION variants slot in after the pacing.
-    const makeGroup = (group, list, storeKey, apply) => {
-      const section = document.createElement('div');
-      section.className = 'qsec';
-      this.quickBody.appendChild(section);
-      const tab = document.createElement('button');
-      tab.type = 'button';
-      tab.textContent = group;
-      tab.addEventListener('click', () => this.showQuickTab(group));
-      this.quickTabs.appendChild(tab);
-      this.quickSections.set(group, { section, tab });
-
-      let picked = null;
-      try { picked = localStorage.getItem(storeKey); } catch { /* private */ }
-      for (const preset of list) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'preset';
-        const nm = document.createElement('b');
-        nm.textContent = preset.name;
-        const hint = document.createElement('small');
-        hint.textContent = preset.hint;
-        b.append(nm, hint);
-        if (preset.name === (picked || 'Classic')) b.classList.add('sel');
-        b.addEventListener('click', () => {
-          apply(preset);
-          try { localStorage.setItem(storeKey, preset.name); } catch { /* private */ }
-          for (const other of section.children) other.classList.remove('sel');
-          b.classList.add('sel');
-          // The big panel's sliders must re-read the values just written.
-          for (const r of this.rows) r.show();
-          this.onTuned?.();
-        });
-        section.appendChild(b);
-      }
-      return picked;
-    };
-    const applyVariant = (group) => (preset) => {
-      Object.assign(SWING_STYLES[STRIKE_VARIANTS[group].index], preset.style);
-      // Pacing rides in the same variant; mirror it into the live keys.
-      T[group.toLowerCase() + 'Wind'] = preset.style.wind;
-      T[group.toLowerCase() + 'Time'] = preset.style.time;
-      saveTuning();
-    };
-
-    // The baked winners win over whatever the testing builds stored.
+    // The quick panel is empty and hidden now — every player-facing
+    // setting is settled and baked. What remains here is the boot-time
+    // enforcement: the baked winners overwrite whatever preset
+    // experiments the testing builds left in localStorage.
     for (const [k, v] of Object.entries(BAKED)) T[k] = v;
-    // The retired tabs' bookmarks would otherwise linger forever.
     try {
-      localStorage.removeItem('tk-preset-Movement');
-      localStorage.removeItem('tk-preset-Strike');
-      localStorage.removeItem('tk-preset-Stamina');
-      localStorage.removeItem('tk-variant-Overhead');
+      for (const key of ['tk-preset-Movement', 'tk-preset-Strike',
+        'tk-preset-Stamina', 'tk-variant-Overhead', 'tk-variant-Rising',
+        'tk-quicktab']) {
+        localStorage.removeItem(key);
+      }
     } catch { /* private mode */ }
     saveTuning();
-
-    for (const group of Object.keys(STRIKE_VARIANTS)) {
-      const picked = makeGroup(group, STRIKE_VARIANTS[group].list,
-        'tk-variant-' + group, applyVariant(group));
-      // Geometry lives in code, not in saved tuning: the stored variant
-      // must be re-applied on every boot (Classic is the code default,
-      // but applying it anyway keeps one path). applyVariant also mirrors
-      // the variant's pacing over the baked keys.
-      const v = STRIKE_VARIANTS[group].list.find((x) => x.name === picked);
-      if (v) applyVariant(group)(v);
-    }
-
-    for (const item of QUICK) {
-      if (item.group) {
-        const section = document.createElement('div');
-        section.className = 'qsec';
-        this.quickBody.appendChild(section);
-        const tab = document.createElement('button');
-        tab.type = 'button';
-        tab.textContent = item.group;
-        tab.addEventListener('click', () => this.showQuickTab(item.group));
-        this.quickTabs.appendChild(tab);
-        this.quickSections.set(item.group, { section, tab });
-        this.quickSection = section;
-      }
-      this.addQuickRow(item);
-    }
-    let saved = null;
-    try { saved = localStorage.getItem('tk-quicktab'); } catch { /* private mode */ }
-    // Any stale tab name falls back to the first live section inside.
-    this.showQuickTab(saved || '');
-
-    const head = document.getElementById('quickHead');
-    // На телефоне панель начинается свёрнутой: девять строк занимают
-    // половину экрана, и арену за ними не видно. Заголовок при этом
-    // на месте, разворачивается одним касанием.
-    if (matchMedia('(max-width: 560px)').matches) {
-      this.quick.classList.add('folded');
-      head.querySelector('.chev').textContent = '▾';
-    }
-    head.addEventListener('click', () => {
-      this.quick.classList.toggle('folded');
-      head.querySelector('.chev').textContent =
-        this.quick.classList.contains('folded') ? '▾' : '▴';
-    });
-  }
-
-  showQuickTab(name) {
-    if (!this.quickSections.has(name)) {
-      name = this.quickSections.keys().next().value;
-    }
-    for (const [g, { section, tab }] of this.quickSections) {
-      section.classList.toggle('on', g === name);
-      tab.classList.toggle('on', g === name);
-    }
-    try { localStorage.setItem('tk-quicktab', name); } catch { /* private mode */ }
+    // The sliders of the debug panel re-read the enforced values.
+    for (const r of this.rows) r.show();
+    if (this.quick) this.quick.style.display = 'none';
   }
 
   addQuickRow(item) {

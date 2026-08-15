@@ -4,7 +4,7 @@ import { tuning as T, loadTuning } from 'tk/tuning.js';
 import { clamp01, lerp } from 'tk/mathx.js';
 import { Arena, VOID_COLOR } from 'tk/arena.js';
 import { CameraRig } from 'tk/cameraRig.js';
-import { Fighter, BodyState, EYE_STYLES, HEAD_SHAPES, TORSO_SHAPES, ARM_SHAPES, LEG_SHAPES } from 'tk/fighter.js';
+import { Fighter, BodyState, EYE_STYLES, HEAD_SHAPES, TORSO_SHAPES, ARM_SHAPES, LEG_SHAPES, CLUB_SKINS } from 'tk/fighter.js';
 import { Bot, BOT_ROSTER } from 'tk/bot.js';
 import { resolveContacts } from 'tk/contact.js';
 import { Match } from 'tk/match.js';
@@ -985,6 +985,10 @@ function dressBot(fighter, name) {
   fighter.setPart('torso', pick(TORSO_SHAPES, 5));
   fighter.setPart('arms', pick(ARM_SHAPES, 8));
   fighter.setPart('legs', pick(LEG_SHAPES, 11));
+  // Weapons too — a wall of identical spiked clubs read as a factory
+  // floor. Bots draw from the FULL rack, trophies included: seeing a
+  // gilded club across the arena is the advertisement for earning one.
+  fighter.setClubSkin(pick(CLUB_SKINS, 14));
 }
 
 function drawPersona(index) {
