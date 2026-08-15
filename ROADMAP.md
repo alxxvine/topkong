@@ -493,6 +493,16 @@ everything above stays a sandbox.
   (a club hit, a ram topple, rolling a downed body to the edge) — the kill
   goes to whoever acted last within the credit window.
 
+### I9.5 — Character part variations
+
+Custom fighters assembled from parts: several variations of the head,
+torso, arms and legs, each picked separately in the character menu, so a
+player builds THEIR figure out of the shared construction kit. Bots draw
+random combinations from the same parts. Technically: per-part panel
+variants in the skeleton (proportions and shapes), a per-part picker in
+the menu, persistence next to the color, and the roster generator
+sampling the same catalog. Requested, not yet scheduled.
+
 ### I10 — Camera and sound
 
 - The camera sits farther while many are alive, closer toward the finale,

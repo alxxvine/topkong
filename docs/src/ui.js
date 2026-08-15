@@ -1,4 +1,5 @@
 import { tuning as T, tuneGroups, saveTuning, resetTuning } from 'tk/tuning.js';
+import { SWING_STYLES } from 'tk/swingAction.js';
 import { BODIES, bodyNames, currentBody, chooseBody } from 'tk/skeleton.js';
 
 // Интерфейс: строка состояния и панель ползунков.
@@ -82,6 +83,56 @@ const PRESETS = {
   ],
 };
 
+// Animation VARIANTS for the two vertical strikes: unlike the pacing
+// presets these rewrite the strike's GEOMETRY — where the club chambers,
+// what arc it travels, how it finishes — plus its own pacing. Applying
+// one mutates the style object in SWING_STYLES (shared with the bots)
+// and mirrors wind/time into the tuning keys. The picked name persists
+// and is re-applied on boot, because style fields live in code, not in
+// the saved tuning.
+const STRIKE_VARIANTS = {
+  Overhead: {
+    index: 1,
+    list: [
+      { name: 'Classic', hint: 'raise high, chop past the knee',
+        style: { aFrom: [0, 15], aTo: [0, -12], wH: 0.6, wP: -75, hF: 0.55, hT: -0.08,
+                 pF: -70, pT: 28, up: 0.7, pow: 1.8, time: 0.8, wind: 5.5, windMin: 0.24 } },
+      { name: 'Executioner', hint: 'dead vertical, deep finish',
+        style: { aFrom: [0, 10], aTo: [0, -10], wH: 0.72, wP: -88, hF: 0.7, hT: -0.15,
+                 pF: -85, pT: 35, up: 0.6, pow: 1.9, time: 0.85, wind: 6, windMin: 0.3 } },
+      { name: 'Hammer', hint: 'compact raise, quick chop',
+        style: { aFrom: [0, 15], aTo: [0, -12], wH: 0.45, wP: -55, hF: 0.42, hT: -0.02,
+                 pF: -55, pT: 22, up: 0.7, pow: 1.6, time: 0.7, wind: 4, windMin: 0.18 } },
+      { name: 'Diagonal', hint: 'comes down at a slant',
+        style: { aFrom: [0.3, 12], aTo: [-0.18, -4], wH: 0.55, wP: -65, hF: 0.5, hT: -0.05,
+                 pF: -62, pT: 20, up: 0.75, pow: 1.7, time: 0.8, wind: 5, windMin: 0.24 } },
+      { name: 'Smash', hint: 'highest raise, hardest drop',
+        style: { aFrom: [0, 18], aTo: [0, -14], wH: 0.66, wP: -80, hF: 0.62, hT: -0.12,
+                 pF: -75, pT: 40, up: 0.65, pow: 2, time: 0.75, wind: 6.5, windMin: 0.3 } },
+    ],
+  },
+  Rising: {
+    index: 2,
+    list: [
+      { name: 'Classic', hint: 'dip back-down, diagonal rip',
+        style: { aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.55,
+                 pF: 76, pT: -60, up: 3.2, pow: 1.15, time: 0.8, wind: 5.5, windMin: 0.3 } },
+      { name: 'Golf', hint: 'wider arc from the hip',
+        style: { aFrom: [0.85, 8], aTo: [-0.12, -2], wH: -0.3, wP: 65, hF: -0.3, hT: 0.5,
+                 pF: 65, pT: -50, up: 2.8, pow: 1.2, time: 0.85, wind: 4.5, windMin: 0.26 } },
+      { name: 'Uppercut', hint: 'straight up the front',
+        style: { aFrom: [0.2, 8], aTo: [0, -8], wH: -0.32, wP: 68, hF: -0.32, hT: 0.6,
+                 pF: 68, pT: -75, up: 3.6, pow: 1.05, time: 0.75, wind: 6, windMin: 0.32 } },
+      { name: 'Scoop', hint: 'deepest dip, flatter finish',
+        style: { aFrom: [0.5, 5], aTo: [0, -12], wH: -0.44, wP: 82, hF: -0.44, hT: 0.42,
+                 pF: 82, pT: -40, up: 3, pow: 1.25, time: 0.8, wind: 5, windMin: 0.34 } },
+      { name: 'Launcher', hint: 'same path, harder lift',
+        style: { aFrom: [0.55, 5], aTo: [0, -10], wH: -0.38, wP: 76, hF: -0.38, hT: 0.58,
+                 pF: 76, pT: -65, up: 4.2, pow: 1.1, time: 0.75, wind: 5.5, windMin: 0.3 } },
+    ],
+  },
+};
+
 const QUICK = [
   // The fight-test switches stay raw: they help testing, not tuning.
   {
@@ -161,7 +212,8 @@ export class Ui {
     this.quickSection = null;
 
     // The preset tabs come first: five flavors per system, one tap each.
-    for (const [group, list] of Object.entries(PRESETS)) {
+    // The vertical-strike ANIMATION variants slot in after the pacing.
+    const makeGroup = (group, list, storeKey, apply) => {
       const section = document.createElement('div');
       section.className = 'qsec';
       this.quickBody.appendChild(section);
@@ -173,7 +225,7 @@ export class Ui {
       this.quickSections.set(group, { section, tab });
 
       let picked = null;
-      try { picked = localStorage.getItem('tk-preset-' + group); } catch { /* private */ }
+      try { picked = localStorage.getItem(storeKey); } catch { /* private */ }
       for (const preset of list) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -185,9 +237,8 @@ export class Ui {
         b.append(nm, hint);
         if (preset.name === (picked || 'Classic')) b.classList.add('sel');
         b.addEventListener('click', () => {
-          for (const [k, v] of Object.entries(preset.set)) T[k] = v;
-          saveTuning();
-          try { localStorage.setItem('tk-preset-' + group, preset.name); } catch { /* private */ }
+          apply(preset);
+          try { localStorage.setItem(storeKey, preset.name); } catch { /* private */ }
           for (const other of section.children) other.classList.remove('sel');
           b.classList.add('sel');
           // The big panel's sliders must re-read the values just written.
@@ -196,7 +247,32 @@ export class Ui {
         });
         section.appendChild(b);
       }
+      return picked;
+    };
+    const applySet = (preset) => {
+      for (const [k, v] of Object.entries(preset.set)) T[k] = v;
+      saveTuning();
+    };
+    const applyVariant = (group) => (preset) => {
+      Object.assign(SWING_STYLES[STRIKE_VARIANTS[group].index], preset.style);
+      // Pacing rides in the same variant; mirror it into the live keys.
+      T[group.toLowerCase() + 'Wind'] = preset.style.wind;
+      T[group.toLowerCase() + 'Time'] = preset.style.time;
+      saveTuning();
+    };
+
+    makeGroup('Movement', PRESETS.Movement, 'tk-preset-Movement', applySet);
+    makeGroup('Strike', PRESETS.Strike, 'tk-preset-Strike', applySet);
+    for (const group of Object.keys(STRIKE_VARIANTS)) {
+      const picked = makeGroup(group, STRIKE_VARIANTS[group].list,
+        'tk-variant-' + group, applyVariant(group));
+      // Geometry lives in code, not in saved tuning: the stored variant
+      // must be re-applied on every boot (Classic is the code default,
+      // but applying it anyway keeps one path).
+      const v = STRIKE_VARIANTS[group].list.find((x) => x.name === picked);
+      if (v) Object.assign(SWING_STYLES[STRIKE_VARIANTS[group].index], v.style);
     }
+    makeGroup('Stamina', PRESETS.Stamina, 'tk-preset-Stamina', applySet);
 
     for (const item of QUICK) {
       if (item.group) {

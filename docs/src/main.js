@@ -519,9 +519,9 @@ export async function start() {
       lastOverField = overField;
       document.body.classList.toggle('offfield', !overField);
     }
-    // The menu has no aim: the cursor drives the gaze there, and the
-    // world ring floating in the close-up read as a stray UI ornament.
-    aim.setVisible(overField && setupState.done);
+    // The world ring IS the cursor, in the menu too: same pointer
+    // language on both screens. Off-deck rays hide it (overField).
+    aim.setVisible(overField);
     aim.update(input.aim, player);
     scene.userData.camQuat = camera.quaternion;
     fx.tick(real);
@@ -636,6 +636,7 @@ function initSetup(player, aim, match, telem, prog) {
     renderAch();
 
     applyColor(color);
+    applySkin(skin);
   };
 
   // The achievements live in a pop-up now: cards with an icon, the
@@ -699,13 +700,46 @@ function initSetup(player, aim, match, telem, prog) {
     });
   }
 
+  // The club skins came back as one neat cycler on the right edge:
+  // click rotates through the EARNED skins, the locked recipes wait in
+  // the tooltip. One weapon still — the skins are paint, not stats.
+  const SKINS = [
+    { id: 'classic', label: 'Classic' },
+    ...rewardOf('club').map((a) => ({
+      id: a.reward.club, label: a.reward.label, ach: a,
+    })),
+  ];
+  const skinOpen = (d) => !d.ach || prog.has(d.ach.id);
+  let skin = SKINS.some((d) => d.id === saved.skin && skinOpen(d))
+    ? saved.skin : 'classic';
+  const skinBtn = document.getElementById('skinBtn');
+  const applySkin = (sk) => {
+    skin = sk;
+    player.setClubSkin(sk);
+    if (!skinBtn) return;
+    const cur = SKINS.find((d) => d.id === sk);
+    skinBtn.textContent = `🔨 ${cur ? cur.label : sk}`;
+    const locked = SKINS.filter((d) => !skinOpen(d))
+      .map((d) => `🔒 ${d.label} — ${d.ach.name}: ${d.ach.desc}`);
+    skinBtn.title = locked.length
+      ? 'Club skin — click to cycle\n' + locked.join('\n')
+      : 'Club skin — click to cycle';
+  };
+  if (skinBtn) {
+    skinBtn.addEventListener('click', () => {
+      const open = SKINS.filter(skinOpen);
+      const i = open.findIndex((d) => d.id === skin);
+      applySkin(open[(i + 1) % open.length].id);
+    });
+  }
+
+
   buildPickers();
   state.refresh = buildPickers;
 
   applyColor(color);
-  // One weapon for everyone: the classic club, no picker.
   player.armed = true;
-  player.setClubSkin('classic');
+  applySkin(skin);
   // Лицом к камере, в центре: экран персонажа должен показывать персонажа.
   player.spawn(0, 0, Math.PI * 0.25);
 
@@ -714,13 +748,13 @@ function initSetup(player, aim, match, telem, prog) {
   document.getElementById('setupGo').addEventListener('click', () => {
     player.name = 'You';
     try {
-      localStorage.setItem('tk-player', JSON.stringify({ color }));
+      localStorage.setItem('tk-player', JSON.stringify({ color, skin }));
     } catch { /* private mode */ }
     root.classList.add('gone');
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
     state.practice = false;
-    telem.fight({ color: color.toString(16).padStart(6, '0') });
+    telem.fight({ skin, color: color.toString(16).padStart(6, '0') });
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }

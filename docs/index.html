@@ -737,6 +737,30 @@
 
   #setupRow { display: flex; gap: 10px; align-items: stretch; }
 
+  #setupSide {
+    position: absolute;
+    right: max(5vw, 18px);
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: auto;
+  }
+
+  #skinBtn {
+    padding: 9px 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
   #achBtn {
     width: 46px;
     border: 1px solid var(--line);
@@ -884,9 +908,6 @@
   body.insetup #score, body.insetup #feed { display: none; }
   /* On a phone the touch cluster used to bleed through the menu buttons. */
   body.insetup #touch { display: none !important; }
-  /* The menu has no world aim ring, so the system cursor comes back —
-     without it the buttons were a guessing game. */
-  body.insetup #view { cursor: default; }
 
   /* Тост достижения: сверху по центру, поверх всего, кликов не ловит. */
   #toast {
@@ -1041,6 +1062,12 @@
         <button id="setupGo" type="button">FIGHT</button>
       </div>
     </div>
+    <!-- Club skin cycler: earned skins rotate on click; locked recipes
+         live in the tooltip. Off to the side - the bottom stack stays
+         two rows tall. -->
+    <div id="setupSide">
+      <button id="skinBtn" type="button"></button>
+    </div>
   </div>
 
   <!-- Achievements pop-up: the scene blurs behind, the list becomes
@@ -1087,33 +1114,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "196";</script>
+<script>window.TK_BUILD = "197";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=196",
-    "tk/main.js":         "./src/main.js?v=196",
-    "tk/tuning.js":       "./src/tuning.js?v=196",
-    "tk/mathx.js":        "./src/mathx.js?v=196",
-    "tk/arena.js":        "./src/arena.js?v=196",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=196",
-    "tk/balance.js":      "./src/balance.js?v=196",
-    "tk/skeleton.js":     "./src/skeleton.js?v=196",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=196",
-    "tk/gait.js":         "./src/gait.js?v=196",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=196",
-    "tk/swingAction.js":  "./src/swingAction.js?v=196",
-    "tk/locomotion.js":   "./src/locomotion.js?v=196",
-    "tk/body.js":         "./src/body.js?v=196",
-    "tk/bot.js":          "./src/bot.js?v=196",
-    "tk/contact.js":      "./src/contact.js?v=196",
-    "tk/match.js":        "./src/match.js?v=196",
-    "tk/fighter.js":      "./src/fighter.js?v=196",
-    "tk/input.js":        "./src/input.js?v=196",
-    "tk/ui.js":           "./src/ui.js?v=196",
-    "tk/sound.js":        "./src/sound.js?v=196",
-    "tk/telemetry.js":    "./src/telemetry.js?v=196",
-    "tk/progress.js":     "./src/progress.js?v=196"
+    "three":              "./vendor/three.module.js?v=197",
+    "tk/main.js":         "./src/main.js?v=197",
+    "tk/tuning.js":       "./src/tuning.js?v=197",
+    "tk/mathx.js":        "./src/mathx.js?v=197",
+    "tk/arena.js":        "./src/arena.js?v=197",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=197",
+    "tk/balance.js":      "./src/balance.js?v=197",
+    "tk/skeleton.js":     "./src/skeleton.js?v=197",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=197",
+    "tk/gait.js":         "./src/gait.js?v=197",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=197",
+    "tk/swingAction.js":  "./src/swingAction.js?v=197",
+    "tk/locomotion.js":   "./src/locomotion.js?v=197",
+    "tk/body.js":         "./src/body.js?v=197",
+    "tk/bot.js":          "./src/bot.js?v=197",
+    "tk/contact.js":      "./src/contact.js?v=197",
+    "tk/match.js":        "./src/match.js?v=197",
+    "tk/fighter.js":      "./src/fighter.js?v=197",
+    "tk/input.js":        "./src/input.js?v=197",
+    "tk/ui.js":           "./src/ui.js?v=197",
+    "tk/sound.js":        "./src/sound.js?v=197",
+    "tk/telemetry.js":    "./src/telemetry.js?v=197",
+    "tk/progress.js":     "./src/progress.js?v=197"
   }
 }
 </script>
