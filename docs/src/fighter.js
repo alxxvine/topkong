@@ -975,6 +975,15 @@ export class Fighter {
         victim.stagger = Math.min(0.75, victim.stagger + 0.2);
         victim.staggerDirX = _impulse.x;
         victim.staggerDirZ = _impulse.z;
+        // Catching a blow on the shell costs the BLOCKER stamina on top
+        // of the hold drain — turtling under fire runs out fast, and an
+        // empty pool drops the shell (the block-broken latch in main).
+        // The hit also resets the regen delay: no sipping between blows.
+        if (T.staminaOn) {
+          victim.stamina = Math.max(0, victim.stamina
+            - T.staminaBlockHit * (0.6 + 0.4 * clamp01(strength)));
+          victim.staminaWait = Math.max(victim.staminaWait, T.staminaDelay);
+        }
         victim.credit(this);
         if (onHit) onHit(this, victim, tip, clamp01(strength) * 0.5, true);
         continue;

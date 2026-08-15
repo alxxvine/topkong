@@ -71,7 +71,7 @@ export const tuning = {
   dashPower: 1.4,
   dashCooldown: 1.1,
   // Блок (ПКМ): принявший удар не падает, а отъезжает назад на столько.
-  blockPushback: 2.6,
+  blockPushback: 3.8,
 
   // --- Итерация физики тела ---
   // 1 — кинематическое тело: поза пишет кости напрямую, физика включается
@@ -543,6 +543,8 @@ export const tuning = {
   staminaPunchCost: 0.15,
   staminaDashCost: 0.55,
   staminaBlockDrain: 0.3,
+  // What one CAUGHT blow costs the blocker, on top of the hold drain.
+  staminaBlockHit: 0.22,
   // Below this the broken block will not re-engage (hysteresis: an empty
   // pool must climb back here before RMB works again).
   staminaFloor: 0.3,
@@ -814,6 +816,7 @@ export const tuneGroups = [
       ['staminaPunchCost', 0, 0.6, 0.01],
       ['staminaDashCost', 0, 1, 0.02],
       ['staminaBlockDrain', 0, 1, 0.02],
+      ['staminaBlockHit', 0, 1, 0.02],
       ['staminaFloor', 0, 0.8, 0.02],
     ],
   },

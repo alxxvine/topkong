@@ -39,10 +39,13 @@ const BAKED = {
   // Rising: a touch more wind-back and a soft, unhurried rip — the snap
   // was the complaint.
   risingWind: 7, risingTime: 1.05,
-  // Stamina: the tight middle grade — every swing is a real spend.
+  // Stamina: the tight middle grade — every swing is a real spend, and
+  // every blow CAUGHT on the shell bites the blocker's pool too.
   staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
   staminaClubCost: 0.42, staminaPunchCost: 0.15,
-  staminaDashCost: 0.55, staminaBlockDrain: 0.3,
+  staminaDashCost: 0.55, staminaBlockDrain: 0.3, staminaBlockHit: 0.22,
+  // A blocked strike shoves the blocker back hard.
+  blockPushback: 3.8,
   // One weapon culture: everyone swings a club, fists are hidden.
   withClub: true, botsArmed: true, botsActive: true,
 };
