@@ -447,6 +447,9 @@ export class Fighter {
     this.swingSpeed = 0;
     this.stamina = 1;
     this.staminaWait = 0;
+    this.dropY = 0;
+    this.dropV = 0;
+    this.dropWait = 0;
     this._swingWas = 'guard';
     this.lastHit.clear();
     this.trailPoints.length = 0;
@@ -632,6 +635,19 @@ export class Fighter {
     else this.buildLegs();
   }
 
+  /**
+   * Entrance drop: the fighter falls onto the deck instead of popping
+   * in. The lift rides the KINEMATIC root (standing bodies snap to the
+   * pose every tick, so shifting particles would not survive a frame):
+   * the whole figure descends under gravity and the landing squashes
+   * the pose via the dash-kick channel. `delay` staggers a group.
+   */
+  dropIn(h = 0.9, delay = 0) {
+    this.dropY = h;
+    this.dropV = 0;
+    this.dropWait = delay;
+  }
+
   /** Swap the face: rebuilds the eye boxes for the named style. */
   setEyes(styleName) {
     this.eyeStyle = EYE_STYLES[styleName] ? styleName : 'classic';
@@ -692,6 +708,12 @@ export class Fighter {
         this.stamina = Math.max(0, this.stamina - strikeCost);
         this.staminaWait = T.staminaDelay;
       }
+      // Holding a charge is not free either: the pool bleeds while the
+      // wind-up is held, so camping on a full charge is a real spend.
+      if (this.swing.state === 'windup' && this.swing.held) {
+        this.stamina = Math.max(0, this.stamina - T.staminaChargeDrain * dt);
+        this.staminaWait = Math.max(this.staminaWait, T.staminaDelay);
+      }
       const busy = this.blocking
         || this.swing.state === 'windup' || this.swing.state === 'strike';
       if (this.blocking) {
@@ -714,13 +736,30 @@ export class Fighter {
     const pose = this.poseDriver.tick(dt, this.locomotion.planarSpeed,
       this.locomotion.grounded);
 
+    // The entrance drop: the lift shrinks under gravity, the landing
+    // squashes the pose. Mirrored into body.lift — the muscle targets
+    // clamp their base to the floor over the deck, so the ride height
+    // must enter through baseY, not through the hips alone.
+    if (this.dropY > 0) {
+      if (this.dropWait > 0) {
+        this.dropWait -= dt;
+      } else {
+        this.dropV += 22 * dt;
+        this.dropY = Math.max(0, this.dropY - this.dropV * dt);
+        if (this.dropY === 0) {
+          this.poseDriver.dashKick = Math.max(this.poseDriver.dashKick, 0.8);
+        }
+      }
+    }
+    body.lift = this.dropY;
+
     if (this.locomotion.kinematic) {
       // Корень ведёт ввод, а не физика: таз ставится туда, куда его увела
       // локомоция, поза раскладывается от него, и частицы садятся ровно
       // в свои цели. Физика при этом никуда не девается — она подхватит
       // тело из этой самой позы, как только мышцы отпустят.
-      const base = this.arena.isOverDeck(this.position.x, this.position.z, 0.4)
-        ? 0 : this.position.y;
+      const base = (this.arena.isOverDeck(this.position.x, this.position.z, 0.4)
+        ? 0 : this.position.y) + this.dropY;
       body.placeHips(this.position.x, base + Rig.HipsY, this.position.z);
       body.setTargets(pose, this.yaw);
       body.snap();

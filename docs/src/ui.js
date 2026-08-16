@@ -44,6 +44,7 @@ const BAKED = {
   staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
   staminaClubCost: 0.42, staminaPunchCost: 0.15,
   staminaDashCost: 0.55, staminaBlockDrain: 0.3, staminaBlockHit: 0.22,
+  staminaChargeDrain: 0.16,
   // A blocked strike shoves the blocker back hard, and the shell only
   // covers the front 100 degrees — flanks and backs are open. 70 was
   // tried and read wrong: a hit at 70 degrees LOOKS like a flank hit.

@@ -122,6 +122,8 @@
 
   <div class="tab on" id="tab-overview">
     <div class="tiles" id="ovTiles"></div>
+    <div class="card"><h3>Business — coming back?</h3><div class="tiles" id="bizTiles"></div>
+      <div id="bizRetention"></div></div>
     <div class="card"><h3>Activity — last 14 days (minutes played)</h3><div id="ovDays"></div></div>
     <div class="card"><h3>Builds seen</h3><div id="ovBuilds"></div></div>
   </div>
@@ -280,6 +282,32 @@
       tile((ss.length ? Math.round(fought.length / ss.length * 100) : 0) + '%', 'sessions that fight') +
       tile(fmtDur(median(ss.map((s) => s.menuTime))), 'median menu → FIGHT');
 
+    // The business row: is anyone coming BACK, and how deep do they go.
+    const dayKey = (t) => Math.floor(t / 86400000);
+    const now = Date.now();
+    const daysOf = (p) => new Set(p.sessions.map((s) => dayKey(s.t0)));
+    const returning = ppl.filter((p) => daysOf(p).size >= 2);
+    const active7 = ppl.filter((p) =>
+      p.sessions.some((s) => now - s.t0 < 7 * 86400000));
+    const new7 = ppl.filter((p) =>
+      (p.player.firstSeen || p.sessions[0]?.t0 || 0) > now - 7 * 86400000);
+    document.getElementById('bizTiles').innerHTML =
+      tile(returning.length + (ppl.length ? ` (${Math.round(returning.length / ppl.length * 100)}%)` : ''),
+        'returned another day') +
+      tile(active7.length, 'active last 7 days') +
+      tile(new7.length, 'new last 7 days') +
+      tile(ppl.length ? (ss.length / ppl.length).toFixed(1) : 0, 'sessions / player') +
+      tile(fmtDur(median(ss.map((s) => s.dur))), 'median session') +
+      tile(fought.length ? (sum(ss, (s) => s.fights) / fought.length).toFixed(1) : 0,
+        'fights / fighting session');
+    // Depth of habit: how many distinct days each player came.
+    const daysDist = { '1 day': 0, '2–3 days': 0, '4+ days': 0 };
+    for (const p of ppl) {
+      const n = daysOf(p).size;
+      daysDist[n <= 1 ? '1 day' : n <= 3 ? '2–3 days' : '4+ days']++;
+    }
+    bars(document.getElementById('bizRetention'), Object.entries(daysDist), (v) => v + ' pl.');
+
     const days = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
@@ -299,8 +327,13 @@
       tile(swings, 'strikes thrown') + tile(hits, 'hits landed') +
       tile((swings ? Math.round(hits / swings * 100) : 0) + '%', 'hit rate') +
       tile(fought.length ? (kills / fought.length).toFixed(1) : 0, 'kills / fighting session');
+    // Only the LIVE strikes: retired styles (punch-era jab/overhand/
+    // uppercut and older experiments) haunted the chart from old sessions.
+    const STYLES = ['side', 'overhead', 'rising'];
     const styleAgg = {};
-    for (const s of ss) for (const [k, v] of Object.entries(s.swings || {})) styleAgg[k] = (styleAgg[k] || 0) + v;
+    for (const s of ss) for (const [k, v] of Object.entries(s.swings || {})) {
+      if (STYLES.includes(k)) styleAgg[k] = (styleAgg[k] || 0) + v;
+    }
     bars(document.getElementById('gpStyles'), Object.entries(styleAgg).sort((a, b) => b[1] - a[1]));
 
     // UX: friction — where time and clicks go before and around fighting.

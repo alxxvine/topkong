@@ -136,6 +136,24 @@ export async function start() {
   faceCamera();
   const openSetup = setupState.open;
   setupState.open = () => { openSetup(); faceCamera(); };
+  // Every FIGHT press deals a FRESH set of opponents: same three bots
+  // every entry read as furniture. The deck reshuffles, the old dummies
+  // are disposed and new personas walk in.
+  setupState.redeal = () => {
+    drawPersona.deck = null;
+    while (dummies.length) {
+      const d = dummies.pop();
+      d.dispose();
+      fighters.splice(fighters.indexOf(d), 1);
+    }
+    syncDummies(scene, arena, dummies, fighters);
+  };
+  // The entrance: everyone DROPS onto the deck instead of popping in,
+  // staggered so the cast lands as a wave, not as one synchronized thud.
+  setupState.entrance = () => {
+    fighters.forEach((f, i) =>
+      f.dropIn(0.9 + Math.random() * 0.3, i * 0.09 + Math.random() * 0.08));
+  };
 
   resize();
   addEventListener('resize', resize);
@@ -942,8 +960,11 @@ function initSetup(player, aim, match, telem, prog, camera) {
     });
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
+    state.redeal?.();
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }
     match.begin();
+    // The cast falls onto the deck — an entrance, not a teleport.
+    state.entrance?.();
   });
 
   /** Вернуться с поля в меню: карточка открывается, бой встаёт у отсчёта. */
@@ -1061,6 +1082,8 @@ function respawnOne(fighter, fighters, arena) {
     }
   }
   fighter.spawn(bestX, bestZ, bestYaw);
+  // Rebirth falls in from above — a pop-in read as a glitch.
+  fighter.dropIn(1.0 + Math.random() * 0.3);
 }
 
 /**

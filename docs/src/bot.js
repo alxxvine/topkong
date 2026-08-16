@@ -64,6 +64,17 @@ export class Bot {
     this.chargePow = 0.6 + 1.2 * temper;
     /** Added to the edge-fear radius: cowards bail out early. */
     this.fearBias = -0.10 + 0.22 * fear;
+
+    // Defense. A read wind-up gets ANSWERED now: the timid raise the
+    // shell, the hot-blooded hop aside. Reaction cooldown keeps the bot
+    // from twitching at every raised club.
+    /** Chance to answer a read wind-up at all. */
+    this.defChance = 0.35 + 0.45 * fear;
+    /** Of the answers, how many are a dodge instead of a block. */
+    this.dodgeShare = 0.25 + 0.5 * temper;
+    this.defCd = 0;
+    this.blockHold = 0;
+    this.threat = null;
   }
 
   reset() {
@@ -72,11 +83,36 @@ export class Bot {
     this.rest = 0;
     this.clinch = 0;
     this.backoff = 0;
+    this.defCd = 0;
+    this.blockHold = 0;
+    this.f.blocking = false;
   }
 
   tick(dt, fighters) {
     const f = this.f;
     if (!f.alive) {
+      f.moveInput.set(0, 0);
+      f.swing.held = false;
+      f.blocking = false;
+      f.swing.blockPose = false;
+      return;
+    }
+
+    this.defCd = Math.max(0, this.defCd - dt);
+    // A held shell overrides everything else this tick: stand, face the
+    // threat, keep the guard up. An empty pool cannot hold it.
+    if (this.blockHold > 0) {
+      this.blockHold -= dt;
+      if (f.stamina <= 0.02) this.blockHold = 0;
+    }
+    f.blocking = this.blockHold > 0 && f.state === 'standing';
+    f.swing.blockPose = f.blocking;
+    if (f.blocking) {
+      const t = this.threat && this.threat.alive ? this.threat : this.target;
+      if (t) {
+        f.facingTarget.set(
+          t.position.x - f.position.x, 0, t.position.z - f.position.z);
+      }
       f.moveInput.set(0, 0);
       f.swing.held = false;
       return;
@@ -205,6 +241,36 @@ export class Bot {
 
     f.moveInput.set(_to.x * drive, _to.z * drive);
 
+    // 2.6 Answer a read wind-up. The swing telegraphs by design — the
+    // bot reads it too: somebody near, facing us, is raising a club.
+    // The timid raise the shell, the hot-blooded hop aside; the cooldown
+    // keeps the bot from twitching at every lifted arm.
+    if (this.defCd <= 0 && f.swing.state === 'guard') {
+      const threat = this.readThreat(fighters);
+      if (threat) {
+        this.defCd = 1.1 + Math.random() * 0.9;
+        if (Math.random() < this.defChance) {
+          if (Math.random() < this.dodgeShare
+              && f.stamina > T.staminaDashCost * 0.5) {
+            // A dash-flavored sidestep off the strike line.
+            const side = Math.random() < 0.5 ? -1 : 1;
+            const dx = f.position.x - threat.position.x;
+            const dz = f.position.z - threat.position.z;
+            const len = Math.hypot(dx, dz) || 1;
+            f.locomotion.shove((dz / len) * side * T.dashPower,
+              (-dx / len) * side * T.dashPower);
+            f.poseDriver.dashKick = 1;
+            f.stamina = Math.max(0, f.stamina - T.staminaDashCost * 0.5);
+          } else if (f.stamina > 0.25) {
+            this.blockHold = 0.45 + Math.random() * 0.35;
+            this.threat = threat;
+            f.swing.held = false;
+            return;
+          }
+        }
+      }
+    }
+
     // 3. Strike. The charge builds while the opponent is in reach and is
     // released once the intended amount is banked. Release EARLY — the
     // sweep takes time, and a point-blank release always arrives late.
@@ -232,6 +298,23 @@ export class Bot {
       f.swing.held = false;
       this.rest = T.botRest * this.restMul;
     }
+  }
+
+  /** Somebody near, FACING us, mid wind-up or swing — a readable threat. */
+  readThreat(fighters) {
+    const f = this.f;
+    for (const o of fighters) {
+      if (o === f || !o.alive) continue;
+      const st = o.swing.state;
+      if (st !== 'windup' && st !== 'strike') continue;
+      const dx = f.position.x - o.position.x;
+      const dz = f.position.z - o.position.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 3.2 * 3.2) continue;
+      const len = Math.sqrt(d2) || 1;
+      if ((dx * Math.sin(o.yaw) + dz * Math.cos(o.yaw)) / len > 0.55) return o;
+    }
+    return null;
   }
 
   /** The nearest living fighter other than itself. */

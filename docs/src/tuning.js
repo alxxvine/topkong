@@ -546,6 +546,8 @@ export const tuning = {
   staminaPunchCost: 0.15,
   staminaDashCost: 0.55,
   staminaBlockDrain: 0.3,
+  // The pool bleeds while a wind-up is HELD: full-charge camping costs.
+  staminaChargeDrain: 0.16,
   // What one CAUGHT blow costs the blocker, on top of the hold drain.
   staminaBlockHit: 0.22,
   // Below this the broken block will not re-engage (hysteresis: an empty
@@ -820,6 +822,7 @@ export const tuneGroups = [
       ['staminaPunchCost', 0, 0.6, 0.01],
       ['staminaDashCost', 0, 1, 0.02],
       ['staminaBlockDrain', 0, 1, 0.02],
+      ['staminaChargeDrain', 0, 1, 0.02],
       ['staminaBlockHit', 0, 1, 0.02],
       ['staminaFloor', 0, 0.8, 0.02],
     ],

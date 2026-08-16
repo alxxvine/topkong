@@ -1230,33 +1230,52 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "209";</script>
+<script>window.TK_BUILD = "210";</script>
+<script>
+// Safari on phones serves this page from cache despite every no-cache
+// header above — the old workaround was a ?N tail on every shared link.
+// Instead the page re-fetches itself PAST the HTTP cache and reloads
+// once when the build number moved: the clean link stays clean, and a
+// stale phone catches up on its own within one load.
+(() => {
+  fetch(location.pathname, { cache: 'reload' }).then((r) => r.text()).then((t) => {
+    const m = t.match(/TK_BUILD = "([0-9]+)"/);
+    if (!m) return;
+    if (m[1] === window.TK_BUILD) {
+      sessionStorage.removeItem('tk-fresh');
+    } else if (sessionStorage.getItem('tk-fresh') !== m[1]) {
+      sessionStorage.setItem('tk-fresh', m[1]);
+      location.reload();
+    }
+  }).catch(() => { /* offline is fine */ });
+})();
+</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=209",
-    "tk/main.js":         "./src/main.js?v=209",
-    "tk/tuning.js":       "./src/tuning.js?v=209",
-    "tk/mathx.js":        "./src/mathx.js?v=209",
-    "tk/arena.js":        "./src/arena.js?v=209",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=209",
-    "tk/balance.js":      "./src/balance.js?v=209",
-    "tk/skeleton.js":     "./src/skeleton.js?v=209",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=209",
-    "tk/gait.js":         "./src/gait.js?v=209",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=209",
-    "tk/swingAction.js":  "./src/swingAction.js?v=209",
-    "tk/locomotion.js":   "./src/locomotion.js?v=209",
-    "tk/body.js":         "./src/body.js?v=209",
-    "tk/bot.js":          "./src/bot.js?v=209",
-    "tk/contact.js":      "./src/contact.js?v=209",
-    "tk/match.js":        "./src/match.js?v=209",
-    "tk/fighter.js":      "./src/fighter.js?v=209",
-    "tk/input.js":        "./src/input.js?v=209",
-    "tk/ui.js":           "./src/ui.js?v=209",
-    "tk/sound.js":        "./src/sound.js?v=209",
-    "tk/telemetry.js":    "./src/telemetry.js?v=209",
-    "tk/progress.js":     "./src/progress.js?v=209"
+    "three":              "./vendor/three.module.js?v=210",
+    "tk/main.js":         "./src/main.js?v=210",
+    "tk/tuning.js":       "./src/tuning.js?v=210",
+    "tk/mathx.js":        "./src/mathx.js?v=210",
+    "tk/arena.js":        "./src/arena.js?v=210",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=210",
+    "tk/balance.js":      "./src/balance.js?v=210",
+    "tk/skeleton.js":     "./src/skeleton.js?v=210",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=210",
+    "tk/gait.js":         "./src/gait.js?v=210",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=210",
+    "tk/swingAction.js":  "./src/swingAction.js?v=210",
+    "tk/locomotion.js":   "./src/locomotion.js?v=210",
+    "tk/body.js":         "./src/body.js?v=210",
+    "tk/bot.js":          "./src/bot.js?v=210",
+    "tk/contact.js":      "./src/contact.js?v=210",
+    "tk/match.js":        "./src/match.js?v=210",
+    "tk/fighter.js":      "./src/fighter.js?v=210",
+    "tk/input.js":        "./src/input.js?v=210",
+    "tk/ui.js":           "./src/ui.js?v=210",
+    "tk/sound.js":        "./src/sound.js?v=210",
+    "tk/telemetry.js":    "./src/telemetry.js?v=210",
+    "tk/progress.js":     "./src/progress.js?v=210"
   }
 }
 </script>

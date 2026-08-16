@@ -140,6 +140,8 @@ export class Body {
     this.strength = 1;
     /** Есть ли у ЭТОГО тела дубина. Ставит боец: оружие теперь пер-бойцовое. */
     this.clubOn = true;
+    /** Entrance-drop ride height: fighter.dropY mirrored in (see baseY). */
+    this.lift = 0;
     /** Диагностика: максимальное растяжение связи за последний шаг, метры. */
     this.maxStretch = 0;
     /** Какие стопы сейчас стоят на опоре. Ставит походка. */
@@ -163,6 +165,7 @@ export class Body {
 
   /** Поставить тело в стойку: спавн и полный сброс. */
   reset(x, z, yaw) {
+    this.lift = 0;
     fillFromPose(this.local, Rig.restPose());
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
@@ -202,7 +205,11 @@ export class Body {
    */
   baseY() {
     const hips = this.pos[P.Hips];
-    return this.arena.isOverDeck(hips.x, hips.z, 0.4) ? 0 : hips.y - Rig.HipsY;
+    // `lift` is the entrance-drop ride height (fighter.dropY): over the
+    // deck the base normally clamps to the floor, which silently ate any
+    // attempt to hold the WHOLE pose in the air.
+    return (this.arena.isOverDeck(hips.x, hips.z, 0.4) ? 0 : hips.y - Rig.HipsY)
+      + this.lift;
   }
 
   /**
