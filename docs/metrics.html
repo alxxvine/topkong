@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Top Kong — metrics</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%93%8A</text></svg>">
+<title>topkong metrics</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%E2%9A%94%EF%B8%8F</text></svg>">
 <style>
   /* Owner's dashboard. Static hosting has no auth, so the gate is
      a passphrase checked against a SHA-256 hash: the phrase itself is
@@ -101,7 +101,7 @@
 <body>
 
 <div id="gate">
-  <b>Top Kong metrics</b>
+  <b>topkong metrics</b>
   <div class="note">Owner's area. Enter the passphrase.</div>
   <input id="pass" type="password" placeholder="Passphrase" autocomplete="off">
   <button id="enter">Enter</button>
@@ -109,7 +109,7 @@
 </div>
 
 <div id="app" class="wrap">
-  <h1>Top Kong — metrics</h1>
+  <h1>topkong metrics</h1>
   <div class="sub" id="scopeLine"></div>
 
   <div class="tabs" id="tabs">
@@ -134,7 +134,7 @@
   <div class="tab" id="tab-ux">
     <div class="tiles" id="uxTiles"></div>
     <div class="card"><h3>Weapon choice (per fight entered)</h3><div id="uxWeapon"></div></div>
-    <div class="card"><h3>Body choice</h3><div id="uxBody"></div></div>
+    <div class="card"><h3>Character looks (per fight entered)</h3><div id="uxParts"></div></div>
     <div class="card"><h3>Device</h3><div id="uxDevice"></div></div>
   </div>
 
@@ -309,8 +309,26 @@
       tile(sum(ss, (s) => s.pauses), 'pauses') +
       tile(sum(ss, (s) => s.settings), 'settings touches') +
       tile(fmtDur(median(ss.map((s) => s.menuTime))), 'median time in menu');
-    bars(document.getElementById('uxWeapon'), count(fought, 'weapon'), (v) => v + ' ses.');
-    bars(document.getElementById('uxBody'), count(fought, 'body'), (v) => v + ' ses.');
+    // Only the CURRENT rack: sessions from retired-weapon builds (fists,
+    // the axe experiment) would otherwise haunt the chart forever.
+    const RACK = ['classic', 'hammer', 'mallet', 'ember', 'frost', 'bat', 'gilded', 'void'];
+    bars(document.getElementById('uxWeapon'),
+      count(fought, 'weapon').filter(([k]) => RACK.includes(k)), (v) => v + ' ses.');
+    // Which shapes and faces people actually fight in, one list —
+    // "head · ball", "torso · barrel", "face · mean"...
+    const partAgg = {};
+    const PART_KEYS = [['head', 'head'], ['torso', 'torso'], ['arms', 'arms'],
+      ['legs', 'legs'], ['eyes', 'face']];
+    for (const s of fought) {
+      for (const [key, label] of PART_KEYS) {
+        if (s[key]) {
+          const tag = label + ' · ' + s[key];
+          partAgg[tag] = (partAgg[tag] || 0) + 1;
+        }
+      }
+    }
+    bars(document.getElementById('uxParts'),
+      Object.entries(partAgg).sort((a, b) => b[1] - a[1]).slice(0, 24), (v) => v + ' ses.');
     bars(document.getElementById('uxDevice'), count(ss, 'device'), (v) => v + ' ses.');
 
     // Players: who exactly does what.

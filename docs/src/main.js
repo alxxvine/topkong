@@ -932,7 +932,14 @@ function initSetup(player, aim, match, telem, prog, camera) {
     if (menuBtn) menuBtn.classList.remove('gone');
     state.done = true;
     state.practice = false;
-    telem.fight({ skin, color: color.toString(16).padStart(6, '0') });
+    // The full outfit goes to telemetry: the dashboard charts which
+    // weapons, shapes and faces people actually fight in.
+    telem.fight({
+      weapon: skin,
+      color: color.toString(16).padStart(6, '0'),
+      head: partPick.head, torso: partPick.torso, arms: partPick.arms,
+      legs: partPick.legs, eyes: partPick.eyes,
+    });
     // Пробы в меню — бесплатные: всё, что игрок навалял ботам, пока
     // примерял цвет, в счёт боя не идёт.
     for (const f of match.fighters) { f.kills = 0; f.deaths = 0; }

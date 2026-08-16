@@ -985,7 +985,7 @@ export class Fighter {
         const dz = this.position.z - victim.position.z;
         const len = Math.hypot(dx, dz) || 1;
         const dot = (dx * Math.sin(victim.yaw) + dz * Math.cos(victim.yaw)) / len;
-        return dot > Math.cos((T.blockArc || 70) * RAD);
+        return dot > Math.cos((T.blockArc || 50) * RAD);
       })();
 
       if (guarded) {
