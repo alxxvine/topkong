@@ -115,7 +115,8 @@ export class Match {
       const left = Math.max(1, Math.ceil(this.timer));
       return {
         big: String(left),
-        small: this.deathmatch ? 'Deathmatch' : 'Round ' + this.round,
+        // The mode name told the player nothing — the GOAL does.
+        small: this.deathmatch ? 'Knock them off the deck' : 'Round ' + this.round,
       };
     }
     if (this.phase === Phase.Over) {

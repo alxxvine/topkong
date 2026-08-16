@@ -95,9 +95,9 @@ export async function start() {
     statsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const code = telem.export();
-      const done = () => { statsBtn.textContent = 'copied!'; };
+      const done = () => { statsBtn.textContent = 'Copied — send it to the author!'; };
       if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, done);
-      setTimeout(() => { statsBtn.textContent = 'copy stats code'; }, 1500);
+      setTimeout(() => { statsBtn.textContent = '📊 Copy my stats'; }, 2200);
     });
   }
 
@@ -218,6 +218,8 @@ export async function start() {
       last = time;
     }
     if (paused) {
+      // The pause veil doubles as the manual: keep the controls card up.
+      document.body.classList.add('showctrl');
       renderer.render(scene, camera);
       return;
     }
@@ -453,6 +455,10 @@ export async function start() {
     // The camera: hero close-up while the menu is open, the arena after.
     rig.menuTarget = setupState.done ? 0 : 1;
     document.body.classList.toggle('insetup', !setupState.done);
+    // The controls card shows while the start countdown holds the player
+    // still (and on pause, handled above) — the only manual the game has.
+    document.body.classList.toggle('showctrl',
+      setupState.done && !practice && match.phase === 'ready');
 
     // Sound is edge-triggered off state the simulation already keeps:
     // no controller tells the mixer anything, the mixer watches the game.
