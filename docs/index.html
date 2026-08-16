@@ -263,7 +263,8 @@
 
 
   /* --- панель настроек --- */
-  body.bare #tune, body.bare #hud, body.bare #hint { display: none; }
+  body.bare #tune, body.bare #hud, body.bare #hint,
+  body.bare .build { display: none; }
 
   #tune {
     position: absolute;
@@ -772,7 +773,17 @@
       0 2px 8px rgba(25, 30, 45, 0.28);
     cursor: pointer;
     pointer-events: auto;
+    transition: opacity 0.25s;
   }
+
+  /* The dots surface only when the cursor comes NEAR the body (class
+     toggled from placeSpots); far away the hero stands clean. */
+  #spots.far .spot {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #spots.far .spot::after { animation: none; }
 
   .spot::after {
     content: '';
@@ -1030,7 +1041,8 @@
      а ради этого панель и делалась. Внизу она оставляет верх кадра свободным,
      а тач-виджеты уступают ей место, когда она раскрыта. */
   @media (max-width: 560px) {
-    body.bare #tune, body.bare #hud, body.bare #hint { display: none; }
+    body.bare #tune, body.bare #hud, body.bare #hint,
+  body.bare .build { display: none; }
 
   #tune {
       top: auto;
@@ -1168,33 +1180,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "206";</script>
+<script>window.TK_BUILD = "207";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=206",
-    "tk/main.js":         "./src/main.js?v=206",
-    "tk/tuning.js":       "./src/tuning.js?v=206",
-    "tk/mathx.js":        "./src/mathx.js?v=206",
-    "tk/arena.js":        "./src/arena.js?v=206",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=206",
-    "tk/balance.js":      "./src/balance.js?v=206",
-    "tk/skeleton.js":     "./src/skeleton.js?v=206",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=206",
-    "tk/gait.js":         "./src/gait.js?v=206",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=206",
-    "tk/swingAction.js":  "./src/swingAction.js?v=206",
-    "tk/locomotion.js":   "./src/locomotion.js?v=206",
-    "tk/body.js":         "./src/body.js?v=206",
-    "tk/bot.js":          "./src/bot.js?v=206",
-    "tk/contact.js":      "./src/contact.js?v=206",
-    "tk/match.js":        "./src/match.js?v=206",
-    "tk/fighter.js":      "./src/fighter.js?v=206",
-    "tk/input.js":        "./src/input.js?v=206",
-    "tk/ui.js":           "./src/ui.js?v=206",
-    "tk/sound.js":        "./src/sound.js?v=206",
-    "tk/telemetry.js":    "./src/telemetry.js?v=206",
-    "tk/progress.js":     "./src/progress.js?v=206"
+    "three":              "./vendor/three.module.js?v=207",
+    "tk/main.js":         "./src/main.js?v=207",
+    "tk/tuning.js":       "./src/tuning.js?v=207",
+    "tk/mathx.js":        "./src/mathx.js?v=207",
+    "tk/arena.js":        "./src/arena.js?v=207",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=207",
+    "tk/balance.js":      "./src/balance.js?v=207",
+    "tk/skeleton.js":     "./src/skeleton.js?v=207",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=207",
+    "tk/gait.js":         "./src/gait.js?v=207",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=207",
+    "tk/swingAction.js":  "./src/swingAction.js?v=207",
+    "tk/locomotion.js":   "./src/locomotion.js?v=207",
+    "tk/body.js":         "./src/body.js?v=207",
+    "tk/bot.js":          "./src/bot.js?v=207",
+    "tk/contact.js":      "./src/contact.js?v=207",
+    "tk/match.js":        "./src/match.js?v=207",
+    "tk/fighter.js":      "./src/fighter.js?v=207",
+    "tk/input.js":        "./src/input.js?v=207",
+    "tk/ui.js":           "./src/ui.js?v=207",
+    "tk/sound.js":        "./src/sound.js?v=207",
+    "tk/telemetry.js":    "./src/telemetry.js?v=207",
+    "tk/progress.js":     "./src/progress.js?v=207"
   }
 }
 </script>

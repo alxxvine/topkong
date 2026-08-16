@@ -44,8 +44,9 @@ const BAKED = {
   staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,
   staminaClubCost: 0.42, staminaPunchCost: 0.15,
   staminaDashCost: 0.55, staminaBlockDrain: 0.3, staminaBlockHit: 0.22,
-  // A blocked strike shoves the blocker back hard.
-  blockPushback: 3.8,
+  // A blocked strike shoves the blocker back hard, and the shell only
+  // covers the front 140 degrees — flanks and backs are open.
+  blockPushback: 3.8, blockArc: 70,
   // One weapon culture: everyone swings a club, fists are hidden.
   withClub: true, botsArmed: true, botsActive: true,
 };

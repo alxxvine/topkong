@@ -539,7 +539,7 @@ export async function start() {
     renderer.render(scene, camera);
     // The customization dots ride the freshly rendered pose: render has
     // just updated every world matrix, so the projection is this frame's.
-    if (!setupState.done) setupState.placeSpots?.();
+    if (!setupState.done) setupState.placeSpots?.(input);
   }
 
   requestAnimationFrame(frame);
@@ -867,10 +867,16 @@ function initSetup(player, aim, match, telem, prog, camera) {
     });
   }
   const _spotV = new THREE.Vector3();
+  // No hover on touch — there the dots simply stay visible.
+  const coarsePointer = matchMedia('(hover: none)').matches;
   /** Pin the dots to the bones through the live camera. Runs every menu
-   *  frame after render, when the world matrices are fresh. */
-  state.placeSpots = () => {
+   *  frame after render, when the world matrices are fresh. The dots
+   *  only SHOW while the cursor is near the body (or a popover is open):
+   *  five permanent rings over the hero read as a rash, not as an
+   *  invitation — proximity makes them an answer to intent. */
+  state.placeSpots = (inp) => {
     if (!spotsEl) return;
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
     for (const s of Object.values(spots)) {
       if (s.def.world) {
         s.def.world(_spotV);
@@ -885,7 +891,16 @@ function initSetup(player, aim, match, telem, prog, camera) {
       s.y = (-_spotV.y * 0.5 + 0.5) * innerHeight;
       s.el.style.left = `${Math.round(s.x)}px`;
       s.el.style.top = `${Math.round(s.y)}px`;
+      minX = Math.min(minX, s.x); maxX = Math.max(maxX, s.x);
+      minY = Math.min(minY, s.y); maxY = Math.max(maxY, s.y);
     }
+    let near = coarsePointer || !!popFor || !inp?.hasScreen;
+    if (!near) {
+      const pad = 90;
+      near = inp.screenX > minX - pad && inp.screenX < maxX + pad
+        && inp.screenY > minY - pad && inp.screenY < maxY + pad;
+    }
+    spotsEl.classList.toggle('far', !near);
     if (popFor) placePop(spots[popFor].def);
   };
 

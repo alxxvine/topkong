@@ -976,7 +976,19 @@ export class Fighter {
       // ЛОКОМОЦИИ, а не в частицы: стоящий боец кинематичен, его тело
       // и так сядет в позу, — он просто отъезжает назад, оставаясь
       // на ногах. Лёгкая расшатка остаётся: блок держит, но не бесплатен.
-      if (victim.blocking) {
+      // The shell only covers the FRONT. A blow from the side or the back
+      // ignores the guard entirely — the blocker falls like anyone else.
+      // Frontal = the attacker sits inside the blockArc cone around the
+      // blocker's facing.
+      const guarded = victim.blocking && (() => {
+        const dx = this.position.x - victim.position.x;
+        const dz = this.position.z - victim.position.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const dot = (dx * Math.sin(victim.yaw) + dz * Math.cos(victim.yaw)) / len;
+        return dot > Math.cos((T.blockArc || 70) * RAD);
+      })();
+
+      if (guarded) {
         _impulse.copy(victim.position).sub(this.position);
         _impulse.y = 0;
         if (_impulse.lengthSq() < 1e-4) _impulse.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));

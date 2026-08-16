@@ -72,6 +72,9 @@ export const tuning = {
   dashCooldown: 1.1,
   // Блок (ПКМ): принявший удар не падает, а отъезжает назад на столько.
   blockPushback: 3.8,
+  // Half-angle (deg) of the frontal cone the shell covers; hits from
+  // outside it ignore the block entirely.
+  blockArc: 70,
 
   // --- Итерация физики тела ---
   // 1 — кинематическое тело: поза пишет кости напрямую, физика включается
@@ -641,6 +644,7 @@ export const tuneGroups = [
       ['dashPower', 0, 6, 0.1],
       ['dashCooldown', 0.2, 3, 0.05],
       ['blockPushback', 0, 8, 0.2],
+      ['blockArc', 20, 180, 5],
       ['chargeMoveSlow', 0.1, 1, 0.05],
     ],
   },
