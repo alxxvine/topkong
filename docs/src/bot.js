@@ -66,12 +66,14 @@ export class Bot {
     this.fearBias = -0.10 + 0.22 * fear;
 
     // Defense. A read wind-up gets ANSWERED now: the timid raise the
-    // shell, the hot-blooded hop aside. Reaction cooldown keeps the bot
-    // from twitching at every raised club.
+    // shell, the hot-blooded hop aside or poke first. Reaction cooldown
+    // keeps the bot from twitching at every raised club.
     /** Chance to answer a read wind-up at all. */
-    this.defChance = 0.35 + 0.45 * fear;
+    this.defChance = 0.5 + 0.4 * fear;
     /** Of the answers, how many are a dodge instead of a block. */
-    this.dodgeShare = 0.25 + 0.5 * temper;
+    this.dodgeShare = 0.2 + 0.45 * temper;
+    /** Chance to hurl a YOUNG charge as a counter-poke at a wind-up. */
+    this.counterBias = 0.3 + 0.5 * temper;
     this.defCd = 0;
     this.blockHold = 0;
     this.threat = null;
@@ -243,31 +245,42 @@ export class Bot {
 
     // 2.6 Answer a read wind-up. The swing telegraphs by design — the
     // bot reads it too: somebody near, facing us, is raising a club.
-    // The timid raise the shell, the hot-blooded hop aside; the cooldown
-    // keeps the bot from twitching at every lifted arm.
-    if (this.defCd <= 0 && f.swing.state === 'guard') {
-      const threat = this.readThreat(fighters);
-      if (threat) {
-        this.defCd = 1.1 + Math.random() * 0.9;
-        if (Math.random() < this.defChance) {
-          if (Math.random() < this.dodgeShare
-              && f.stamina > T.staminaDashCost * 0.5) {
-            // A dash-flavored sidestep off the strike line.
-            const side = Math.random() < 0.5 ? -1 : 1;
-            const dx = f.position.x - threat.position.x;
-            const dz = f.position.z - threat.position.z;
-            const len = Math.hypot(dx, dz) || 1;
-            f.locomotion.shove((dz / len) * side * T.dashPower,
-              (-dx / len) * side * T.dashPower);
-            f.poseDriver.dashKick = 1;
-            f.stamina = Math.max(0, f.stamina - T.staminaDashCost * 0.5);
-          } else if (f.stamina > 0.25) {
-            this.blockHold = 0.45 + Math.random() * 0.35;
-            this.threat = threat;
-            f.swing.held = false;
-            return;
-          }
+    // The timid raise the shell, the hot-blooded hop aside or hurl what
+    // they have banked; the cooldown keeps the bot from twitching at
+    // every lifted arm.
+    const threat = this.readThreat(fighters);
+    if (threat && this.defCd <= 0 && f.swing.state === 'guard') {
+      this.defCd = 0.7 + Math.random() * 0.7;
+      if (Math.random() < this.defChance) {
+        if (Math.random() < this.dodgeShare
+            && f.stamina > T.staminaDashCost * 0.5) {
+          // A dash-flavored sidestep off the strike line.
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const dx = f.position.x - threat.position.x;
+          const dz = f.position.z - threat.position.z;
+          const len = Math.hypot(dx, dz) || 1;
+          f.locomotion.shove((dz / len) * side * T.dashPower,
+            (-dx / len) * side * T.dashPower);
+          f.poseDriver.dashKick = 1;
+          f.stamina = Math.max(0, f.stamina - T.staminaDashCost * 0.5);
+        } else if (f.stamina > 0.25) {
+          // Long enough to actually CATCH the slow swings of this game.
+          this.blockHold = 0.7 + Math.random() * 0.5;
+          this.threat = threat;
+          f.swing.held = false;
+          return;
         }
+      }
+    }
+    // A young charge answers a wind-up with a QUICK poke instead of a
+    // patience contest — the hot-blooded release early on purpose.
+    if (threat && this.defCd <= 0 && f.swing.state === 'windup'
+        && f.swing.held && f.swing.charge < 0.4) {
+      this.defCd = 0.7 + Math.random() * 0.7;
+      if (Math.random() < this.counterBias) {
+        f.swing.held = false;
+        this.rest = T.botRest * this.restMul * 0.6;
+        return;
       }
     }
 
@@ -285,6 +298,12 @@ export class Bot {
     }
 
     if (!f.swing.held && f.swing.state === 'guard') {
+      // Wait-and-see: a club is already coming up across the line. Do
+      // not start a charge INTO it — the guard stays free, and the next
+      // reaction window can raise the shell or hop. This is also what
+      // finally makes bot blocks VISIBLE: before it, a bot in range was
+      // always mid-charge and the defense window never opened.
+      if (threat) return;
       f.swing.held = true;
       // How much to bank this time. The spread is deliberate: a bot with
       // a constant charge reads as a metronome. The exponent is character:
