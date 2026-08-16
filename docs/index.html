@@ -708,6 +708,10 @@
     position: absolute;
     left: 50%;
     bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+    /* left:50% caps shrink-to-fit at HALF the screen — max-content frees
+       the swatch row to its real width before the transform centers it. */
+    width: max-content;
+    max-width: 96vw;
     transform: translateX(-50%);
     display: flex;
     flex-direction: column;
@@ -716,7 +720,13 @@
     pointer-events: auto;
   }
 
-  #setupColors { display: flex; gap: 9px; }
+  #setupColors {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 9px;
+    max-width: 92vw;
+  }
 
   #setupColors button {
     width: 30px;
@@ -954,6 +964,9 @@
   body.insetup #hint, body.insetup #stam, body.insetup #hud,
   body.insetup #tune, body.insetup #quick, body.insetup #pause,
   body.insetup #score { display: none; }
+  /* The build number is service chrome — the character screen shows the
+     character, nothing else. It stays visible during the fight. */
+  body.insetup .build { display: none; }
   /* On a phone the touch cluster used to bleed through the menu buttons. */
   body.insetup #touch { display: none !important; }
 
@@ -1155,33 +1168,33 @@
 
   ПРИ КАЖДОЙ ПРАВКЕ В docs/src ПОДНИМАТЬ НОМЕР:  ./docs/bump-build.sh
 -->
-<script>window.TK_BUILD = "205";</script>
+<script>window.TK_BUILD = "206";</script>
 <script type="importmap">
 {
   "imports": {
-    "three":              "./vendor/three.module.js?v=205",
-    "tk/main.js":         "./src/main.js?v=205",
-    "tk/tuning.js":       "./src/tuning.js?v=205",
-    "tk/mathx.js":        "./src/mathx.js?v=205",
-    "tk/arena.js":        "./src/arena.js?v=205",
-    "tk/cameraRig.js":    "./src/cameraRig.js?v=205",
-    "tk/balance.js":      "./src/balance.js?v=205",
-    "tk/skeleton.js":     "./src/skeleton.js?v=205",
-    "tk/fighterRig.js":   "./src/fighterRig.js?v=205",
-    "tk/gait.js":         "./src/gait.js?v=205",
-    "tk/poseDriver.js":   "./src/poseDriver.js?v=205",
-    "tk/swingAction.js":  "./src/swingAction.js?v=205",
-    "tk/locomotion.js":   "./src/locomotion.js?v=205",
-    "tk/body.js":         "./src/body.js?v=205",
-    "tk/bot.js":          "./src/bot.js?v=205",
-    "tk/contact.js":      "./src/contact.js?v=205",
-    "tk/match.js":        "./src/match.js?v=205",
-    "tk/fighter.js":      "./src/fighter.js?v=205",
-    "tk/input.js":        "./src/input.js?v=205",
-    "tk/ui.js":           "./src/ui.js?v=205",
-    "tk/sound.js":        "./src/sound.js?v=205",
-    "tk/telemetry.js":    "./src/telemetry.js?v=205",
-    "tk/progress.js":     "./src/progress.js?v=205"
+    "three":              "./vendor/three.module.js?v=206",
+    "tk/main.js":         "./src/main.js?v=206",
+    "tk/tuning.js":       "./src/tuning.js?v=206",
+    "tk/mathx.js":        "./src/mathx.js?v=206",
+    "tk/arena.js":        "./src/arena.js?v=206",
+    "tk/cameraRig.js":    "./src/cameraRig.js?v=206",
+    "tk/balance.js":      "./src/balance.js?v=206",
+    "tk/skeleton.js":     "./src/skeleton.js?v=206",
+    "tk/fighterRig.js":   "./src/fighterRig.js?v=206",
+    "tk/gait.js":         "./src/gait.js?v=206",
+    "tk/poseDriver.js":   "./src/poseDriver.js?v=206",
+    "tk/swingAction.js":  "./src/swingAction.js?v=206",
+    "tk/locomotion.js":   "./src/locomotion.js?v=206",
+    "tk/body.js":         "./src/body.js?v=206",
+    "tk/bot.js":          "./src/bot.js?v=206",
+    "tk/contact.js":      "./src/contact.js?v=206",
+    "tk/match.js":        "./src/match.js?v=206",
+    "tk/fighter.js":      "./src/fighter.js?v=206",
+    "tk/input.js":        "./src/input.js?v=206",
+    "tk/ui.js":           "./src/ui.js?v=206",
+    "tk/sound.js":        "./src/sound.js?v=206",
+    "tk/telemetry.js":    "./src/telemetry.js?v=206",
+    "tk/progress.js":     "./src/progress.js?v=206"
   }
 }
 </script>

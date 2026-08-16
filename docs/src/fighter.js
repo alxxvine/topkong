@@ -36,6 +36,12 @@ const TRAIL_POINTS = 26;
 export const CLUB_SKINS = {
   classic: { wood: 0xd8c3a5, woodR: 0.72, metal: 0x9ba1ab, metalR: 0.38, metalM: 0.55, head: 'ball' },
   hammer:  { wood: 0xb99b7a, woodR: 0.6,  metal: 0xaab4c0, metalR: 0.3,  metalM: 0.75, head: 'maul' },
+  // A big all-wood mallet: a fat drum across the shaft.
+  mallet:  { wood: 0xcdb28c, woodR: 0.6,  metal: 0xa9835c, metalR: 0.62, metalM: 0.08, head: 'drum' },
+  // Palette twins of the classic spiked ball: charcoal-and-ember and
+  // pale-birch-and-ice. Cheap variety with the head players know.
+  ember:   { wood: 0x453a35, woodR: 0.6,  metal: 0xe8543f, metalR: 0.35, metalM: 0.3,  head: 'ball' },
+  frost:   { wood: 0xe8e2d4, woodR: 0.5,  metal: 0xa8d8ea, metalR: 0.2,  metalM: 0.7,  head: 'ball' },
   // The bat is all wood; the "metal" slot paints its grip tape. (An axe
   // was tried in this slot and cut: a bladed head read wrong against the
   // blunt swing arcs — simple club-shaped things only.)
@@ -577,6 +583,11 @@ export class Fighter {
     if (skin.head === 'maul') {
       // The sledge: one steel block across the shaft.
       box(this.bones.club, 0.34, 0.17, 0.17, H, metal);
+    } else if (skin.head === 'drum') {
+      // The mallet: a fat wooden drum across the shaft.
+      const drum = addMesh(this.bones.club,
+        new THREE.CylinderGeometry(0.13, 0.13, 0.3, 12, 1), metal, H);
+      drum.rotation.z = Math.PI / 2;
     } else {
       // The classic: the spiked ball.
       sphere(this.bones.club, Rig.ClubHeadRadius, metal, H);

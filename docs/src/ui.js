@@ -38,7 +38,7 @@ const BAKED = {
   overheadWind: 6, overheadTime: 0.85,
   // Rising: a touch more wind-back and a soft, unhurried rip — the snap
   // was the complaint.
-  risingWind: 7, risingTime: 1.05,
+  risingWind: 7.5, risingTime: 1.2,
   // Stamina: the tight middle grade — every swing is a real spend, and
   // every blow CAUGHT on the shell bites the blocker's pool too.
   staminaOn: true, staminaRegen: 0.35, staminaDelay: 0.7,

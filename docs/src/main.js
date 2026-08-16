@@ -597,7 +597,8 @@ function initSetup(player, aim, match, telem, prog, camera) {
   // The demo character is a COLOR and a CLUB SKIN, nothing else: no name,
   // no bodies, no weapon choice — everyone swings the same club, and the
   // skins are trophies from achievements. Fewer knobs, cleaner screen.
-  const FREE_COLORS = [0xff8a5c, 0xe4533f, 0x4fbf8b, 0x5b8def, 0xc46fb0];
+  const FREE_COLORS = [0xff8a5c, 0xe4533f, 0x4fbf8b, 0x5b8def, 0xc46fb0,
+    0x45c1b8, 0x9a86ec, 0xa9c74d, 0xe9e2cf];
   const rewardOf = (kind) => ACHIEVEMENTS.filter((a) => a.reward && a.reward[kind]);
 
   const colorKnown = (c) => FREE_COLORS.includes(c)
@@ -655,6 +656,9 @@ function initSetup(player, aim, match, telem, prog, camera) {
   const SKINS = [
     { id: 'classic', label: 'Classic' },
     { id: 'hammer', label: 'Sledge' },
+    { id: 'mallet', label: 'Mallet' },
+    { id: 'ember', label: 'Ember' },
+    { id: 'frost', label: 'Frost' },
     ...rewardOf('club').map((a) => ({
       id: a.reward.club, label: a.reward.label, ach: a,
     })),
