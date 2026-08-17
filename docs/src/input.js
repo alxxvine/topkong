@@ -100,6 +100,15 @@ export class Input {
       this.screenX = e.clientX;
       this.screenY = e.clientY;
       this.hasScreen = true;
+      // Self-healing buttons. A button released OUTSIDE the window sends
+      // no pointerup, and the stuck RMB read as "my fighter raises the
+      // block by itself". Every mouse move re-syncs with the REAL state.
+      if (this.blockHeld && !(e.buttons & 2)) this.blockHeld = false;
+      if (this.swingHeld && !(e.buttons & 1)) this.swingHeld = false;
+    });
+    addEventListener('pointercancel', () => {
+      this.swingHeld = false;
+      this.blockHeld = false;
     });
 
     this.canvas.addEventListener('pointerdown', (e) => {
@@ -115,8 +124,10 @@ export class Input {
       if (e.button === 2) this.blockHeld = false;
     });
 
-    // The right button over the arena is not a context menu — it is a block.
-    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // The right button is not a context menu ANYWHERE on the page — it
+    // is a block. Window-wide: a right-release over a UI card used to
+    // pop the menu and could eat the pointerup.
+    addEventListener('contextmenu', (e) => e.preventDefault());
 
     // The wheel picks a strike: up — the overhead slam, down — the rising
     // scoop. One wheel tick, one strike; nothing accumulates between ticks.
